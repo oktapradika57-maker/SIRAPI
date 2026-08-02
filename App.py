@@ -17,11 +17,16 @@ def init_connection():
     # Mengambil kredensial dari Streamlit Secrets
     credentials_dict = dict(st.secrets["gcp_service_account"])
     
-    # Menggunakan metode baca dari dictionary (bukan file)
+    # KODE AJAIB: Memperbaiki format \n agar private_key terbaca dengan benar
+    credentials_dict["private_key"] = credentials_dict["private_key"].replace("\\n", "\n")
+    
+    # Mengkoneksikan menggunakan dictionary
     client = gspread.service_account_from_dict(credentials_dict)
     return client
 
 client = init_connection()
+
+# URL SPREADSHEET ANDA
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1HvgVicTWwO4RMQI6ZR3Mu3IgGicwjcLZl9mDN1auvJU/edit"
 
 # Mengakses Sheet
@@ -119,7 +124,7 @@ if menu == "📝 Request Dana":
                 with st.spinner("Menyimpan data ke Spreadsheet..."):
                     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     
-                    # 24 Kolom dari A sampai X (Index N/13 dikosongkan sesuai permintaan awal)
+                    # 24 Kolom dari A sampai X (Index N dikosongkan)
                     row_data_req = [
                         timestamp,                      # A
                         str(tanggal),                   # B
@@ -174,7 +179,7 @@ elif menu == "✅ PJB Operasional":
             all_records = sheet_req.get_all_records()
             df_req = pd.DataFrame(all_records)
             
-            # Filter berdasarkan Nomor Tiket (Pastikan nama header ini SAMA PERSIS dengan di Spreadsheet Anda)
+            # Filter berdasarkan Nomor Tiket
             header_tiket = 'Nomor Tiket SWFM ( tulis cth BPS-2026-000000034391)'
             
             if header_tiket in df_req.columns:
@@ -200,15 +205,15 @@ elif menu == "✅ PJB Operasional":
             with col1:
                 tanggal_pjb = st.date_input("Tanggal (Kolom B)")
                 
-                # AUTO FILL DARI REQUEST DANA (KOLOM C SAMPAI J)
+                # AUTO FILL DARI REQUEST DANA
                 nop_pjb = st.text_input("NOP (Kolom C)", value=data.get('NOP (pilihan Palangkaraya)', ''), disabled=True)
-                cluster_pjb = st.text_input("Cluster (Kolom D)", value=data.get('Cluster', ''), disabled=True)
-                nama_pjb = st.text_input("Nama (Kolom E)", value=data.get('Nama', ''), disabled=True)
-                role_pjb = st.text_input("Role (Kolom F)", value=data.get('Role', ''), disabled=True)
+                cluster_pjb = st.text_input("Cluster (Kolom D)", value=data.get('Cluster (Dropdown pilihan : Palangkaraya, Barito Raya)', data.get('Cluster', '')), disabled=True)
+                nama_pjb = st.text_input("Nama (Kolom E)", value=data.get('Nama Dibuat Dropdown dengan data berikut', data.get('Nama', '')), disabled=True)
+                role_pjb = st.text_input("Role (Kolom F)", value=data.get('Role (Dibuat dropdown : Pilihan PM,TE,MBP,CME)', data.get('Role', '')), disabled=True)
                 site_id_pjb = st.text_input("Site ID (Kolom G)", value=data.get('Site ID', ''), disabled=True)
                 keperluan_pjb = st.text_input("Keperluan Dana (Kolom H)", value=data.get('Keperluan Dana', ''), disabled=True)
-                jenis_bbm_pjb = st.text_input("Jenis BBM (Kolom I)", value=data.get('Jenis BBM', ''), disabled=True)
-                deskripsi_pjb = st.text_area("Deskripsi Pekerjaan (Kolom J)", value=data.get('Deskripsi Pekerjaan', ''))
+                jenis_bbm_pjb = st.text_input("Jenis BBM (Kolom I)", value=data.get('Jenis BBM (Mobil,motor,genset)', data.get('Jenis BBM', '')), disabled=True)
+                deskripsi_pjb = st.text_area("Deskripsi Pekerjaan (Kolom J)", value=data.get('Deskripsi Pekerjaan (Jabarkan secara lengkap)', data.get('Deskripsi Pekerjaan', '')))
                 
             with col2:
                 km_akhir = st.text_input("KM Akhir (Kolom K)", placeholder="Tulis 0 jika tidak req bbm")
