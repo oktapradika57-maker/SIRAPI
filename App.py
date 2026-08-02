@@ -1,40 +1,33 @@
 import streamlit as st
 import pandas as pd
 import gspread
-import json
-import requests
-import base64
+import io
 from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
 from datetime import datetime
 import time
 
 # ==========================================
-# 0. KONFIGURASI TAMPILAN & HALAMAN
+# 0. KONFIGURASI HALAMAN
 # ==========================================
 st.set_page_config(page_title="Portal Operasional", page_icon="💼", layout="wide")
-
-st.markdown("""
-    <style>
-        .main { background-color: #f8f9fa; }
-        .stButton>button { width: 100%; border-radius: 6px; font-weight: bold; height: 45px; }
-    </style>
-""", unsafe_allow_html=True)
 
 # ==========================================
 # 1. KONFIGURASI UTAMA
 # ==========================================
-# MASUKKAN LINK WEB APP GOOGLE SCRIPT ANDA DI SINI (Pastikan diakhiri /exec)
-GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwHfE1ppmll1uUP0qyCOnz6zb8AAsxXjotzmqnthOxUqGQaHOdPq1jQBhEO9y8asXIY/exec"
-
-# ID FOLDER GOOGLE DRIVE ANDA UNTUK MENAMPUNG FOTO
-DRIVE_FOLDER_REQUEST = "1Hjgt0LaHBjKMnTyPNLYxRo2MdATlCz01ugu1eKgJ9Fyh-D3Mbye87MRwBbRpf4_qd_R0zvGX"
-DRIVE_FOLDER_PJB = "1zPv_DLi4Knyl7FCYLmma1a1Jk8zAV3-Q37Nn2NMCR0pU79dGBPNXQcIK4edI_MefKWRvH7cI"
-
 SPREADSHEET_ID = "1HvgVicTWwO4RMQI6ZR3Mu3IgGicwjcLZl9mDN1auvJU"
 SHEET_REQUEST = "Form Request dana"        
 SHEET_PJB = "Form PJB"                     
 
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+# ID FOLDER GOOGLE DRIVE ANDA
+DRIVE_FOLDER_REQUEST = "1Hjgt0LaHBjKMnTyPNLYxRo2MdATlCz01ugu1eKgJ9Fyh-D3Mbye87MRwBbRpf4_qd_R0zvGX"
+DRIVE_FOLDER_PJB = "1zPv_DLi4Knyl7FCYLmma1a1Jk8zAV3-Q37Nn2NMCR0pU79dGBPNXQcIK4edI_MefKWRvH7cI"
+
+SCOPES = [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive"
+]
 
 # ==========================================
 # 2. DATA MASTER
@@ -55,7 +48,7 @@ LIST_KEPERLUAN = [
 ]
 
 # ==========================================
-# 3. FUNGSI UPLOAD AMAN & SPREADSHEET
+# 3. FUNGSI KONEKSI & UPLOAD NATIVE GOOGLE
 # ==========================================
 @st.cache_resource
 def get_credentials():
@@ -64,23 +57,40 @@ def get_credentials():
         f.write(creds_json)
     return Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
 
-def upload_to_drive_via_gas(file, folder_id):
-    if file is None: return ""
+def upload_to_drive_native(file, folder_id, credentials):
+    if file is None: 
+        return ""
     try:
-        payload = {
-            "filename": file.name,
-            "mimetype": file.type,
-            "bytes": base64.b64encode(file.getvalue()).decode("utf-8"),
-            "folder_id": folder_id
+        service = build('drive', 'v3', credentials=credentials)
+        
+        file_metadata = {
+            'name': f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{file.name}",
+            'parents': [folder_id]
         }
-        res = requests.post(GAS_WEB_APP_URL, json=payload).json()
-        if res.get("status") == "success":
-            return res.get("url")
-        else:
-            st.error(f"Gagal Upload: {res.get('message')}")
-            return ""
+        
+        media = MediaIoBaseUpload(
+            io.BytesIO(file.getvalue()),
+            mimetype=file.type,
+            resumable=True
+        )
+        
+        uploaded_file = service.files().create(
+            body=file_metadata,
+            media_body=media,
+            fields='id, webViewLink'
+        ).execute()
+        
+        file_id = uploaded_file.get('id')
+        
+        # Berikan izin agar link bisa dibuka publik
+        service.permissions().create(
+            fileId=file_id,
+            body={'role': 'reader', 'type': 'anyone'}
+        ).execute()
+        
+        return uploaded_file.get('webViewLink')
     except Exception as e:
-        st.error(f"Error Koneksi: {e}")
+        st.error(f"Gagal Upload Foto ({file.name}): {e}")
         return ""
 
 def append_data(sheet_name, data, credentials):
@@ -159,20 +169,19 @@ if menu == "📝 Form Request Dana":
             if not tiket.strip():
                 st.error("Nomor Tiket SWFM wajib diisi!")
             else:
-                with st.spinner("Mengunggah foto dan merekam data ke Spreadsheet..."):
-                    url_km = upload_to_drive_via_gas(foto_km, DRIVE_FOLDER_REQUEST)
-                    url_evid = upload_to_drive_via_gas(foto_evidance, DRIVE_FOLDER_REQUEST)
-                    
+                with st.spinner("Mengunggah foto dan menyimpan data ke Spreadsheet..."):
                     creds = get_credentials()
-                    waktu = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+                    url_km = upload_to_drive_native(foto_km, DRIVE_FOLDER_REQUEST, creds)
+                    url_evid = upload_to_drive_native(foto_evidance, DRIVE_FOLDER_REQUEST, creds)
                     
+                    waktu = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
                     data_req = [
                         waktu, tanggal.strftime("%d/%m/%Y"), nop, tiket, cluster, nama, role, site_id, 
                         keperluan, kebutuhan, jns_bbm, deskripsi, km_awal, "", lat_berangkat, long_berangkat, 
                         plat, rek_penerima, no_rek, nominal_tf, url_km, url_evid, lat_tujuan, long_tujuan
                     ]
                     append_data(SHEET_REQUEST, data_req, creds)
-                    st.success(f"✅ Data Teks & Foto Request Dana Tiket **{tiket}** BERHASIL tersimpan dan Sinkron!")
+                    st.success(f"✅ Data Teks & Foto Request Dana Tiket **{tiket}** BERHASIL tersimpan!")
 
 # ==========================================
 # MENU 2: FORM PJB OPERASIONAL
@@ -245,17 +254,16 @@ elif menu == "✅ Form PJB Operasional":
             
         if submit_pjb:
             with st.spinner("Mengunggah foto dan merekam PJB ke Spreadsheet..."):
-                url_pengisian = upload_to_drive_via_gas(f_pengisian, DRIVE_FOLDER_PJB)
-                url_nota_bbm = upload_to_drive_via_gas(f_nota_bbm, DRIVE_FOLDER_PJB)
-                url_nota_km = upload_to_drive_via_gas(f_nota_km, DRIVE_FOLDER_PJB)
-                url_material = upload_to_drive_via_gas(f_material, DRIVE_FOLDER_PJB)
-                url_nota_mat = upload_to_drive_via_gas(f_nota_mat, DRIVE_FOLDER_PJB)
-                url_penginapan = upload_to_drive_via_gas(f_penginapan, DRIVE_FOLDER_PJB)
-                url_pekerjaan = upload_to_drive_via_gas(f_pekerjaan, DRIVE_FOLDER_PJB)
-                
                 creds = get_credentials()
-                waktu_pjb = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+                url_pengisian = upload_to_drive_native(f_pengisian, DRIVE_FOLDER_PJB, creds)
+                url_nota_bbm = upload_to_drive_native(f_nota_bbm, DRIVE_FOLDER_PJB, creds)
+                url_nota_km = upload_to_native = upload_to_drive_native(f_nota_km, DRIVE_FOLDER_PJB, creds)
+                url_material = upload_to_drive_native(f_material, DRIVE_FOLDER_PJB, creds)
+                url_nota_mat = upload_to_drive_native(f_nota_mat, DRIVE_FOLDER_PJB, creds)
+                url_penginapan = upload_to_drive_native(f_penginapan, DRIVE_FOLDER_PJB, creds)
+                url_pekerjaan = upload_to_drive_native(f_pekerjaan, DRIVE_FOLDER_PJB, creds)
                 
+                waktu_pjb = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
                 data_pjb = [
                     waktu_pjb, tanggal_pjb.strftime("%d/%m/%Y"), d["NOP"], d["Cluster"], d["Nama"], d["Role"], 
                     d["Site ID"], d["Keperluan Dana"], d["Jenis BBM"], d["Deskripsi"], km_akhir, nominal_pjb, 
@@ -264,7 +272,7 @@ elif menu == "✅ Form PJB Operasional":
                 ]
                 
                 append_data(SHEET_PJB, data_pjb, creds)
-                st.success(f"✅ Data Teks & Foto PJB Tiket **{cari_tiket}** BERHASIL tersimpan dan Sinkron!")
+                st.success(f"✅ Data Teks & Foto PJB Tiket **{cari_tiket}** BERHASIL tersimpan!")
                 st.session_state.pjb_data = None
                 time.sleep(2)
                 st.rerun()
