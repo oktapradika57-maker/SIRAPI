@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import gspread
 import json
+import re  # <--- INI LIBRARY BARU UNTUK MELACAK KUNCI
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
@@ -20,7 +21,6 @@ st.set_page_config(page_title="Portal Operasional & Keuangan", page_icon="💼",
 DRIVE_FOLDER_ID = "ID_FOLDER_DRIVE_ANDA_MASUKKAN_DISINI"   
 SPREADSHEET_ID = "1HvgVicTWwO4RMQI6ZR3Mu3IgGicwjcLZl9mDN1auvJU"
 
-# Pastikan nama tab sheet ini sama persis dengan yang ada di Google Sheets Anda
 SHEET_REQUEST = "Form Request Dana"        
 SHEET_PJB = "Form PJB"                     
 
@@ -45,27 +45,32 @@ LIST_KEPERLUAN = [
 ]
 
 # ==========================================
-# 3. FUNGSI KONEKSI & UTILITAS
+# 3. FUNGSI KONEKSI & UTILITAS (PELACAK OTOMATIS)
 # ==========================================
 @st.cache_resource
 def get_credentials():
     try:
-        # Mengambil string rahasia dari Streamlit Secrets
         creds_json = st.secrets["gcp_json"]
         credentials_dict = json.loads(creds_json)
         
-        # --- SAPU PEMBERSIH KODE AJAIB ---
         if "private_key" in credentials_dict:
-            # 1. Mengubah string literal \n menjadi baris baru asli (Enter)
-            credentials_dict["private_key"] = credentials_dict["private_key"].replace("\\n", "\n")
+            raw_key = credentials_dict["private_key"]
+            raw_key = raw_key.replace("\\n", "\n")
             
-            # 2. Menghapus karakter spasi ekstra, kutip nyasar, atau titik yang tidak sengaja terbawa
-            credentials_dict["private_key"] = credentials_dict["private_key"].strip().strip('"').strip("'")
+            # --- JURUS PELACAK REGEX (ANTI TITIK NYASAR) ---
+            # Mengambil HANYA teks dari blok BEGIN sampai END. 
+            # Mengabaikan titik, kutip, atau karakter apapun di luar blok ini.
+            match = re.search(r"-----BEGIN PRIVATE KEY-----.*?-----END PRIVATE KEY-----", raw_key, re.DOTALL)
             
-        # Membaca langsung dari memori (dictionary)
+            if match:
+                credentials_dict["private_key"] = match.group(0)
+            else:
+                st.error("❌ Kesalahan Fatal: Tidak menemukan tulisan 'BEGIN PRIVATE KEY' di dalam Streamlit Secrets Anda. Pastikan Anda tidak menghapusnya.")
+                st.stop()
+                
         return Credentials.from_service_account_info(credentials_dict, scopes=SCOPES)
     except Exception as e:
-        st.error(f"Gagal memuat kredensial: {e}. Pastikan format JSON di Secrets sudah benar.")
+        st.error(f"Gagal memuat kredensial: {e}")
         st.stop()
 
 def upload_to_drive(file, credentials):
@@ -93,7 +98,6 @@ def get_data_request(tiket, credentials):
     records = sheet.get_all_records()
     
     for row in records:
-        # Membaca tiket dari sheet dengan mempertimbangkan spasi header
         tiket_di_sheet = str(row.get("Nomor Tiket SWFM ( tulis cth BPS-2026-000000034391)", row.get("Nomor Tiket SWFM", "")))
         if tiket_di_sheet == str(tiket):
             return row
@@ -168,7 +172,6 @@ if menu == "📝 Request Dana":
                         waktu = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
                         tgl_str = tanggal.strftime("%d/%m/%Y")
                         
-                        # Susunan Kolom A - X (Index ke-13/Kolom N dikosongkan)
                         data_req = [
                             waktu, tgl_str, nop, tiket, cluster, nama, role, site_id, 
                             keperluan, kebutuhan, jns_bbm, deskripsi, km_awal, 
@@ -188,7 +191,6 @@ elif menu == "✅ PJB Operasional":
     st.title("✅ Form PJB Operasional")
     st.markdown("Cari Nomor Tiket Anda. Data akan **terisi otomatis** berdasarkan Request Dana sebelumnya.")
     
-    # 1. Kolom Pencarian Tiket
     search_col1, search_col2 = st.columns([3, 1])
     with search_col1:
         cari_tiket = st.text_input("🔍 Cari Nomor Tiket SWFM (Sama dengan pengajuan awal):")
@@ -215,7 +217,6 @@ elif menu == "✅ PJB Operasional":
             except Exception as e:
                 st.error(f"Terjadi kesalahan koneksi: {e}")
 
-    # 2. Form PJB (Muncul jika tiket ditemukan)
     if st.session_state.pjb_data is not None:
         d_lama = st.session_state.pjb_data
         
@@ -223,7 +224,6 @@ elif menu == "✅ PJB Operasional":
             st.info("💡 Kolom NOP, Cluster, Nama, Role, dll telah dikunci sesuai pengajuan awal.")
             col_a, col_b = st.columns(2)
             
-            # --- AUTO FILL BAGIAN ---
             with col_a:
                 tanggal_pjb = st.date_input("Tanggal PJB")
                 nop_pjb = st.text_input("NOP", value=d_lama.get("NOP (pilihan Palangkaraya)", d_lama.get("NOP", "")), disabled=True)
@@ -267,7 +267,6 @@ elif menu == "✅ PJB Operasional":
                 with st.spinner("Mulai mengunggah foto ke Google Drive dan Menyimpan Data (Mohon Tunggu)..."):
                     try:
                         creds = get_credentials()
-                        # Upload semua foto ke Google Drive
                         url_pengisian = upload_to_drive(f_pengisian, creds)
                         url_nota_bbm = upload_to_drive(f_nota_bbm, creds)
                         url_nota_km = upload_to_drive(f_nota_km, creds)
@@ -279,7 +278,6 @@ elif menu == "✅ PJB Operasional":
                         waktu_pjb = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
                         tgl_pjb_str = tanggal_pjb.strftime("%d/%m/%Y")
                         
-                        # Susunan Kolom A - X untuk PJB
                         data_pjb = [
                             waktu_pjb, tgl_pjb_str, nop_pjb, cluster_pjb, nama_pjb, role_pjb, 
                             site_pjb, keperluan_pjb, jns_bbm_pjb, deskripsi_pjb, km_akhir, 
@@ -292,7 +290,6 @@ elif menu == "✅ PJB Operasional":
                         append_data(SHEET_PJB, data_pjb, creds)
                         st.success(f"✅ Mantap! Form PJB untuk Tiket {cari_tiket} berhasil disubmit.")
                         
-                        # Membersihkan memori untuk input tiket berikutnya
                         st.session_state.pjb_data = None
                         time.sleep(2)
                         st.rerun()
