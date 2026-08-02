@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import gspread
 import json
-import os
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
@@ -15,11 +14,12 @@ import time
 st.set_page_config(page_title="Portal Operasional & Keuangan", page_icon="💼", layout="wide")
 
 # ==========================================
-# 1. KONFIGURASI PENTING (SESUAIKAN DATA ANDA)
+# 1. KONFIGURASI PENTING (ID DRIVE & SHEET)
 # ==========================================
-DRIVE_FOLDER_ID = "ID_FOLDER_DRIVE_ANDA_MASUKKAN_DISINI"   
-SPREADSHEET_ID = "1HvgVicTWwO4RMQI6ZR3Mu3IgGicwjcLZl9mDN1auvJU"
+DRIVE_FOLDER_REQUEST = "1Hjgt0LaHBjKMnTyPNLYxRo2MdATlCz01ugu1eKgJ9Fyh-D3Mbye87MRwBbRpf4_qd_R0zvGX"
+DRIVE_FOLDER_PJB = "1zPv_DLi4Knyl7FCYLmma1a1Jk8zAV3-Q37Nn2NMCR0pU79dGBPNXQcIK4edI_MefKWRvH7cI"
 
+SPREADSHEET_ID = "1HvgVicTWwO4RMQI6ZR3Mu3IgGicwjcLZl9mDN1auvJU"
 SHEET_REQUEST = "Form Request Dana"        
 SHEET_PJB = "Form PJB"                     
 
@@ -44,31 +44,26 @@ LIST_KEPERLUAN = [
 ]
 
 # ==========================================
-# 3. FUNGSI KONEKSI (METODE FILE GENERATOR ANTI-PEM ERROR)
+# 3. FUNGSI KONEKSI & UTILITAS
 # ==========================================
 @st.cache_resource
 def get_credentials():
     try:
-        # Mengambil string JSON mentah dari Streamlit Secrets
         creds_json = st.secrets["gcp_json"]
-        
-        # Menulis ulang string tersebut menjadi file fisik 'credentials.json' secara otomatis di server
         with open("credentials.json", "w") as f:
             f.write(creds_json)
-            
-        # Menggunakan fungsi bawaan asli Google dari file (100% aman dari error PEM / symbol 46)
         return Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
     except Exception as e:
         st.error(f"Gagal memuat kredensial: {e}")
         st.stop()
 
-def upload_to_drive(file, credentials):
+def upload_to_drive(file, credentials, folder_id):
     if file is None: return ""
     try:
         drive_service = build('drive', 'v3', credentials=credentials)
         media = MediaIoBaseUpload(file, mimetype=file.type, resumable=True)
         uploaded = drive_service.files().create(
-            body={'name': file.name, 'parents': [DRIVE_FOLDER_ID]}, 
+            body={'name': file.name, 'parents': [folder_id]}, 
             media_body=media, fields='webViewLink'
         ).execute()
         return uploaded.get('webViewLink')
@@ -152,11 +147,11 @@ if menu == "📝 Request Dana":
             if not tiket:
                 st.error("Nomor Tiket SWFM wajib diisi!")
             else:
-                with st.spinner("Mengunggah foto ke Drive dan menyimpan ke Spreadsheet..."):
+                with st.spinner("Mengunggah foto ke Drive Request Dana dan menyimpan ke Spreadsheet..."):
                     try:
                         creds = get_credentials()
-                        url_km = upload_to_drive(foto_km, creds)
-                        url_evid = upload_to_drive(foto_evidance, creds)
+                        url_km = upload_to_drive(foto_km, creds, DRIVE_FOLDER_REQUEST)
+                        url_evid = upload_to_drive(foto_evidance, creds, DRIVE_FOLDER_REQUEST)
                         
                         waktu = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
                         tgl_str = tanggal.strftime("%d/%m/%Y")
@@ -235,7 +230,7 @@ elif menu == "✅ PJB Operasional":
                 harga_satuan = st.number_input("Harga Satuan BBM / material", min_value=0)
             
             st.write("---")
-            st.subheader("📸 Upload Foto Evidence & Nota (Langsung ke Drive)")
+            st.subheader("📸 Upload Foto Evidence & Nota (Langsung ke Drive PJB)")
             st.caption("Proses upload 7 foto ke Drive membutuhkan waktu, mohon tunggu hingga muncul notifikasi sukses.")
             
             f1, f2, f3 = st.columns(3)
@@ -253,16 +248,16 @@ elif menu == "✅ PJB Operasional":
             submit_pjb = st.form_submit_button("Kirim PJB", use_container_width=True)
             
             if submit_pjb:
-                with st.spinner("Mulai mengunggah foto ke Google Drive dan Menyimpan Data (Mohon Tunggu)..."):
+                with st.spinner("Mulai mengunggah foto ke Google Drive PJB dan Menyimpan Data (Mohon Tunggu)..."):
                     try:
                         creds = get_credentials()
-                        url_pengisian = upload_to_drive(f_pengisian, creds)
-                        url_nota_bbm = upload_to_drive(f_nota_bbm, creds)
-                        url_nota_km = upload_to_drive(f_nota_km, creds)
-                        url_material = upload_to_drive(f_material, creds)
-                        url_nota_mat = upload_to_drive(f_nota_mat, creds)
-                        url_penginapan = upload_to_drive(f_penginapan, creds)
-                        url_pekerjaan = upload_to_drive(f_pekerjaan, creds)
+                        url_pengisian = upload_to_drive(f_pengisian, creds, DRIVE_FOLDER_PJB)
+                        url_nota_bbm = upload_to_drive(f_nota_bbm, creds, DRIVE_FOLDER_PJB)
+                        url_nota_km = upload_to_drive(f_nota_km, creds, DRIVE_FOLDER_PJB)
+                        url_material = upload_to_drive(f_material, creds, DRIVE_FOLDER_PJB)
+                        url_nota_mat = upload_to_drive(f_nota_mat, creds, DRIVE_FOLDER_PJB)
+                        url_penginapan = upload_to_drive(f_penginapan, creds, DRIVE_FOLDER_PJB)
+                        url_pekerjaan = upload_to_drive(f_pekerjaan, creds, DRIVE_FOLDER_PJB)
                         
                         waktu_pjb = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
                         tgl_pjb_str = tanggal_pjb.strftime("%d/%m/%Y")
