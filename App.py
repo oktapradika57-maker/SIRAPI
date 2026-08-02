@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import gspread
+import json
 from datetime import datetime
 import time
 
@@ -10,17 +11,18 @@ import time
 st.set_page_config(page_title="Portal Operasional", page_icon="🚀", layout="wide")
 
 # ==========================================
-# KONEKSI KE GOOGLE SHEETS
+# KONEKSI KE GOOGLE SHEETS (METODE JSON ANTI-GAGAL)
 # ==========================================
 @st.cache_resource
 def init_connection():
-    # Mengambil kredensial dari Streamlit Secrets
-    credentials_dict = dict(st.secrets["gcp_service_account"])
+    # Mengambil string mentah JSON dari Streamlit Secrets
+    creds_json = st.secrets["gcp_json"]
     
-    # KODE AJAIB: Memperbaiki format \n agar private_key terbaca dengan benar
-    credentials_dict["private_key"] = credentials_dict["private_key"].replace("\\n", "\n")
+    # Mengubah string mentah tersebut menjadi Dictionary menggunakan modul JSON bawaan Python
+    # Cara ini mengabaikan error pembacaan TOML karena Python membaca \n dengan sempurna
+    credentials_dict = json.loads(creds_json)
     
-    # Mengkoneksikan menggunakan dictionary
+    # Konek ke Google Sheet
     client = gspread.service_account_from_dict(credentials_dict)
     return client
 
@@ -57,7 +59,7 @@ LIST_KEPERLUAN = [
 # Fungsi Penampung Upload Foto
 def upload_foto_to_cloud(uploaded_file):
     if uploaded_file is not None:
-        # Placeholder: Di sinilah letak integrasi API Drive/Cloudinary nantinya
+        # Placeholder
         return f"File_{uploaded_file.name}_terlampir"
     return ""
 
@@ -124,7 +126,6 @@ if menu == "📝 Request Dana":
                 with st.spinner("Menyimpan data ke Spreadsheet..."):
                     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     
-                    # 24 Kolom dari A sampai X (Index N dikosongkan)
                     row_data_req = [
                         timestamp,                      # A
                         str(tanggal),                   # B
@@ -179,7 +180,6 @@ elif menu == "✅ PJB Operasional":
             all_records = sheet_req.get_all_records()
             df_req = pd.DataFrame(all_records)
             
-            # Filter berdasarkan Nomor Tiket
             header_tiket = 'Nomor Tiket SWFM ( tulis cth BPS-2026-000000034391)'
             
             if header_tiket in df_req.columns:
@@ -205,7 +205,6 @@ elif menu == "✅ PJB Operasional":
             with col1:
                 tanggal_pjb = st.date_input("Tanggal (Kolom B)")
                 
-                # AUTO FILL DARI REQUEST DANA
                 nop_pjb = st.text_input("NOP (Kolom C)", value=data.get('NOP (pilihan Palangkaraya)', ''), disabled=True)
                 cluster_pjb = st.text_input("Cluster (Kolom D)", value=data.get('Cluster (Dropdown pilihan : Palangkaraya, Barito Raya)', data.get('Cluster', '')), disabled=True)
                 nama_pjb = st.text_input("Nama (Kolom E)", value=data.get('Nama Dibuat Dropdown dengan data berikut', data.get('Nama', '')), disabled=True)
@@ -226,7 +225,6 @@ elif menu == "✅ PJB Operasional":
                 harga_satuan = st.text_input("Harga Satuan BBM/Material (Kolom X)")
 
             st.subheader("📸 Upload Evidence & Nota PJB")
-            st.caption("Pastikan foto diupload sesuai peruntukannya (Kolom N - T).")
             
             f1, f2, f3 = st.columns(3)
             with f1:
@@ -246,7 +244,6 @@ elif menu == "✅ PJB Operasional":
                 with st.spinner("Menyimpan data PJB ke Spreadsheet..."):
                     timestamp_pjb = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     
-                    # 24 Kolom dari A sampai X
                     row_data_pjb = [
                         timestamp_pjb,                  # A
                         str(tanggal_pjb),               # B
