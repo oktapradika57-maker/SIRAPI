@@ -24,7 +24,7 @@ st.markdown("""
 # 1. KONFIGURASI UTAMA
 # ==========================================
 # MASUKKAN LINK WEB APP GOOGLE SCRIPT ANDA DI SINI (Pastikan diakhiri /exec)
-GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwlZ77EX7G4siW7OCMvOJfwNhFWzTjzQClMV5jtMpcc1vweXpFnt-6o4B90k8FwUcII/exec"
+GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwHfE1ppmll1uUP0qyCOnz6zb8AAsxXjotzmqnthOxUqGQaHOdPq1jQBhEO9y8asXIY/exec"
 
 # ID FOLDER GOOGLE DRIVE ANDA UNTUK MENAMPUNG FOTO
 DRIVE_FOLDER_REQUEST = "1Hjgt0LaHBjKMnTyPNLYxRo2MdATlCz01ugu1eKgJ9Fyh-D3Mbye87MRwBbRpf4_qd_R0zvGX"
