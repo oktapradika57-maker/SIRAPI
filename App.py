@@ -19,6 +19,7 @@ st.set_page_config(page_title="Portal Operasional & Keuangan", page_icon="💼",
 IMGBB_API_KEY = "5f2dd705015f8b5beb348cbd04e7c215"
 SPREADSHEET_ID = "1HvgVicTWwO4RMQI6ZR3Mu3IgGicwjcLZl9mDN1auvJU"
 
+# NAMA SHEET SESUAI DENGAN YANG ANDA BUAT DI SPREADSHEET
 SHEET_REQUEST = "Form Request Dana"        
 SHEET_PJB = "Form PJB"                     
 
@@ -43,7 +44,7 @@ LIST_KEPERLUAN = [
 ]
 
 # ==========================================
-# 3. FUNGSI KONEKSI & UTILITAS (IMGBB)
+# 3. FUNGSI KONEKSI & UTILITAS
 # ==========================================
 @st.cache_resource
 def get_credentials():
@@ -61,7 +62,6 @@ def upload_to_imgbb(file):
         return ""
     try:
         url = "https://api.imgbb.com/1/upload"
-        # Membaca file bytes dari Streamlit dan enkripsi ke base64
         file_bytes = file.getvalue()
         payload = {
             "key": IMGBB_API_KEY,
@@ -71,7 +71,7 @@ def upload_to_imgbb(file):
         result = response.json()
         
         if result.get("success"):
-            return result["data"]["url"] # Mengembalikan URL link gambar
+            return result["data"]["url"]
         else:
             err_msg = result.get('error', {}).get('message', 'Gagal upload')
             st.error(f"ImgBB Error ({file.name}): {err_msg}")
@@ -91,6 +91,7 @@ def get_data_request(tiket, credentials):
     records = sheet.get_all_records()
     
     for row in records:
+        # Mencocokkan dengan header kolom tiket di sheet "Form Request Dana"
         tiket_di_sheet = str(row.get("Nomor Tiket SWFM ( tulis cth BPS-2026-000000034391)", row.get("Nomor Tiket SWFM", "")))
         if tiket_di_sheet == str(tiket):
             return row
@@ -156,7 +157,7 @@ if menu == "📝 Request Dana":
             if not tiket:
                 st.error("Nomor Tiket SWFM wajib diisi!")
             else:
-                with st.spinner("Mengunggah foto dan menyimpan data ke Spreadsheet..."):
+                with st.spinner("Mengunggah foto dan menyimpan data ke sheet Form Request Dana..."):
                     try:
                         url_km = upload_to_imgbb(foto_km)
                         url_evid = upload_to_imgbb(foto_evidance)
@@ -168,7 +169,7 @@ if menu == "📝 Request Dana":
                         data_req = [
                             waktu, tgl_str, nop, tiket, cluster, nama, role, site_id, 
                             keperluan, kebutuhan, jns_bbm, deskripsi, km_awal, 
-                            "", 
+                            "", # Kolom N kosong
                             lat_berangkat, long_berangkat, plat, rek_penerima, no_rek, 
                             nominal_tf, url_km, url_evid, lat_tujuan, long_tujuan
                         ]
@@ -196,7 +197,7 @@ elif menu == "✅ PJB Operasional":
         st.session_state.pjb_data = None
 
     if btn_cari and cari_tiket:
-        with st.spinner("Mencari data tiket di server..."):
+        with st.spinner("Mencari data tiket di sheet Form Request Dana..."):
             try:
                 creds = get_credentials()
                 data_lama = get_data_request(cari_tiket, creds)
@@ -206,7 +207,7 @@ elif menu == "✅ PJB Operasional":
                     st.success("✅ Data Ditemukan! Silakan lengkapi form PJB di bawah ini.")
                 else:
                     st.session_state.pjb_data = None
-                    st.error("❌ Nomor Tiket tidak ditemukan di data Request Dana.")
+                    st.error("❌ Nomor Tiket tidak ditemukan di data Form Request Dana.")
             except Exception as e:
                 st.error(f"Terjadi kesalahan koneksi: {e}")
 
@@ -257,9 +258,8 @@ elif menu == "✅ PJB Operasional":
             submit_pjb = st.form_submit_button("Kirim PJB", use_container_width=True)
             
             if submit_pjb:
-                with st.spinner("Mengunggah foto ke Cloud & Menyimpan PJB (Mohon Tunggu)..."):
+                with st.spinner("Mengunggah foto ke Cloud & Menyimpan ke sheet Form PJB..."):
                     try:
-                        # Upload semua foto via ImgBB
                         url_pengisian = upload_to_imgbb(f_pengisian)
                         url_nota_bbm = upload_to_imgbb(f_nota_bbm)
                         url_nota_km = upload_to_imgbb(f_nota_km)
@@ -282,7 +282,7 @@ elif menu == "✅ PJB Operasional":
                         ]
                         
                         append_data(SHEET_PJB, data_pjb, creds)
-                        st.success(f"✅ Mantap! Form PJB untuk Tiket {cari_tiket} berhasil disubmit.")
+                        st.success(f"✅ Mantap! Form PJB untuk Tiket {cari_tiket} berhasil tersimpan di sheet Form PJB.")
                         
                         st.session_state.pjb_data = None
                         time.sleep(2)
