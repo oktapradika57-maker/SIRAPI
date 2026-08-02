@@ -8,6 +8,9 @@ from googleapiclient.http import MediaIoBaseUpload
 from datetime import datetime
 import time
 
+# ==========================================
+# 0. KONFIGURASI HALAMAN
+# ==========================================
 st.set_page_config(page_title="Portal Operasional & Keuangan", page_icon="💼", layout="wide")
 
 # ==========================================
@@ -17,7 +20,7 @@ st.set_page_config(page_title="Portal Operasional & Keuangan", page_icon="💼",
 DRIVE_FOLDER_ID = "ID_FOLDER_DRIVE_ANDA_MASUKKAN_DISINI"   
 SPREADSHEET_ID = "1HvgVicTWwO4RMQI6ZR3Mu3IgGicwjcLZl9mDN1auvJU"
 
-# Pastikan nama tab sheet ini sama persis dengan yang ada di Google Sheets Anda!
+# Pastikan nama tab sheet ini sama persis dengan yang ada di Google Sheets Anda
 SHEET_REQUEST = "Form Request Dana"        
 SHEET_PJB = "Form PJB"                     
 
@@ -42,26 +45,33 @@ LIST_KEPERLUAN = [
 ]
 
 # ==========================================
-# 3. FUNGSI KONEKSI & UTILITAS (ANTI-ERROR)
+# 3. FUNGSI KONEKSI & UTILITAS
 # ==========================================
 @st.cache_resource
 def get_credentials():
-    # Mengambil string rahasia dari Streamlit Secrets
-    creds_json = st.secrets["gcp_json"]
-    credentials_dict = json.loads(creds_json)
-    
-    # --- SAPU PEMBERSIH (KODE AJAIB) ---
-    # Memaksa teks "\n" berubah menjadi Enter (Baris Baru) yang asli
-    # agar bisa dibaca oleh sistem keamanan (Kriptografi) Google
-    credentials_dict["private_key"] = credentials_dict["private_key"].replace("\\n", "\n")
-    
-    # Membaca langsung dari memori (dictionary)
-    return Credentials.from_service_account_info(credentials_dict, scopes=SCOPES)
+    try:
+        # Mengambil string rahasia dari Streamlit Secrets
+        creds_json = st.secrets["gcp_json"]
+        credentials_dict = json.loads(creds_json)
+        
+        # --- SAPU PEMBERSIH KODE AJAIB ---
+        if "private_key" in credentials_dict:
+            # 1. Mengubah string literal \n menjadi baris baru asli (Enter)
+            credentials_dict["private_key"] = credentials_dict["private_key"].replace("\\n", "\n")
+            
+            # 2. Menghapus karakter spasi ekstra, kutip nyasar, atau titik yang tidak sengaja terbawa
+            credentials_dict["private_key"] = credentials_dict["private_key"].strip().strip('"').strip("'")
+            
+        # Membaca langsung dari memori (dictionary)
+        return Credentials.from_service_account_info(credentials_dict, scopes=SCOPES)
+    except Exception as e:
+        st.error(f"Gagal memuat kredensial: {e}. Pastikan format JSON di Secrets sudah benar.")
+        st.stop()
+
 def upload_to_drive(file, credentials):
     if file is None: return ""
     try:
         drive_service = build('drive', 'v3', credentials=credentials)
-        # file dari Streamlit sudah berupa file-like object
         media = MediaIoBaseUpload(file, mimetype=file.type, resumable=True)
         uploaded = drive_service.files().create(
             body={'name': file.name, 'parents': [DRIVE_FOLDER_ID]}, 
@@ -82,9 +92,8 @@ def get_data_request(tiket, credentials):
     sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_REQUEST)
     records = sheet.get_all_records()
     
-    # Mencari tiket di semua row
     for row in records:
-        # Cek beberapa kemungkinan nama header (karena kadang spasi/kurung berpengaruh)
+        # Membaca tiket dari sheet dengan mempertimbangkan spasi header
         tiket_di_sheet = str(row.get("Nomor Tiket SWFM ( tulis cth BPS-2026-000000034391)", row.get("Nomor Tiket SWFM", "")))
         if tiket_di_sheet == str(tiket):
             return row
@@ -150,7 +159,7 @@ if menu == "📝 Request Dana":
             if not tiket:
                 st.error("Nomor Tiket SWFM wajib diisi!")
             else:
-                with st.spinner("Mengunggah foto dan menyimpan data ke Spreadsheet..."):
+                with st.spinner("Mengunggah foto ke Drive dan menyimpan ke Spreadsheet..."):
                     try:
                         creds = get_credentials()
                         url_km = upload_to_drive(foto_km, creds)
@@ -238,7 +247,7 @@ elif menu == "✅ PJB Operasional":
             
             st.write("---")
             st.subheader("📸 Upload Foto Evidence & Nota (Langsung ke Drive)")
-            st.caption("Proses upload foto ke Drive membutuhkan waktu, mohon tunggu hingga muncul notifikasi sukses.")
+            st.caption("Proses upload 7 foto ke Drive membutuhkan waktu, mohon tunggu hingga muncul notifikasi sukses.")
             
             f1, f2, f3 = st.columns(3)
             with f1:
