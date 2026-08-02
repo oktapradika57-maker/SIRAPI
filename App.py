@@ -35,7 +35,7 @@ IMGBB_API_KEY = "5f2dd705015f8b5beb348cbd04e7c215"
 SPREADSHEET_ID = "1HvgVicTWwO4RMQI6ZR3Mu3IgGicwjcLZl9mDN1auvJU"
 
 # Nama Tab Sheet sesuai permintaan Anda
-SHEET_REQUEST = "Form Request Dana"        
+SHEET_REQUEST = "Form Request dana"        
 SHEET_PJB = "Form PJB"                     
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
