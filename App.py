@@ -33,8 +33,8 @@ SHEET_REQUEST = "Form Request dana"
 SHEET_PJB = "Form PJB"                     
 
 # MASUKKAN LINK GOOGLE FORM UNTUK UPLOAD FOTO DI SINI
-URL_FORM_FOTO_REQUEST = "https://forms.gle/GANTI_DENGAN_LINK_FORM_FOTO_REQUEST_ANDA"
-URL_FORM_FOTO_PJB = "https://forms.gle/GANTI_DENGAN_LINK_FORM_FOTO_PJB_ANDA"
+URL_FORM_FOTO_REQUEST = "https://forms.gle/Ackr2KkvcVYtgCQ26"
+URL_FORM_FOTO_PJB = "https://forms.gle/sE5RDwmGmxBgUczC9"
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
