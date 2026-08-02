@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import gspread
+import json
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
@@ -12,11 +13,13 @@ st.set_page_config(page_title="Portal Operasional & Keuangan", page_icon="💼",
 # ==========================================
 # 1. KONFIGURASI PENTING (SESUAIKAN DATA ANDA)
 # ==========================================
-CREDENTIALS_FILE = "kredensial_anda.json"  # Pastikan nama file JSON di folder Anda benar
-DRIVE_FOLDER_ID = "ID_FOLDER_DRIVE_ANDA"   # Ganti dengan ID folder Google Drive Anda
+# Ganti dengan ID folder Google Drive tempat menyimpan foto-foto
+DRIVE_FOLDER_ID = "ID_FOLDER_DRIVE_ANDA_MASUKKAN_DISINI"   
 SPREADSHEET_ID = "1HvgVicTWwO4RMQI6ZR3Mu3IgGicwjcLZl9mDN1auvJU"
-SHEET_REQUEST = "Form Request Dana"        # Sesuaikan dengan nama Tab / Sheet Anda
-SHEET_PJB = "Form PJB"                     # Sesuaikan dengan nama Tab / Sheet Anda
+
+# Pastikan nama tab sheet ini sama persis dengan yang ada di Google Sheets Anda!
+SHEET_REQUEST = "Form Request Dana"        
+SHEET_PJB = "Form PJB"                     
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 
@@ -39,23 +42,22 @@ LIST_KEPERLUAN = [
 ]
 
 # ==========================================
-# 3. FUNGSI KONEKSI & UTILITAS
+# 3. FUNGSI KONEKSI & UTILITAS (ANTI-ERROR)
 # ==========================================
-import json
-
 @st.cache_resource
 def get_credentials():
-    # Mengambil string rahasia dari Streamlit Secrets
+    # Mengambil string rahasia dari Streamlit Secrets (gcp_json)
     creds_json = st.secrets["gcp_json"]
     credentials_dict = json.loads(creds_json)
     
-    # Membaca dari memori (dictionary), bukan dari file fisik
+    # Membaca langsung dari memori (dictionary), bukan dari file fisik
     return Credentials.from_service_account_info(credentials_dict, scopes=SCOPES)
 
 def upload_to_drive(file, credentials):
     if file is None: return ""
     try:
         drive_service = build('drive', 'v3', credentials=credentials)
+        # file dari Streamlit sudah berupa file-like object
         media = MediaIoBaseUpload(file, mimetype=file.type, resumable=True)
         uploaded = drive_service.files().create(
             body={'name': file.name, 'parents': [DRIVE_FOLDER_ID]}, 
@@ -63,7 +65,7 @@ def upload_to_drive(file, credentials):
         ).execute()
         return uploaded.get('webViewLink')
     except Exception as e:
-        st.error(f"Gagal upload {file.name}: {e}")
+        st.error(f"Gagal upload foto {file.name}: {e}")
         return ""
 
 def append_data(sheet_name, data, credentials):
@@ -75,11 +77,12 @@ def get_data_request(tiket, credentials):
     client = gspread.authorize(credentials)
     sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_REQUEST)
     records = sheet.get_all_records()
+    
     # Mencari tiket di semua row
     for row in records:
-        # Menyesuaikan dengan nama header di Spreadsheet Anda (kolom D)
-        # Jika nama header persisnya beda, bisa pakai index atau pastikan header cocok
-        if str(row.get("Nomor Tiket SWFM ( tulis cth BPS-2026-000000034391)", row.get("Nomor Tiket SWFM", ""))) == str(tiket):
+        # Cek beberapa kemungkinan nama header (karena kadang spasi/kurung berpengaruh)
+        tiket_di_sheet = str(row.get("Nomor Tiket SWFM ( tulis cth BPS-2026-000000034391)", row.get("Nomor Tiket SWFM", "")))
+        if tiket_di_sheet == str(tiket):
             return row
     return None
 
@@ -87,14 +90,14 @@ def get_data_request(tiket, credentials):
 # 4. ANTARMUKA APLIKASI
 # ==========================================
 st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2942/2942813.png", width=100)
-st.title("Portal Operasional & Keuangan 💼")
-menu = st.sidebar.radio("Pilih Menu Navigasi:", ["📝 Request Dana", "✅ PJB Operasional"])
+st.sidebar.title("Navigasi Menu")
+menu = st.sidebar.radio("Pilih Formulir:", ["📝 Request Dana", "✅ PJB Operasional"])
 
 # ------------------------------------------
 # MENU 1: REQUEST DANA
 # ------------------------------------------
 if menu == "📝 Request Dana":
-    st.header("Form Pengajuan Request Dana")
+    st.title("📝 Form Pengajuan Request Dana")
     st.markdown("Isi formulir di bawah ini dengan lengkap. Pastikan **Nomor Tiket** valid.")
     
     with st.form("form_req"):
@@ -133,9 +136,9 @@ if menu == "📝 Request Dana":
         st.subheader("📸 Upload Bukti (Evidence)")
         c1, c2 = st.columns(2)
         with c1:
-            foto_km = st.file_uploader("Foto KM Awal", type=["jpg", "png", "jpeg"])
+            foto_km = st.file_uploader("Foto KM Awal (Kolom U)", type=["jpg", "png", "jpeg"])
         with c2:
-            foto_evidance = st.file_uploader("Foto Kendaraan/Evidence dll", type=["jpg", "png", "jpeg"])
+            foto_evidance = st.file_uploader("Foto Kendaraan/Evidence dll (Kolom V)", type=["jpg", "png", "jpeg"])
         
         submit_req = st.form_submit_button("Kirim Request Dana", use_container_width=True)
         
@@ -143,36 +146,39 @@ if menu == "📝 Request Dana":
             if not tiket:
                 st.error("Nomor Tiket SWFM wajib diisi!")
             else:
-                with st.spinner("Mengunggah foto dan menyimpan data..."):
-                    creds = get_credentials()
-                    url_km = upload_to_drive(foto_km, creds)
-                    url_evid = upload_to_drive(foto_evidance, creds)
-                    
-                    waktu = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-                    tgl_str = tanggal.strftime("%d/%m/%Y")
-                    
-                    # Susunan Kolom A - X (N dikosongkan)
-                    data_req = [
-                        waktu, tgl_str, nop, tiket, cluster, nama, role, site_id, 
-                        keperluan, kebutuhan, jns_bbm, deskripsi, km_awal, 
-                        "", # Kolom N kosong
-                        lat_berangkat, long_berangkat, plat, rek_penerima, no_rek, 
-                        nominal_tf, url_km, url_evid, lat_tujuan, long_tujuan
-                    ]
-                    append_data(SHEET_REQUEST, data_req, creds)
-                    st.success(f"Berhasil! Request Dana tiket {tiket} tersimpan.")
+                with st.spinner("Mengunggah foto dan menyimpan data ke Spreadsheet..."):
+                    try:
+                        creds = get_credentials()
+                        url_km = upload_to_drive(foto_km, creds)
+                        url_evid = upload_to_drive(foto_evidance, creds)
+                        
+                        waktu = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+                        tgl_str = tanggal.strftime("%d/%m/%Y")
+                        
+                        # Susunan Kolom A - X (Index ke-13/Kolom N dikosongkan)
+                        data_req = [
+                            waktu, tgl_str, nop, tiket, cluster, nama, role, site_id, 
+                            keperluan, kebutuhan, jns_bbm, deskripsi, km_awal, 
+                            "", # Kolom N kosong
+                            lat_berangkat, long_berangkat, plat, rek_penerima, no_rek, 
+                            nominal_tf, url_km, url_evid, lat_tujuan, long_tujuan
+                        ]
+                        append_data(SHEET_REQUEST, data_req, creds)
+                        st.success(f"✅ Berhasil! Request Dana dengan tiket {tiket} telah tersimpan.")
+                    except Exception as e:
+                        st.error(f"Terjadi kesalahan saat menyimpan: {e}")
 
 # ------------------------------------------
 # MENU 2: PJB OPERASIONAL
 # ------------------------------------------
 elif menu == "✅ PJB Operasional":
-    st.header("Form PJB Operasional")
+    st.title("✅ Form PJB Operasional")
     st.markdown("Cari Nomor Tiket Anda. Data akan **terisi otomatis** berdasarkan Request Dana sebelumnya.")
     
     # 1. Kolom Pencarian Tiket
     search_col1, search_col2 = st.columns([3, 1])
     with search_col1:
-        cari_tiket = st.text_input("🔍 Cari Nomor Tiket SWFM (Sama dengan pengajuan):")
+        cari_tiket = st.text_input("🔍 Cari Nomor Tiket SWFM (Sama dengan pengajuan awal):")
     with search_col2:
         st.write("") 
         st.write("")
@@ -183,15 +189,18 @@ elif menu == "✅ PJB Operasional":
 
     if btn_cari and cari_tiket:
         with st.spinner("Mencari data tiket di server..."):
-            creds = get_credentials()
-            data_lama = get_data_request(cari_tiket, creds)
-            
-            if data_lama:
-                st.session_state.pjb_data = data_lama
-                st.success("✅ Data Ditemukan! Silakan lengkapi form PJB di bawah ini.")
-            else:
-                st.session_state.pjb_data = None
-                st.error("❌ Nomor Tiket tidak ditemukan di data Request Dana.")
+            try:
+                creds = get_credentials()
+                data_lama = get_data_request(cari_tiket, creds)
+                
+                if data_lama:
+                    st.session_state.pjb_data = data_lama
+                    st.success("✅ Data Ditemukan! Silakan lengkapi form PJB di bawah ini.")
+                else:
+                    st.session_state.pjb_data = None
+                    st.error("❌ Nomor Tiket tidak ditemukan di data Request Dana.")
+            except Exception as e:
+                st.error(f"Terjadi kesalahan koneksi: {e}")
 
     # 2. Form PJB (Muncul jika tiket ditemukan)
     if st.session_state.pjb_data is not None:
@@ -202,7 +211,6 @@ elif menu == "✅ PJB Operasional":
             col_a, col_b = st.columns(2)
             
             # --- AUTO FILL BAGIAN ---
-            # Menggunakan method .get() dengan banyak kemungkinan header karena terkadang header GSheet panjang
             with col_a:
                 tanggal_pjb = st.date_input("Tanggal PJB")
                 nop_pjb = st.text_input("NOP", value=d_lama.get("NOP (pilihan Palangkaraya)", d_lama.get("NOP", "")), disabled=True)
@@ -216,16 +224,17 @@ elif menu == "✅ PJB Operasional":
             
             with col_b:
                 km_akhir = st.text_input("KM Akhir (Tulis 0 jika tidak req bbm)", value="0")
-                nominal_pjb = st.number_input("Total Nominal PJB (Kolom L)", min_value=0)
+                nominal_pjb = st.number_input("Total Nominal PJB", min_value=0)
                 plat_pjb = st.text_input("Plat Mobil/Motor", value=d_lama.get("Plat Mobil/Motor", ""))
                 
                 tot_nilai_pjb = st.number_input("Total Nilai PJB (Sesuai nota upload)", min_value=0)
-                no_tiket_pjb = st.text_input("Nomor Tiket (Kolom V)", value=cari_tiket, disabled=True)
+                no_tiket_pjb = st.text_input("Nomor Tiket", value=cari_tiket, disabled=True)
                 tot_liter = st.text_input("Total Liter / Material", value="0")
                 harga_satuan = st.number_input("Harga Satuan BBM / material", min_value=0)
             
             st.write("---")
-            st.subheader("📸 Upload Foto Evidence (Langsung Masuk Google Drive)")
+            st.subheader("📸 Upload Foto Evidence & Nota (Langsung ke Drive)")
+            st.caption("Proses upload foto ke Drive membutuhkan waktu, mohon tunggu hingga muncul notifikasi sukses.")
             
             f1, f2, f3 = st.columns(3)
             with f1:
@@ -242,34 +251,37 @@ elif menu == "✅ PJB Operasional":
             submit_pjb = st.form_submit_button("Kirim PJB", use_container_width=True)
             
             if submit_pjb:
-                with st.spinner("Proses unggah 7 foto ke Drive & Simpan PJB (Mohon tunggu)..."):
-                    creds = get_credentials()
-                    # Upload ke Google Drive
-                    url_pengisian = upload_to_drive(f_pengisian, creds)
-                    url_nota_bbm = upload_to_drive(f_nota_bbm, creds)
-                    url_nota_km = upload_to_drive(f_nota_km, creds)
-                    url_material = upload_to_drive(f_material, creds)
-                    url_nota_mat = upload_to_drive(f_nota_mat, creds)
-                    url_penginapan = upload_to_drive(f_penginapan, creds)
-                    url_pekerjaan = upload_to_drive(f_pekerjaan, creds)
-                    
-                    waktu_pjb = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-                    tgl_pjb_str = tanggal_pjb.strftime("%d/%m/%Y")
-                    
-                    # Susunan Kolom A - X untuk PJB
-                    data_pjb = [
-                        waktu_pjb, tgl_pjb_str, nop_pjb, cluster_pjb, nama_pjb, role_pjb, 
-                        site_pjb, keperluan_pjb, jns_bbm_pjb, deskripsi_pjb, km_akhir, 
-                        nominal_pjb, plat_pjb, 
-                        url_pengisian, url_nota_bbm, url_nota_km, url_material, 
-                        url_nota_mat, url_penginapan, url_pekerjaan, 
-                        tot_nilai_pjb, cari_tiket, tot_liter, harga_satuan
-                    ]
-                    
-                    append_data(SHEET_PJB, data_pjb, creds)
-                    st.success(f"✅ Mantap! Form PJB untuk Tiket {cari_tiket} berhasil disubmit.")
-                    
-                    # Reset memory agar form tertutup dan siap untuk PJB tiket lain
-                    st.session_state.pjb_data = None
-                    time.sleep(2)
-                    st.rerun()
+                with st.spinner("Mulai mengunggah foto ke Google Drive dan Menyimpan Data (Mohon Tunggu)..."):
+                    try:
+                        creds = get_credentials()
+                        # Upload semua foto ke Google Drive
+                        url_pengisian = upload_to_drive(f_pengisian, creds)
+                        url_nota_bbm = upload_to_drive(f_nota_bbm, creds)
+                        url_nota_km = upload_to_drive(f_nota_km, creds)
+                        url_material = upload_to_drive(f_material, creds)
+                        url_nota_mat = upload_to_drive(f_nota_mat, creds)
+                        url_penginapan = upload_to_drive(f_penginapan, creds)
+                        url_pekerjaan = upload_to_drive(f_pekerjaan, creds)
+                        
+                        waktu_pjb = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+                        tgl_pjb_str = tanggal_pjb.strftime("%d/%m/%Y")
+                        
+                        # Susunan Kolom A - X untuk PJB
+                        data_pjb = [
+                            waktu_pjb, tgl_pjb_str, nop_pjb, cluster_pjb, nama_pjb, role_pjb, 
+                            site_pjb, keperluan_pjb, jns_bbm_pjb, deskripsi_pjb, km_akhir, 
+                            nominal_pjb, plat_pjb, 
+                            url_pengisian, url_nota_bbm, url_nota_km, url_material, 
+                            url_nota_mat, url_penginapan, url_pekerjaan, 
+                            tot_nilai_pjb, cari_tiket, tot_liter, harga_satuan
+                        ]
+                        
+                        append_data(SHEET_PJB, data_pjb, creds)
+                        st.success(f"✅ Mantap! Form PJB untuk Tiket {cari_tiket} berhasil disubmit.")
+                        
+                        # Membersihkan memori untuk input tiket berikutnya
+                        st.session_state.pjb_data = None
+                        time.sleep(2)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Terjadi kesalahan saat menyimpan PJB: {e}")
