@@ -32,9 +32,9 @@ SPREADSHEET_ID = "1HvgVicTWwO4RMQI6ZR3Mu3IgGicwjcLZl9mDN1auvJU"
 SHEET_REQUEST = "Form Request dana"        
 SHEET_PJB = "Form PJB"                     
 
-# MASUKKAN LINK GOOGLE FORM UNTUK UPLOAD FOTO DI SINI
-URL_FORM_FOTO_REQUEST = "https://forms.gle/Ackr2KkvcVYtgCQ26"
-URL_FORM_FOTO_PJB = "https://forms.gle/sE5RDwmGmxBgUczC9"
+# LINK GOOGLE FORM UNTUK UPLOAD FOTO (SESUAI REQUEST)
+URL_FORM_FOTO_REQUEST = "https://docs.google.com/forms/d/e/1FAIpQLSdy9n-LQNePc36DYluD9XbNH07Gc2cOVy9CaU_Qj4kGJ9FTDg/viewform"
+URL_FORM_FOTO_PJB = "https://docs.google.com/forms/d/e/1FAIpQLSdX4a8lC_fbKwGnOgkSkm1cyVoiJfTF1PR5Fy29as947vnFcA/viewform?usp=header"
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
@@ -120,7 +120,7 @@ menu = st.sidebar.radio("📌 Pilih Menu Formulir:", ["📝 Form Request Dana", 
 # ==========================================
 if menu == "📝 Form Request Dana":
     st.title("📝 Pengajuan Form Request Dana")
-    st.markdown("Isi data teks di bawah ini. Untuk upload bukti (foto), Anda akan diarahkan ke Google Form setelah menekan tombol simpan.")
+    st.markdown("Isi data teks di bawah ini. Untuk upload bukti foto, Anda akan diarahkan ke Google Form setelah menekan tombol simpan.")
     
     with st.form("form_request_dana"):
         col1, col2 = st.columns(2)
@@ -156,7 +156,7 @@ if menu == "📝 Form Request Dana":
             nominal_tf = st.number_input("Total Nominal ditransfer (Rp)", min_value=0, step=1000)
             
         st.markdown("---")
-        st.info("📸 **Kolom Foto Dihilangkan:** Anda dapat mengupload foto KM Awal dan Kendaraan di link Form yang muncul setelah Anda klik simpan.")
+        st.info("📸 **PERHATIAN:** Setelah menekan tombol Simpan di bawah, Anda **WAJIB** membuka link Google Form yang muncul untuk mengupload **Foto KM Awal** dan **Foto Kendaraan/Evidence**.")
         submit_req = st.form_submit_button("🚀 Simpan Data & Lanjut Upload Foto", type="primary")
         
     if submit_req:
@@ -190,18 +190,18 @@ if menu == "📝 Form Request Dana":
                         rek_penerima,   # R: Rekening Penerima
                         no_rek,         # S: Nomor Rekening
                         nominal_tf,     # T: Total Nominal ditransfer
-                        "Upload di Form", # U: Foto KM Awal (Diisi keterangan)
-                        "Upload di Form", # V: Foto Kendaraan/Evidence (Diisi keterangan)
+                        "Upload via Form", # U: Foto KM Awal (Keterangan)
+                        "Upload via Form", # V: Foto Kendaraan/Evidence (Keterangan)
                         lat_tujuan,     # W: Lat Tujuan
                         long_tujuan     # X: Long Tujuan
                     ]
                     
                     append_data(SHEET_REQUEST, data_req, creds)
                     st.success(f"✅ Data Teks Request Dana Tiket **{tiket}** BERHASIL tersimpan!")
-                    st.warning("👇 **LANGKAH TERAKHIR:** Klik tombol di bawah ini untuk mengupload foto Evidence Anda.")
+                    st.warning("👇 **LANGKAH TERAKHIR:** Klik tombol di bawah ini untuk mengupload Foto KM Awal & Kendaraan.")
                     
-                    # TAMPILKAN TOMBOL MENUJU GOOGLE FORM
-                    st.link_button("📸 BUKA GOOGLE FORM (UPLOAD FOTO)", URL_FORM_FOTO_REQUEST)
+                    # TAMPILKAN TOMBOL MENUJU GOOGLE FORM REQUEST DANA
+                    st.link_button("📸 BUKA GOOGLE FORM (UPLOAD FOTO REQUEST)", URL_FORM_FOTO_REQUEST)
                     
                 except Exception as e:
                     st.error(f"Gagal menyimpan data: {e}")
@@ -269,7 +269,16 @@ elif menu == "✅ Form PJB Operasional":
                 harga_satuan = st.number_input("Kolom X: Harga Satuan BBM / Material", min_value=0, step=500)
             
             st.markdown("---")
-            st.info("📸 **Kolom Foto Dihilangkan:** Anda dapat mengupload seluruh bukti Nota & Evidence di link Form yang muncul setelah Anda klik simpan.")
+            st.info("""
+            📸 **PERHATIAN:** Setelah menekan tombol Simpan, Anda **WAJIB** membuka link Google Form untuk mengupload 7 Foto berikut:
+            1. Foto Evidence Pengisian
+            2. Foto Nota BBM (Setelah isi)
+            3. Foto Nota disanding dengan KM
+            4. Foto Material
+            5. Foto Nota material disanding
+            6. Foto Nota Penginapan
+            7. Foto Evidence Pekerjaan
+            """)
             
             submit_pjb = st.form_submit_button("🚀 Simpan Data PJB & Lanjut Upload Foto", type="primary")
             
@@ -294,13 +303,13 @@ elif menu == "✅ Form PJB Operasional":
                         km_akhir,        # K: KM Akhir
                         nominal_pjb,     # L: Total Nominal PJB
                         d["Plat"],       # M: Plat Mobil/Motor
-                        "Upload di Form", # N: Foto Evidence Pengisian
-                        "Upload di Form", # O: Foto Nota BBM
-                        "Upload di Form", # P: Foto Nota disanding KM
-                        "Upload di Form", # Q: Foto Material
-                        "Upload di Form", # R: Foto Nota material disanding
-                        "Upload di Form", # S: Foto Nota Penginapan
-                        "Upload di Form", # T: Foto Evidence Pekerjaan
+                        "Upload via Form", # N: Foto Evidence Pengisian
+                        "Upload via Form", # O: Foto Nota BBM
+                        "Upload via Form", # P: Foto Nota disanding KM
+                        "Upload via Form", # Q: Foto Material
+                        "Upload via Form", # R: Foto Nota material disanding
+                        "Upload via Form", # S: Foto Nota Penginapan
+                        "Upload via Form", # T: Foto Evidence Pekerjaan
                         tot_nilai_pjb,   # U: Total Nilai PJB
                         cari_tiket,      # V: Nomor tiket
                         tot_liter,       # W: Total Liter / Material
@@ -309,9 +318,9 @@ elif menu == "✅ Form PJB Operasional":
                     
                     append_data(SHEET_PJB, data_pjb, creds)
                     st.success(f"✅ Data Teks PJB untuk Tiket **{cari_tiket}** BERHASIL tersimpan.")
-                    st.warning("👇 **LANGKAH TERAKHIR:** Klik tombol di bawah ini untuk mengupload kumpulan foto Nota & Evidence Anda.")
+                    st.warning("👇 **LANGKAH TERAKHIR:** Klik tombol di bawah ini untuk mengupload 7 Foto Bukti PJB Anda.")
                     
-                    # TAMPILKAN TOMBOL MENUJU GOOGLE FORM
+                    # TAMPILKAN TOMBOL MENUJU GOOGLE FORM PJB
                     st.link_button("📸 BUKA GOOGLE FORM (UPLOAD FOTO PJB)", URL_FORM_FOTO_PJB)
                     
                     st.session_state.pjb_data = None
