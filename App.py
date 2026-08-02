@@ -46,13 +46,17 @@ LIST_KEPERLUAN = [
 # ==========================================
 @st.cache_resource
 def get_credentials():
-    # Mengambil string rahasia dari Streamlit Secrets (gcp_json)
+    # Mengambil string rahasia dari Streamlit Secrets
     creds_json = st.secrets["gcp_json"]
     credentials_dict = json.loads(creds_json)
     
-    # Membaca langsung dari memori (dictionary), bukan dari file fisik
+    # --- SAPU PEMBERSIH (KODE AJAIB) ---
+    # Memaksa teks "\n" berubah menjadi Enter (Baris Baru) yang asli
+    # agar bisa dibaca oleh sistem keamanan (Kriptografi) Google
+    credentials_dict["private_key"] = credentials_dict["private_key"].replace("\\n", "\n")
+    
+    # Membaca langsung dari memori (dictionary)
     return Credentials.from_service_account_info(credentials_dict, scopes=SCOPES)
-
 def upload_to_drive(file, credentials):
     if file is None: return ""
     try:
