@@ -14,9 +14,11 @@ st.set_page_config(page_title="Portal Operasional", page_icon="🚀", layout="wi
 # ==========================================
 @st.cache_resource
 def init_connection():
-    # Menggunakan metode terbaru gspread (tidak perlu oauth2client)
-    # Pastikan file credentials.json berada di folder yang sama di GitHub/Streamlit Cloud Anda
-    client = gspread.service_account(filename='credentials.json')
+    # Mengambil kredensial dari Streamlit Secrets
+    credentials_dict = dict(st.secrets["gcp_service_account"])
+    
+    # Menggunakan metode baca dari dictionary (bukan file)
+    client = gspread.service_account_from_dict(credentials_dict)
     return client
 
 client = init_connection()
