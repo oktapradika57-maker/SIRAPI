@@ -2,9 +2,9 @@ import streamlit as st
 import pandas as pd
 import gspread
 import json
+import requests
+import base64
 from google.oauth2.service_account import Credentials
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseUpload
 from datetime import datetime
 import time
 
@@ -14,16 +14,15 @@ import time
 st.set_page_config(page_title="Portal Operasional & Keuangan", page_icon="💼", layout="wide")
 
 # ==========================================
-# 1. KONFIGURASI PENTING (ID DRIVE & SHEET)
+# 1. KONFIGURASI PENTING (IMGBB & SPREADSHEET)
 # ==========================================
-DRIVE_FOLDER_REQUEST = "1Hjgt0LaHBjKMnTyPNLYxRo2MdATlCz01ugu1eKgJ9Fyh-D3Mbye87MRwBbRpf4_qd_R0zvGX"
-DRIVE_FOLDER_PJB = "1zPv_DLi4Knyl7FCYLmma1a1Jk8zAV3-Q37Nn2NMCR0pU79dGBPNXQcIK4edI_MefKWRvH7cI"
-
+IMGBB_API_KEY = "5f2dd705015f8b5beb348cbd04e7c215"
 SPREADSHEET_ID = "1HvgVicTWwO4RMQI6ZR3Mu3IgGicwjcLZl9mDN1auvJU"
+
 SHEET_REQUEST = "Form Request Dana"        
 SHEET_PJB = "Form PJB"                     
 
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 # ==========================================
 # 2. DATA MASTER (DROPDOWNS)
@@ -44,7 +43,7 @@ LIST_KEPERLUAN = [
 ]
 
 # ==========================================
-# 3. FUNGSI KONEKSI & UTILITAS
+# 3. FUNGSI KONEKSI & UTILITAS (IMGBB)
 # ==========================================
 @st.cache_resource
 def get_credentials():
@@ -57,18 +56,28 @@ def get_credentials():
         st.error(f"Gagal memuat kredensial: {e}")
         st.stop()
 
-def upload_to_drive(file, credentials, folder_id):
-    if file is None: return ""
+def upload_to_imgbb(file):
+    if file is None: 
+        return ""
     try:
-        drive_service = build('drive', 'v3', credentials=credentials)
-        media = MediaIoBaseUpload(file, mimetype=file.type, resumable=True)
-        uploaded = drive_service.files().create(
-            body={'name': file.name, 'parents': [folder_id]}, 
-            media_body=media, fields='webViewLink'
-        ).execute()
-        return uploaded.get('webViewLink')
+        url = "https://api.imgbb.com/1/upload"
+        # Membaca file bytes dari Streamlit dan enkripsi ke base64
+        file_bytes = file.getvalue()
+        payload = {
+            "key": IMGBB_API_KEY,
+            "image": base64.b64encode(file_bytes).decode("utf-8")
+        }
+        response = requests.post(url, data=payload)
+        result = response.json()
+        
+        if result.get("success"):
+            return result["data"]["url"] # Mengembalikan URL link gambar
+        else:
+            err_msg = result.get('error', {}).get('message', 'Gagal upload')
+            st.error(f"ImgBB Error ({file.name}): {err_msg}")
+            return ""
     except Exception as e:
-        st.error(f"Gagal upload foto {file.name}: {e}")
+        st.error(f"Gagal menghubungkan ke ImgBB untuk {file.name}: {e}")
         return ""
 
 def append_data(sheet_name, data, credentials):
@@ -147,12 +156,12 @@ if menu == "📝 Request Dana":
             if not tiket:
                 st.error("Nomor Tiket SWFM wajib diisi!")
             else:
-                with st.spinner("Mengunggah foto ke Drive Request Dana dan menyimpan ke Spreadsheet..."):
+                with st.spinner("Mengunggah foto dan menyimpan data ke Spreadsheet..."):
                     try:
-                        creds = get_credentials()
-                        url_km = upload_to_drive(foto_km, creds, DRIVE_FOLDER_REQUEST)
-                        url_evid = upload_to_drive(foto_evidance, creds, DRIVE_FOLDER_REQUEST)
+                        url_km = upload_to_imgbb(foto_km)
+                        url_evid = upload_to_imgbb(foto_evidance)
                         
+                        creds = get_credentials()
                         waktu = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
                         tgl_str = tanggal.strftime("%d/%m/%Y")
                         
@@ -230,8 +239,8 @@ elif menu == "✅ PJB Operasional":
                 harga_satuan = st.number_input("Harga Satuan BBM / material", min_value=0)
             
             st.write("---")
-            st.subheader("📸 Upload Foto Evidence & Nota (Langsung ke Drive PJB)")
-            st.caption("Proses upload 7 foto ke Drive membutuhkan waktu, mohon tunggu hingga muncul notifikasi sukses.")
+            st.subheader("📸 Upload Foto Evidence & Nota (Ke ImgBB)")
+            st.caption("Proses upload foto ke cloud memerlukan waktu beberapa detik, mohon tunggu hingga sukses.")
             
             f1, f2, f3 = st.columns(3)
             with f1:
@@ -248,17 +257,18 @@ elif menu == "✅ PJB Operasional":
             submit_pjb = st.form_submit_button("Kirim PJB", use_container_width=True)
             
             if submit_pjb:
-                with st.spinner("Mulai mengunggah foto ke Google Drive PJB dan Menyimpan Data (Mohon Tunggu)..."):
+                with st.spinner("Mengunggah foto ke Cloud & Menyimpan PJB (Mohon Tunggu)..."):
                     try:
-                        creds = get_credentials()
-                        url_pengisian = upload_to_drive(f_pengisian, creds, DRIVE_FOLDER_PJB)
-                        url_nota_bbm = upload_to_drive(f_nota_bbm, creds, DRIVE_FOLDER_PJB)
-                        url_nota_km = upload_to_drive(f_nota_km, creds, DRIVE_FOLDER_PJB)
-                        url_material = upload_to_drive(f_material, creds, DRIVE_FOLDER_PJB)
-                        url_nota_mat = upload_to_drive(f_nota_mat, creds, DRIVE_FOLDER_PJB)
-                        url_penginapan = upload_to_drive(f_penginapan, creds, DRIVE_FOLDER_PJB)
-                        url_pekerjaan = upload_to_drive(f_pekerjaan, creds, DRIVE_FOLDER_PJB)
+                        # Upload semua foto via ImgBB
+                        url_pengisian = upload_to_imgbb(f_pengisian)
+                        url_nota_bbm = upload_to_imgbb(f_nota_bbm)
+                        url_nota_km = upload_to_imgbb(f_nota_km)
+                        url_material = upload_to_imgbb(f_material)
+                        url_nota_mat = upload_to_imgbb(f_nota_mat)
+                        url_penginapan = upload_to_imgbb(f_penginapan)
+                        url_pekerjaan = upload_to_imgbb(f_pekerjaan)
                         
+                        creds = get_credentials()
                         waktu_pjb = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
                         tgl_pjb_str = tanggal_pjb.strftime("%d/%m/%Y")
                         
