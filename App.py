@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import gspread
 import json
-import re  # <--- INI LIBRARY BARU UNTUK MELACAK KUNCI
+import os
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
@@ -17,7 +17,6 @@ st.set_page_config(page_title="Portal Operasional & Keuangan", page_icon="💼",
 # ==========================================
 # 1. KONFIGURASI PENTING (SESUAIKAN DATA ANDA)
 # ==========================================
-# Ganti dengan ID folder Google Drive tempat menyimpan foto-foto
 DRIVE_FOLDER_ID = "ID_FOLDER_DRIVE_ANDA_MASUKKAN_DISINI"   
 SPREADSHEET_ID = "1HvgVicTWwO4RMQI6ZR3Mu3IgGicwjcLZl9mDN1auvJU"
 
@@ -45,30 +44,20 @@ LIST_KEPERLUAN = [
 ]
 
 # ==========================================
-# 3. FUNGSI KONEKSI & UTILITAS (PELACAK OTOMATIS)
+# 3. FUNGSI KONEKSI (METODE FILE GENERATOR ANTI-PEM ERROR)
 # ==========================================
 @st.cache_resource
 def get_credentials():
     try:
+        # Mengambil string JSON mentah dari Streamlit Secrets
         creds_json = st.secrets["gcp_json"]
-        credentials_dict = json.loads(creds_json)
         
-        if "private_key" in credentials_dict:
-            raw_key = credentials_dict["private_key"]
-            raw_key = raw_key.replace("\\n", "\n")
+        # Menulis ulang string tersebut menjadi file fisik 'credentials.json' secara otomatis di server
+        with open("credentials.json", "w") as f:
+            f.write(creds_json)
             
-            # --- JURUS PELACAK REGEX (ANTI TITIK NYASAR) ---
-            # Mengambil HANYA teks dari blok BEGIN sampai END. 
-            # Mengabaikan titik, kutip, atau karakter apapun di luar blok ini.
-            match = re.search(r"-----BEGIN PRIVATE KEY-----.*?-----END PRIVATE KEY-----", raw_key, re.DOTALL)
-            
-            if match:
-                credentials_dict["private_key"] = match.group(0)
-            else:
-                st.error("❌ Kesalahan Fatal: Tidak menemukan tulisan 'BEGIN PRIVATE KEY' di dalam Streamlit Secrets Anda. Pastikan Anda tidak menghapusnya.")
-                st.stop()
-                
-        return Credentials.from_service_account_info(credentials_dict, scopes=SCOPES)
+        # Menggunakan fungsi bawaan asli Google dari file (100% aman dari error PEM / symbol 46)
+        return Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
     except Exception as e:
         st.error(f"Gagal memuat kredensial: {e}")
         st.stop()
@@ -175,7 +164,7 @@ if menu == "📝 Request Dana":
                         data_req = [
                             waktu, tgl_str, nop, tiket, cluster, nama, role, site_id, 
                             keperluan, kebutuhan, jns_bbm, deskripsi, km_awal, 
-                            "", # Kolom N kosong
+                            "", 
                             lat_berangkat, long_berangkat, plat, rek_penerima, no_rek, 
                             nominal_tf, url_km, url_evid, lat_tujuan, long_tujuan
                         ]
