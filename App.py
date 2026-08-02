@@ -19,7 +19,7 @@ st.set_page_config(page_title="Portal Operasional & Keuangan", page_icon="💼",
 IMGBB_API_KEY = "5f2dd705015f8b5beb348cbd04e7c215"
 SPREADSHEET_ID = "1HvgVicTWwO4RMQI6ZR3Mu3IgGicwjcLZl9mDN1auvJU"
 
-# NAMA SHEET SESUAI DENGAN YANG ANDA BUAT DI SPREADSHEET
+# NAMA TAB SHEET SESUAI DENGAN YANG ANDA BUAT DI GOOGLE SHEETS
 SHEET_REQUEST = "Form Request Dana"        
 SHEET_PJB = "Form PJB"                     
 
@@ -91,7 +91,6 @@ def get_data_request(tiket, credentials):
     records = sheet.get_all_records()
     
     for row in records:
-        # Mencocokkan dengan header kolom tiket di sheet "Form Request Dana"
         tiket_di_sheet = str(row.get("Nomor Tiket SWFM ( tulis cth BPS-2026-000000034391)", row.get("Nomor Tiket SWFM", "")))
         if tiket_di_sheet == str(tiket):
             return row
@@ -169,12 +168,12 @@ if menu == "📝 Request Dana":
                         data_req = [
                             waktu, tgl_str, nop, tiket, cluster, nama, role, site_id, 
                             keperluan, kebutuhan, jns_bbm, deskripsi, km_awal, 
-                            "", # Kolom N kosong
+                            "", 
                             lat_berangkat, long_berangkat, plat, rek_penerima, no_rek, 
                             nominal_tf, url_km, url_evid, lat_tujuan, long_tujuan
                         ]
                         append_data(SHEET_REQUEST, data_req, creds)
-                        st.success(f"✅ Berhasil! Request Dana dengan tiket {tiket} telah tersimpan.")
+                        st.success(f"✅ Berhasil! Request Dana dengan tiket {tiket} telah tersimpan di sheet Form Request Dana.")
                     except Exception as e:
                         st.error(f"Terjadi kesalahan saat menyimpan: {e}")
 
