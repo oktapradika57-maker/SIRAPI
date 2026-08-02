@@ -2,8 +2,6 @@ import streamlit as st
 import pandas as pd
 import gspread
 import json
-import requests
-import base64
 from google.oauth2.service_account import Credentials
 from datetime import datetime
 import time
@@ -28,18 +26,15 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 1. KONFIGURASI UTAMA (GAS WEB APP & SPREADSHEET)
+# 1. KONFIGURASI UTAMA
 # ==========================================
-# Ganti dengan URL Web App Google Apps Script Anda
-GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwlZ77EX7G4siW7OCMvOJfwNhFWzTjzQClMV5jtMpcc1vweXpFnt-6o4B90k8FwUcII/exec"
-
-# Masukkan ID Folder Google Drive Anda untuk masing-masing form
-DRIVE_FOLDER_REQUEST = "1Hjgt0LaHBjKMnTyPNLYxRo2MdATlCz01ugu1eKgJ9Fyh-D3Mbye87MRwBbRpf4_qd_R0zvGX"
-DRIVE_FOLDER_PJB = "1zPv_DLi4Knyl7FCYLmma1a1Jk8zAV3-Q37Nn2NMCR0pU79dGBPNXQcIK4edI_MefKWRvH7cI"
-
 SPREADSHEET_ID = "1HvgVicTWwO4RMQI6ZR3Mu3IgGicwjcLZl9mDN1auvJU"
 SHEET_REQUEST = "Form Request dana"        
 SHEET_PJB = "Form PJB"                     
+
+# MASUKKAN LINK GOOGLE FORM UNTUK UPLOAD FOTO DI SINI
+URL_FORM_FOTO_REQUEST = "https://forms.gle/GANTI_DENGAN_LINK_FORM_FOTO_REQUEST_ANDA"
+URL_FORM_FOTO_PJB = "https://forms.gle/GANTI_DENGAN_LINK_FORM_FOTO_PJB_ANDA"
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
@@ -62,7 +57,7 @@ LIST_KEPERLUAN = [
 ]
 
 # ==========================================
-# 3. FUNGSI KONEKSI & UPLOAD AMAN
+# 3. FUNGSI KONEKSI SPREADSHEET
 # ==========================================
 @st.cache_resource
 def get_credentials():
@@ -74,30 +69,6 @@ def get_credentials():
     except Exception as e:
         st.error(f"Gagal memuat kredensial: {e}")
         st.stop()
-
-def upload_to_drive_via_gas(file, folder_id):
-    """Mengunggah file ke Google Drive melalui Apps Script Web App (Bebas Kuota Service Account & Anti HSTS Block)"""
-    if file is None: 
-        return ""
-    try:
-        file_bytes = file.getvalue()
-        payload = {
-            "filename": file.name,
-            "mimetype": file.type,
-            "bytes": base64.b64encode(file_bytes).decode("utf-8"),
-            "folder_id": folder_id
-        }
-        response = requests.post(GAS_WEB_APP_URL, json=payload)
-        result = response.json()
-        
-        if result.get("status") == "success":
-            return result.get("url")
-        else:
-            st.error(f"Gagal upload {file.name}: {result.get('message')}")
-            return ""
-    except Exception as e:
-        st.error(f"Koneksi upload error untuk {file.name}: {e}")
-        return ""
 
 def append_data(sheet_name, data, credentials):
     client = gspread.authorize(credentials)
@@ -124,15 +95,15 @@ def get_data_request(tiket, credentials):
     for row in rows[1:]:
         if len(row) > 3 and str(row[3]).strip().upper() == str(tiket).strip().upper():
             return {
-                "NOP": row[2] if len(row) > 2 else "",               # Kolom C
-                "Cluster": row[4] if len(row) > 4 else "",           # Kolom E
-                "Nama": row[5] if len(row) > 5 else "",              # Kolom F
-                "Role": row[6] if len(row) > 6 else "",              # Kolom G
-                "Site ID": row[7] if len(row) > 7 else "",           # Kolom H
-                "Keperluan Dana": row[8] if len(row) > 8 else "",    # Kolom I
-                "Jenis BBM": row[10] if len(row) > 10 else "",       # Kolom K
-                "Deskripsi": row[11] if len(row) > 11 else "",       # Kolom L
-                "Plat": row[16] if len(row) > 16 else ""             # Kolom Q
+                "NOP": row[2] if len(row) > 2 else "",               
+                "Cluster": row[4] if len(row) > 4 else "",           
+                "Nama": row[5] if len(row) > 5 else "",              
+                "Role": row[6] if len(row) > 6 else "",              
+                "Site ID": row[7] if len(row) > 7 else "",           
+                "Keperluan Dana": row[8] if len(row) > 8 else "",    
+                "Jenis BBM": row[10] if len(row) > 10 else "",       
+                "Deskripsi": row[11] if len(row) > 11 else "",       
+                "Plat": row[16] if len(row) > 16 else ""             
             }
     return None
 
@@ -149,7 +120,7 @@ menu = st.sidebar.radio("📌 Pilih Menu Formulir:", ["📝 Form Request Dana", 
 # ==========================================
 if menu == "📝 Form Request Dana":
     st.title("📝 Pengajuan Form Request Dana")
-    st.markdown("Isi formulir pengajuan dana di bawah ini. Foto akan langsung tersimpan di Google Drive Anda.")
+    st.markdown("Isi data teks di bawah ini. Untuk upload bukti (foto), Anda akan diarahkan ke Google Form setelah menekan tombol simpan.")
     
     with st.form("form_request_dana"):
         col1, col2 = st.columns(2)
@@ -185,60 +156,55 @@ if menu == "📝 Form Request Dana":
             nominal_tf = st.number_input("Total Nominal ditransfer (Rp)", min_value=0, step=1000)
             
         st.markdown("---")
-        st.subheader("📸 Upload Bukti / Evidence (Resolusi Asli)")
-        c_up1, c_up2 = st.columns(2)
-        with c_up1:
-            foto_km = st.file_uploader("Kolom U: Foto KM Awal", type=["jpg", "png", "jpeg"])
-        with c_up2:
-            foto_evidance = st.file_uploader("Kolom V: Foto Kendaraan / Evidence", type=["jpg", "png", "jpeg"])
+        st.info("📸 **Kolom Foto Dihilangkan:** Anda dapat mengupload foto KM Awal dan Kendaraan di link Form yang muncul setelah Anda klik simpan.")
+        submit_req = st.form_submit_button("🚀 Simpan Data & Lanjut Upload Foto", type="primary")
         
-        st.markdown("")
-        submit_req = st.form_submit_button("🚀 Kirim Request Dana", type="primary")
-        
-        if submit_req:
-            if not tiket.strip():
-                st.error("Nomor Tiket SWFM wajib diisi!")
-            else:
-                with st.spinner("Mengunggah foto ke Google Drive & merekam data ke Spreadsheet..."):
-                    try:
-                        url_km = upload_to_drive_via_gas(foto_km, DRIVE_FOLDER_REQUEST)
-                        url_evid = upload_to_drive_via_gas(foto_evidance, DRIVE_FOLDER_REQUEST)
-                        
-                        creds = get_credentials()
-                        waktu = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-                        tgl_str = tanggal.strftime("%d/%m/%Y")
-                        
-                        data_req = [
-                            waktu,          # A: Timestamp
-                            tgl_str,        # B: Tanggal
-                            nop,            # C: NOP
-                            tiket,          # D: Nomor Tiket SWFM
-                            cluster,        # E: Cluster
-                            nama,           # F: Nama
-                            role,           # G: Role
-                            site_id,        # H: Site ID
-                            keperluan,      # I: Keperluan Dana
-                            kebutuhan,      # J: Kebutuhan dana
-                            jns_bbm,        # K: Jenis BBM
-                            deskripsi,      # L: Deskripsi Pekerjaan
-                            km_awal,        # M: KM Awal
-                            "",             # N: Kosong / Pemisah
-                            lat_berangkat,  # O: Lat keberangkatan
-                            long_berangkat, # P: Long Keberangkatan
-                            plat,           # Q: Plat Mobil/Motor
-                            rek_penerima,   # R: Rekening Penerima
-                            no_rek,         # S: Nomor Rekening
-                            nominal_tf,     # T: Total Nominal ditransfer
-                            url_km,         # U: Foto KM Awal
-                            url_evid,       # V: Foto Kendaraan/Evidence
-                            lat_tujuan,     # W: Lat Tujuan
-                            long_tujuan     # X: Long Tujuan
-                        ]
-                        
-                        append_data(SHEET_REQUEST, data_req, creds)
-                        st.success(f"✅ Berhasil! Data Request Dana dengan Tiket **{tiket}** tersimpan.")
-                    except Exception as e:
-                        st.error(f"Gagal menyimpan data: {e}")
+    if submit_req:
+        if not tiket.strip():
+            st.error("Nomor Tiket SWFM wajib diisi!")
+        else:
+            with st.spinner("Merekam data teks ke Spreadsheet..."):
+                try:
+                    creds = get_credentials()
+                    waktu = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+                    tgl_str = tanggal.strftime("%d/%m/%Y")
+                    
+                    data_req = [
+                        waktu,          # A: Timestamp
+                        tgl_str,        # B: Tanggal
+                        nop,            # C: NOP
+                        tiket,          # D: Nomor Tiket SWFM
+                        cluster,        # E: Cluster
+                        nama,           # F: Nama
+                        role,           # G: Role
+                        site_id,        # H: Site ID
+                        keperluan,      # I: Keperluan Dana
+                        kebutuhan,      # J: Kebutuhan dana
+                        jns_bbm,        # K: Jenis BBM
+                        deskripsi,      # L: Deskripsi Pekerjaan
+                        km_awal,        # M: KM Awal
+                        "",             # N: Kosong / Pemisah
+                        lat_berangkat,  # O: Lat keberangkatan
+                        long_berangkat, # P: Long Keberangkatan
+                        plat,           # Q: Plat Mobil/Motor
+                        rek_penerima,   # R: Rekening Penerima
+                        no_rek,         # S: Nomor Rekening
+                        nominal_tf,     # T: Total Nominal ditransfer
+                        "Upload di Form", # U: Foto KM Awal (Diisi keterangan)
+                        "Upload di Form", # V: Foto Kendaraan/Evidence (Diisi keterangan)
+                        lat_tujuan,     # W: Lat Tujuan
+                        long_tujuan     # X: Long Tujuan
+                    ]
+                    
+                    append_data(SHEET_REQUEST, data_req, creds)
+                    st.success(f"✅ Data Teks Request Dana Tiket **{tiket}** BERHASIL tersimpan!")
+                    st.warning("👇 **LANGKAH TERAKHIR:** Klik tombol di bawah ini untuk mengupload foto Evidence Anda.")
+                    
+                    # TAMPILKAN TOMBOL MENUJU GOOGLE FORM
+                    st.link_button("📸 BUKA GOOGLE FORM (UPLOAD FOTO)", URL_FORM_FOTO_REQUEST)
+                    
+                except Exception as e:
+                    st.error(f"Gagal menyimpan data: {e}")
 
 # ==========================================
 # MENU 2: FORM PJB OPERASIONAL
@@ -303,71 +269,51 @@ elif menu == "✅ Form PJB Operasional":
                 harga_satuan = st.number_input("Kolom X: Harga Satuan BBM / Material", min_value=0, step=500)
             
             st.markdown("---")
-            st.subheader("📸 Upload Foto Evidence & Nota (Resolusi Asli)")
-            st.caption("Pastikan gambar nota dan evidence terbaca jelas.")
+            st.info("📸 **Kolom Foto Dihilangkan:** Anda dapat mengupload seluruh bukti Nota & Evidence di link Form yang muncul setelah Anda klik simpan.")
             
-            p1, p2, p3 = st.columns(3)
-            with p1:
-                f_pengisian = st.file_uploader("Kolom N: Foto Evidence Pengisian", type=["jpg","png","jpeg"])
-                f_nota_bbm = st.file_uploader("Kolom O: Foto Nota BBM", type=["jpg","png","jpeg"])
-                f_nota_km = st.file_uploader("Kolom P: Foto Nota Disanding KM", type=["jpg","png","jpeg"])
-            with p2:
-                f_material = st.file_uploader("Kolom Q: Foto Material", type=["jpg","png","jpeg"])
-                f_nota_mat = st.file_uploader("Kolom R: Foto Nota Material Disanding", type=["jpg","png","jpeg"])
-            with p3:
-                f_penginapan = st.file_uploader("Kolom S: Foto Nota Penginapan", type=["jpg","png","jpeg"])
-                f_pekerjaan = st.file_uploader("Kolom T: Foto Evidence Pekerjaan", type=["jpg","png","jpeg"])
+            submit_pjb = st.form_submit_button("🚀 Simpan Data PJB & Lanjut Upload Foto", type="primary")
             
-            st.markdown("")
-            submit_pjb = st.form_submit_button("🚀 Kirim Form PJB", type="primary")
-            
-            if submit_pjb:
-                with st.spinner("Mengunggah foto ke Google Drive & menyimpan PJB ke Spreadsheet..."):
-                    try:
-                        url_pengisian = upload_to_drive_via_gas(f_pengisian, DRIVE_FOLDER_PJB)
-                        url_nota_bbm = upload_to_drive_via_gas(f_nota_bbm, DRIVE_FOLDER_PJB)
-                        url_nota_km = upload_to_drive_via_gas(f_nota_km, DRIVE_FOLDER_PJB)
-                        url_material = upload_to_drive_via_gas(f_material, DRIVE_FOLDER_PJB)
-                        url_nota_mat = upload_to_drive_via_gas(f_nota_mat, DRIVE_FOLDER_PJB)
-                        url_penginapan = upload_to_drive_via_gas(f_penginapan, DRIVE_FOLDER_PJB)
-                        url_pekerjaan = upload_to_drive_via_gas(f_pekerjaan, DRIVE_FOLDER_PJB)
-                        
-                        creds = get_credentials()
-                        waktu_pjb = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-                        tgl_pjb_str = tanggal_pjb.strftime("%d/%m/%Y")
-                        
-                        data_pjb = [
-                            waktu_pjb,       # A: Timestamp
-                            tgl_pjb_str,     # B: Tanggal
-                            d["NOP"],        # C: NOP
-                            d["Cluster"],    # D: Cluster
-                            d["Nama"],       # E: Nama
-                            d["Role"],       # F: Role
-                            d["Site ID"],    # G: Site ID
-                            d["Keperluan Dana"], # H: Keperluan Dana
-                            d["Jenis BBM"],  # I: Jenis BBM
-                            d["Deskripsi"],  # J: Deskripsi Pekerjaan
-                            km_akhir,        # K: KM Akhir
-                            nominal_pjb,     # L: Total Nominal PJB
-                            d["Plat"],       # M: Plat Mobil/Motor
-                            url_pengisian,   # N: Foto Evidence Pengisian
-                            url_nota_bbm,    # O: Foto Nota BBM
-                            url_nota_km,     # P: Foto Nota disanding KM
-                            url_material,    # Q: Foto Material
-                            url_nota_mat,    # R: Foto Nota material disanding
-                            url_penginapan,  # S: Foto Nota Penginapan
-                            url_pekerjaan,   # T: Foto Evidence Pekerjaan
-                            tot_nilai_pjb,   # U: Total Nilai PJB
-                            cari_tiket,      # V: Nomor tiket
-                            tot_liter,       # W: Total Liter / Material
-                            harga_satuan     # X: Harga Satuan BBM / material
-                        ]
-                        
-                        append_data(SHEET_PJB, data_pjb, creds)
-                        st.success(f"✅ Mantap! Pertanggungjawaban PJB untuk Tiket **{cari_tiket}** berhasil tersimpan.")
-                        
-                        st.session_state.pjb_data = None
-                        time.sleep(2)
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Terjadi kesalahan saat menyimpan PJB: {e}")
+        if submit_pjb:
+            with st.spinner("Merekam data teks PJB ke Spreadsheet..."):
+                try:
+                    creds = get_credentials()
+                    waktu_pjb = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+                    tgl_pjb_str = tanggal_pjb.strftime("%d/%m/%Y")
+                    
+                    data_pjb = [
+                        waktu_pjb,       # A: Timestamp
+                        tgl_pjb_str,     # B: Tanggal
+                        d["NOP"],        # C: NOP
+                        d["Cluster"],    # D: Cluster
+                        d["Nama"],       # E: Nama
+                        d["Role"],       # F: Role
+                        d["Site ID"],    # G: Site ID
+                        d["Keperluan Dana"], # H: Keperluan Dana
+                        d["Jenis BBM"],  # I: Jenis BBM
+                        d["Deskripsi"],  # J: Deskripsi Pekerjaan
+                        km_akhir,        # K: KM Akhir
+                        nominal_pjb,     # L: Total Nominal PJB
+                        d["Plat"],       # M: Plat Mobil/Motor
+                        "Upload di Form", # N: Foto Evidence Pengisian
+                        "Upload di Form", # O: Foto Nota BBM
+                        "Upload di Form", # P: Foto Nota disanding KM
+                        "Upload di Form", # Q: Foto Material
+                        "Upload di Form", # R: Foto Nota material disanding
+                        "Upload di Form", # S: Foto Nota Penginapan
+                        "Upload di Form", # T: Foto Evidence Pekerjaan
+                        tot_nilai_pjb,   # U: Total Nilai PJB
+                        cari_tiket,      # V: Nomor tiket
+                        tot_liter,       # W: Total Liter / Material
+                        harga_satuan     # X: Harga Satuan BBM / material
+                    ]
+                    
+                    append_data(SHEET_PJB, data_pjb, creds)
+                    st.success(f"✅ Data Teks PJB untuk Tiket **{cari_tiket}** BERHASIL tersimpan.")
+                    st.warning("👇 **LANGKAH TERAKHIR:** Klik tombol di bawah ini untuk mengupload kumpulan foto Nota & Evidence Anda.")
+                    
+                    # TAMPILKAN TOMBOL MENUJU GOOGLE FORM
+                    st.link_button("📸 BUKA GOOGLE FORM (UPLOAD FOTO PJB)", URL_FORM_FOTO_PJB)
+                    
+                    st.session_state.pjb_data = None
+                except Exception as e:
+                    st.error(f"Terjadi kesalahan saat menyimpan PJB: {e}")
