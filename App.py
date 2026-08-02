@@ -18,7 +18,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS agar tampilan lebih profesional dan rapi
 st.markdown("""
     <style>
         .main { background-color: #f8f9fa; }
@@ -29,13 +28,17 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 1. KONFIGURASI UTAMA (IMGBB & SPREADSHEET)
+# 1. KONFIGURASI UTAMA (GAS WEB APP & SPREADSHEET)
 # ==========================================
-IMGBB_API_KEY = "5f2dd705015f8b5beb348cbd04e7c215"
-SPREADSHEET_ID = "1HvgVicTWwO4RMQI6ZR3Mu3IgGicwjcLZl9mDN1auvJU"
+# Ganti dengan URL Web App Google Apps Script Anda
+GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwlZ77EX7G4siW7OCMvOJfwNhFWzTjzQClMV5jtMpcc1vweXpFnt-6o4B90k8FwUcII/exec"
 
-# Nama Tab Sheet sesuai permintaan Anda
-SHEET_REQUEST = "Form Request dana"        
+# Masukkan ID Folder Google Drive Anda untuk masing-masing form
+DRIVE_FOLDER_REQUEST = "1Hjgt0LaHBjKMnTyPNLYxRo2MdATlCz01ugu1eKgJ9Fyh-D3Mbye87MRwBbRpf4_qd_R0zvGX"
+DRIVE_FOLDER_PJB = "1zPv_DLi4Knyl7FCYLmma1a1Jk8zAV3-Q37Nn2NMCR0pU79dGBPNXQcIK4edI_MefKWRvH7cI"
+
+SPREADSHEET_ID = "1HvgVicTWwO4RMQI6ZR3Mu3IgGicwjcLZl9mDN1auvJU"
+SHEET_REQUEST = "Form Request Dana"        
 SHEET_PJB = "Form PJB"                     
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
@@ -59,7 +62,7 @@ LIST_KEPERLUAN = [
 ]
 
 # ==========================================
-# 3. FUNGSI KONEKSI & UTILITAS
+# 3. FUNGSI KONEKSI & UPLOAD AMAN
 # ==========================================
 @st.cache_resource
 def get_credentials():
@@ -72,46 +75,43 @@ def get_credentials():
         st.error(f"Gagal memuat kredensial: {e}")
         st.stop()
 
-def upload_to_imgbb(file):
+def upload_to_drive_via_gas(file, folder_id):
+    """Mengunggah file ke Google Drive melalui Apps Script Web App (Bebas Kuota Service Account & Anti HSTS Block)"""
     if file is None: 
         return ""
     try:
-        url = "https://api.imgbb.com/1/upload"
         file_bytes = file.getvalue()
         payload = {
-            "key": IMGBB_API_KEY,
-            "image": base64.b64encode(file_bytes).decode("utf-8")
+            "filename": file.name,
+            "mimetype": file.type,
+            "bytes": base64.b64encode(file_bytes).decode("utf-8"),
+            "folder_id": folder_id
         }
-        response = requests.post(url, data=payload)
+        response = requests.post(GAS_WEB_APP_URL, json=payload)
         result = response.json()
         
-        if result.get("success"):
-            return result["data"]["url"]
+        if result.get("status") == "success":
+            return result.get("url")
         else:
-            err_msg = result.get('error', {}).get('message', 'Gagal upload')
-            st.error(f"ImgBB Error ({file.name}): {err_msg}")
+            st.error(f"Gagal upload {file.name}: {result.get('message')}")
             return ""
     except Exception as e:
-        st.error(f"Gagal menghubungkan ke ImgBB untuk {file.name}: {e}")
+        st.error(f"Koneksi upload error untuk {file.name}: {e}")
         return ""
 
 def append_data(sheet_name, data, credentials):
     client = gspread.authorize(credentials)
     spreadsheet = client.open_by_key(SPREADSHEET_ID)
-    
     try:
         sheet = spreadsheet.worksheet(sheet_name)
     except gspread.exceptions.WorksheetNotFound:
         existing = [w.title for w in spreadsheet.worksheets()]
-        raise Exception(f"Tab '{sheet_name}' tidak ditemukan! Tab yang tersedia di Spreadsheet Anda: {existing}")
-        
+        raise Exception(f"Tab '{sheet_name}' tidak ditemukan! Tab tersedia: {existing}")
     sheet.append_row(data)
 
 def get_data_request(tiket, credentials):
-    """Mencari tiket berdasarkan Kolom D (Indeks 3) secara aman"""
     client = gspread.authorize(credentials)
     spreadsheet = client.open_by_key(SPREADSHEET_ID)
-    
     try:
         sheet = spreadsheet.worksheet(SHEET_REQUEST)
     except gspread.exceptions.WorksheetNotFound:
@@ -122,7 +122,6 @@ def get_data_request(tiket, credentials):
         return None
         
     for row in rows[1:]:
-        # Kolom D adalah indeks ke-3 (Nomor Tiket SWFM)
         if len(row) > 3 and str(row[3]).strip().upper() == str(tiket).strip().upper():
             return {
                 "NOP": row[2] if len(row) > 2 else "",               # Kolom C
@@ -150,7 +149,7 @@ menu = st.sidebar.radio("📌 Pilih Menu Formulir:", ["📝 Form Request Dana", 
 # ==========================================
 if menu == "📝 Form Request Dana":
     st.title("📝 Pengajuan Form Request Dana")
-    st.markdown("Silakan lengkapi formulir di bawah ini. Data akan langsung terekam ke Google Sheets & terhubung ke sistem PJB.")
+    st.markdown("Isi formulir pengajuan dana di bawah ini. Foto akan langsung tersimpan di Google Drive Anda.")
     
     with st.form("form_request_dana"):
         col1, col2 = st.columns(2)
@@ -186,7 +185,7 @@ if menu == "📝 Form Request Dana":
             nominal_tf = st.number_input("Total Nominal ditransfer (Rp)", min_value=0, step=1000)
             
         st.markdown("---")
-        st.subheader("📸 Upload Bukti / Evidence (Format Gambar)")
+        st.subheader("📸 Upload Bukti / Evidence (Resolusi Asli)")
         c_up1, c_up2 = st.columns(2)
         with c_up1:
             foto_km = st.file_uploader("Kolom U: Foto KM Awal", type=["jpg", "png", "jpeg"])
@@ -200,16 +199,15 @@ if menu == "📝 Form Request Dana":
             if not tiket.strip():
                 st.error("Nomor Tiket SWFM wajib diisi!")
             else:
-                with st.spinner("Mengunggah foto ke cloud & merekam data ke Spreadsheet..."):
+                with st.spinner("Mengunggah foto ke Google Drive & merekam data ke Spreadsheet..."):
                     try:
-                        url_km = upload_to_imgbb(foto_km)
-                        url_evid = upload_to_imgbb(foto_evidance)
+                        url_km = upload_to_drive_via_gas(foto_km, DRIVE_FOLDER_REQUEST)
+                        url_evid = upload_to_drive_via_gas(foto_evidance, DRIVE_FOLDER_REQUEST)
                         
                         creds = get_credentials()
                         waktu = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
                         tgl_str = tanggal.strftime("%d/%m/%Y")
                         
-                        # Susunan Kolom A sampai X secara presisi
                         data_req = [
                             waktu,          # A: Timestamp
                             tgl_str,        # B: Tanggal
@@ -238,7 +236,7 @@ if menu == "📝 Form Request Dana":
                         ]
                         
                         append_data(SHEET_REQUEST, data_req, creds)
-                        st.success(f"✅ Berhasil! Data Request Dana dengan Tiket **{tiket}** tersimpan ke sheet '{SHEET_REQUEST}'.")
+                        st.success(f"✅ Berhasil! Data Request Dana dengan Tiket **{tiket}** tersimpan.")
                     except Exception as e:
                         st.error(f"Gagal menyimpan data: {e}")
 
@@ -249,10 +247,9 @@ elif menu == "✅ Form PJB Operasional":
     st.title("✅ Form PJB Operasional (Pertanggungjawaban)")
     st.markdown("Masukkan **Nomor Tiket** Anda untuk menarik data pengajuan sebelumnya secara otomatis.")
     
-    # Kotak Pencarian Tiket
     col_s1, col_s2 = st.columns([3, 1])
     with col_s1:
-        cari_tiket = st.text_input("🔍 Masukkan Nomor Tiket SWFM (Sama seperti saat Request Dana):", placeholder="cth: BPS-2026-000000034391")
+        cari_tiket = st.text_input("🔍 Masukkan Nomor Tiket SWFM:", placeholder="cth: BPS-2026-000000034391")
     with col_s2:
         st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
         btn_cari = st.button("Cek Tiket", type="primary")
@@ -271,15 +268,14 @@ elif menu == "✅ Form PJB Operasional":
                     st.success("🎉 Data ditemukan! Silakan lengkapi pertanggungjawaban di bawah ini.")
                 else:
                     st.session_state.pjb_data = None
-                    st.error(f"❌ Tiket '{cari_tiket}' tidak ditemukan di sheet '{SHEET_REQUEST}'. Pastikan nomor tiket sudah benar.")
+                    st.error(f"❌ Tiket '{cari_tiket}' tidak ditemukan di sheet '{SHEET_REQUEST}'.")
             except Exception as e:
                 st.error(f"Terjadi kesalahan koneksi: {e}")
 
-    # Form PJB Muncul Jika Tiket Valid
     if st.session_state.pjb_data is not None:
         d = st.session_state.pjb_data
         
-        st.info("💡 Data dari pengajuan awal (NOP, Cluster, Nama, Role, Site ID, dll) telah terisi otomatis dan dikunci.")
+        st.info("💡 Data pengajuan awal (NOP, Cluster, Nama, Role, Site ID, dll) terkunci otomatis.")
         
         with st.form("form_pjb_operasional"):
             col_a, col_b = st.columns(2)
@@ -307,8 +303,8 @@ elif menu == "✅ Form PJB Operasional":
                 harga_satuan = st.number_input("Kolom X: Harga Satuan BBM / Material", min_value=0, step=500)
             
             st.markdown("---")
-            st.subheader("📸 Upload Foto Evidence & Nota (Wajib Format Gambar)")
-            st.caption("Pastikan mengunggah gambar yang sesuai pada masing-masing kolom agar laporan valid.")
+            st.subheader("📸 Upload Foto Evidence & Nota (Resolusi Asli)")
+            st.caption("Pastikan gambar nota dan evidence terbaca jelas.")
             
             p1, p2, p3 = st.columns(3)
             with p1:
@@ -326,22 +322,20 @@ elif menu == "✅ Form PJB Operasional":
             submit_pjb = st.form_submit_button("🚀 Kirim Form PJB", type="primary")
             
             if submit_pjb:
-                with st.spinner("Mengunggah foto ke cloud & merekam data PJB ke Spreadsheet..."):
+                with st.spinner("Mengunggah foto ke Google Drive & menyimpan PJB ke Spreadsheet..."):
                     try:
-                        # Upload 7 foto ke ImgBB secara paralel/berurutan aman
-                        url_pengisian = upload_to_imgbb(f_pengisian)
-                        url_nota_bbm = upload_to_imgbb(f_nota_bbm)
-                        url_nota_km = upload_to_imgbb(f_nota_km)
-                        url_material = upload_to_imgbb(f_material)
-                        url_nota_mat = upload_to_imgbb(f_nota_mat)
-                        url_penginapan = upload_to_imgbb(f_penginapan)
-                        url_pekerjaan = upload_to_imgbb(f_pekerjaan)
+                        url_pengisian = upload_to_drive_via_gas(f_pengisian, DRIVE_FOLDER_PJB)
+                        url_nota_bbm = upload_to_drive_via_gas(f_nota_bbm, DRIVE_FOLDER_PJB)
+                        url_nota_km = upload_to_drive_via_gas(f_nota_km, DRIVE_FOLDER_PJB)
+                        url_material = upload_to_drive_via_gas(f_material, DRIVE_FOLDER_PJB)
+                        url_nota_mat = upload_to_drive_via_gas(f_nota_mat, DRIVE_FOLDER_PJB)
+                        url_penginapan = upload_to_drive_via_gas(f_penginapan, DRIVE_FOLDER_PJB)
+                        url_pekerjaan = upload_to_drive_via_gas(f_pekerjaan, DRIVE_FOLDER_PJB)
                         
                         creds = get_credentials()
                         waktu_pjb = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
                         tgl_pjb_str = tanggal_pjb.strftime("%d/%m/%Y")
                         
-                        # Susunan Kolom A sampai X untuk Form PJB secara presisi
                         data_pjb = [
                             waktu_pjb,       # A: Timestamp
                             tgl_pjb_str,     # B: Tanggal
@@ -370,9 +364,8 @@ elif menu == "✅ Form PJB Operasional":
                         ]
                         
                         append_data(SHEET_PJB, data_pjb, creds)
-                        st.success(f"✅ Mantap! Pertanggungjawaban PJB untuk Tiket **{cari_tiket}** berhasil tersimpan ke sheet '{SHEET_PJB}'.")
+                        st.success(f"✅ Mantap! Pertanggungjawaban PJB untuk Tiket **{cari_tiket}** berhasil tersimpan.")
                         
-                        # Reset sesi PJB setelah sukses
                         st.session_state.pjb_data = None
                         time.sleep(2)
                         st.rerun()
