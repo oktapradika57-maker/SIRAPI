@@ -41,9 +41,16 @@ LIST_KEPERLUAN = [
 # ==========================================
 # 3. FUNGSI KONEKSI & UTILITAS
 # ==========================================
+import json
+
 @st.cache_resource
 def get_credentials():
-    return Credentials.from_service_account_file(CREDENTIALS_FILE, scopes=SCOPES)
+    # Mengambil string rahasia dari Streamlit Secrets
+    creds_json = st.secrets["gcp_json"]
+    credentials_dict = json.loads(creds_json)
+    
+    # Membaca dari memori (dictionary), bukan dari file fisik
+    return Credentials.from_service_account_info(credentials_dict, scopes=SCOPES)
 
 def upload_to_drive(file, credentials):
     if file is None: return ""
