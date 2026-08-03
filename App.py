@@ -79,7 +79,7 @@ MASTER_DATA = {
 }
 
 LIST_KEPERLUAN = ["Tshoot", "Backup", "Support", "PM", "Program BCP", "Program Quikwin", "Program G348T", "Pengiriman Material SPMS", "Pembelian Material"]
-SHEET_REQUEST = "Form Request Dana"        
+SHEET_REQUEST = "Form Request dana"        
 SHEET_PJB = "Form PJB"                     
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
