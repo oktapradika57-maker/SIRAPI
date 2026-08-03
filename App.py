@@ -62,7 +62,7 @@ LIST_KEPERLUAN = [
     "Program G348T", "Pengiriman Material SPMS", "Pembelian Material"
 ]
 
-SHEET_REQUEST = "Form Request Dana"        
+SHEET_REQUEST = "Form Request dana"        
 SHEET_PJB = "Form PJB"                     
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
