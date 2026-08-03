@@ -17,6 +17,7 @@ st.markdown("""
     <style>
         .main { background-color: #f8f9fa; }
         .stButton>button { width: 100%; border-radius: 6px; font-weight: bold; height: 45px; }
+        div.stAlert { border-radius: 6px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -31,33 +32,42 @@ cloudinary.config(
 )
 
 # ==========================================
-# 2. KONFIGURASI GOOGLE SHEETS
+# 2. MASTER DATA (DINAMIS BERDASARKAN NOP)
 # ==========================================
-SPREADSHEET_ID = "1HvgVicTWwO4RMQI6ZR3Mu3IgGicwjcLZl9mDN1auvJU"
-SHEET_REQUEST = "Form Request dana"        
-SHEET_PJB = "Form PJB"                     
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+MASTER_DATA = {
+    "Palangkaraya": {
+        "spreadsheet_id": "1HvgVicTWwO4RMQI6ZR3Mu3IgGicwjcLZl9mDN1auvJU",
+        "clusters": ["Palangkaraya", "Barito Raya"],
+        "names": ["ADI BOWO SANTOSO", "AHMAD", "AHMAD MUZAKIR", "AHMAD SETIAWAN", "ALFI SYAHRI", "ARMADI", "AULIA RAHMAN", "DARLI SUTANTO", "DIDI RIYADI", "FAHMI", "FRANS EJHA ADITYA", "GYLLBRHED ALFARY LOLOMSAIT", "HARUN NURASYID", "HORY YUSMANTO", "INDRA", "JAMES JIMBRIS TAMAILANG", "JUMADI", "KHILAL DAWAI KATIRI", "LEONARD HARA", "M. RIFANI", "MUHAMMAD MUKHLIS", "MUHAMMAD MUKTI", "MUNAWIR AHMAD", "MURJANI", "NURHAYAT", "OKY BANGKIT PAMUNGKAS", "PRADILA KANDI", "PUJIANTO", "PUTRA WARDANA", "REYNALDI RICARDO PUTRA", "RIKI HIDAYAT", "RIKO SETIADI", "SAILILLAH", "SARUL SAPUTRA", "SARWONO", "TAKLIM", "TIVIANSYAH", "TRISNO SUSANTO", "YAHYA MUHAMAD"]
+    },
+    "Pangkalanbun": {
+        "spreadsheet_id": "1bc0lDhR5iMtXZsKiKIdEwPY8JTaASeHFtaJSeXkywE4",
+        "clusters": ["Ketapang", "Sampit", "Pangkalanbun"],
+        "names": ["RIRIH HARIANTO", "MUKHAMAD ABDUL KHOLIP", "YAMA DEWANTA", "BAGUS SANTOSO", "IMRON SETIAWAN", "JOENDRIS HERDIAN KARA", "STEVEN HERDIAN KARA", "YUDIONO", "DADANG WAHYU SYAHPUTRA", "CAVIN ANDREAN EKA PUTRA", "RAHMAT RIYAN WAHYUDIN", "SUWITO", "DIDIK PRIYONO", "GUNTUR WAHYU PRADANA", "UTI MUHAMMAD KHAIRUL HUDA", "IDRUS MAULANA", "M. RIZKY", "TRIYONO", "ERIK SETIAWAN", "AGUS SUGANDA", "AJI SAPUTRA", "DIAN WAHYUDI", "HAFID BUDIANTO", "IWAN ZAINAL ABIDIN", "DANDI PUTRA", "PONIRAN", "PARYADI KUSUMA", "HERWANI", "DIAN WILDANI", "IPAN HARIONO", "FIRDAUS", "RONI YUDI ISYANTO", "AYU NUR ISLAMIAH", "ARDIANSYAH.", "DAYU SHANDY", "WAHYUDI", "TAJAM SAPUTRA", "MUJHAHID ALWI", "NANDA FIRMANSYAH", "WAHYU RAHMADANI", "TEGUH WICAKSONO", "FERI HARIADI", "NASUKI", "ANDARIANTO PUJI SURO", "BONDAN PRAMUDYA ANANTATUR", "SOLEKHAN", "RIZAL IHZAMAHENDRA", "MUHAMMAD ROIS FERDIANSYAH", "WIDI ARYANTO", "FHANNY AGUSTIAWAN"]
+    },
+    "Tarakan": {
+        "spreadsheet_id": "1lRj1YdZGQwY5vHg8P4wudK9V1O_lJuEYjdyHkXoB-Wg",
+        "clusters": ["Tarakan Inner", "Tarakan Outer"],
+        "names": ["HENDRA WIRTASI SIMANULLANG", "ARIZONA ROSADI", "KUKUH BHASKARA", "NATAL SIMBOLON", "HERMAWAN", "IRVAN DINATA VANDITYAWAN", "ENDRAS SAPTA", "AHMADI", "EDI PANJI ERMAYANA", "HANS RISKY RONI TUAH GIRSANG", "IRMANSYAH B. SANGAJI", "REMO REMOLDUS MANALU", "MOHAMMAD RAFAI", "FIRMAN SYAHRUL", "AZMIR", "PETRUS RESI KELORE", "ANIR REZKY", "AHDAN", "PARJON SIMANULLANG", "RUSDI", "HASRIADI", "PURO SUGONDO", "ALIMUDIN M. SAER", "KORNELIUS USI KELORE", "RUSDIANSYAH", "JONTES YUSDA SIMANULLANG", "NANI SETIANINGSIH", "UNGGUL NUGRAHA", "YOGABITA INDOTENO", "JHON KENNEDI SIMANULLANG", "RAFI MUHAMAD SYARIF", "AGRIVA", "SEPTIAN ALVITO", "M. DEDI RIZALDI", "SAHARUDDIN.", "MUHAMMAD RASYID", "SUPRIADI", "JULIMAT SIHITE", "EFNI NURYADIN", "ERWIN SAPUTRA ARIANSYAH", "ALVEUS", "SUPRIADI BANDANGAN"]
+    },
+    "Pontianak": {
+        "spreadsheet_id": "1VmoWPImNFMjnaIQpBXEVYdMiTEzsz3P4tpmzfA0EMDE",
+        "clusters": ["Sintang", "Singkawang", "Pontianak"],
+        "names": ["ALOYSIUS", "RUDI", "RONIYANTO", "SUKADI", "HAIRIL", "AZMI ASHADIQI", "SUYADI", "ARIEF DARUL IKHWAN", "MUHAMMAD AL FATAH", "YUDIANSYAH", "RAHMAD INDRA IRAWAN", "MATIUS MARTIN", "RYVAEEL DEWANGGA", "AMIRDA ANGGA SAPUTRA", "IZHARUDDIN", "VINSENSIUS YOGI", "GUSTI ARIZAL", "MUHAMMAD MIFTAHUDIN, A.MD", "BAYU ANGGARA PUTRA", "YONI IRAWAN", "SUGANDI", "IRVAN ANDRIYANA", "ALDIANSYAH", "ABANG HAMDANI", "ABANG KUSDIANSYAH", "SUMAN", "SANGGARA ISMARAWARI", "IBIN", "VALENTINUS PETRO", "DWI KURNIAWAN ISMANTO", "ARISAFRIADI", "DONATUS DONI", "NUR AHMAD KARDIYANTO", "AGRI PERDANA", "AKHSANUL FIKI", "ALI ALAMSYAH", "MUHAMMAD FIRZHA GIANNI HARSYA", "RICKY ARDILAY", "FAISAL", "WIJI SANTOSO", "HISYAM MUTHOYIB", "ARIF RAHMAN NUGROHO", "TOTOK SUGIARTO", "PURWANDI SETIAWAN", "JULIANTO BHAKTI PUTRO, SH", "ILHAMMUDIN", "AGUNG", "ROSIDI", "ABRAR ELZAH FATHALIF", "HENDRI YULIANSYAH", "JAMIL", "GORO SUKARTONO", "OKTAPIANUS JUMIN", "ONNIE SYAEFUDDIN", "BUDI", "ULUL AMRY", "RUHIAT, A.MD", "SUPIANDI", "WAHYUDI", "SUHENDRIK", "M. ARKAM", "SYAFRI APRIJAL", "ARIANTO SUMANTRI", "TUTU AGE ANDIKA", "VIRANDA SAPTA, A.MD", "TOTO HERMANSYAH", "KURNIAWAN", "ROBI ISKANDAR MASDIANSYAH", "MUTIIN CHANDRA", "MISJANI", "KHAIRUL FARISD", "ANDRA", "DODI RATMAYANTO", "WAWAN DARYANA", "MISWARDI", "JUPRILIAUS PICO", "DEDY PURNOMO", "EDI KURNIAWAN", "DEDE GUNAWAN", "WANDALA JAGOARDI PANDALO", "KARIYADI", "REZQI AL BARQAH", "FIRMANSYAH, SP"]
+    }
+}
 
-# ==========================================
-# 3. DATA MASTER
-# ==========================================
-LIST_NAMA = [
-    "ADI BOWO SANTOSO", "AHMAD", "AHMAD MUZAKIR", "AHMAD SETIAWAN", "ALFI SYAHRI", 
-    "ARMADI", "AULIA RAHMAN", "DARLI SUTANTO", "DIDI RIYADI", "FAHMI", "FRANS EJHA ADITYA", 
-    "GYLLBRHED ALFARY LOLOMSAIT", "HARUN NURASYID", "HORY YUSMANTO", "INDRA", 
-    "JAMES JIMBRIS TAMAILANG", "JUMADI", "KHILAL DAWAI KATIRI", "LEONARD HARA", "M. RIFANI", 
-    "MUHAMMAD MUKHLIS", "MUHAMMAD MUKTI", "MUNAWIR AHMAD", "MURJANI", "NURHAYAT", 
-    "OKY BANGKIT PAMUNGKAS", "PRADILA KANDI", "PUJIANTO", "PUTRA WARDANA", 
-    "REYNALDI RICARDO PUTRA", "RIKI HIDAYAT", "RIKO SETIADI", "SAILILLAH", "SARUL SAPUTRA", 
-    "SARWONO", "TAKLIM", "TIVIANSYAH", "TRISNO SUSANTO", "YAHYA MUHAMAD"
-]
 LIST_KEPERLUAN = [
     "Tshoot", "Backup", "Support", "PM", "Program BCP", "Program Quikwin", 
     "Program G348T", "Pengiriman Material SPMS", "Pembelian Material"
 ]
 
+SHEET_REQUEST = "Form Request dana"        
+SHEET_PJB = "Form PJB"                     
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+
 # ==========================================
-# 4. FUNGSI UPLOAD & SPREADSHEET (ANTI GAGAL)
+# 3. FUNGSI UPLOAD & SPREADSHEET
 # ==========================================
 @st.cache_resource
 def get_credentials():
@@ -67,29 +77,28 @@ def get_credentials():
     return Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
 
 def upload_foto(file):
-    """Fungsi super aman: ubah foto ke teks base64 lalu tembak ke Cloudinary"""
+    """Konversi foto ke base64 lalu tembak ke Cloudinary"""
     if file is None: return ""
     try:
-        # Konversi foto agar aman dikirim
         encoded = base64.b64encode(file.getvalue()).decode('utf-8')
         mime_type = file.type
         file_b64 = f"data:{mime_type};base64,{encoded}"
-        
-        # Upload ke server Cloudinary
         response = cloudinary.uploader.upload(file_b64, resource_type="auto")
-        return response.get("secure_url") # Link gambar langsung bisa dibuka siapa saja
+        return response.get("secure_url") 
     except Exception as e:
         st.error(f"Gagal Upload Foto: {e}")
         return ""
 
-def append_data(sheet_name, data, credentials):
+def append_data(sheet_name, data, credentials, spreadsheet_id):
+    """Menyimpan data ke Spreadsheet yang dinamis sesuai NOP"""
     client = gspread.authorize(credentials)
-    sheet = client.open_by_key(SPREADSHEET_ID).worksheet(sheet_name)
+    sheet = client.open_by_key(spreadsheet_id).worksheet(sheet_name)
     sheet.append_row(data)
 
-def get_data_request(tiket, credentials):
+def get_data_request(tiket, credentials, spreadsheet_id):
+    """Mengambil data tiket dari Spreadsheet yang dinamis sesuai NOP"""
     client = gspread.authorize(credentials)
-    rows = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_REQUEST).get_all_values()
+    rows = client.open_by_key(spreadsheet_id).worksheet(SHEET_REQUEST).get_all_values()
     for row in rows[1:]:
         if len(row) > 3 and str(row[3]).strip().upper() == str(tiket).strip().upper():
             return {
@@ -106,7 +115,7 @@ def get_data_request(tiket, credentials):
     return None
 
 # ==========================================
-# 5. SIDEBAR NAVIGASI
+# 4. SIDEBAR NAVIGASI
 # ==========================================
 st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2942/2942813.png", width=80)
 st.sidebar.title("Portal Operasional")
@@ -118,14 +127,19 @@ menu = st.sidebar.radio("📌 Pilih Menu Formulir:", ["📝 Form Request Dana", 
 if menu == "📝 Form Request Dana":
     st.title("📝 Pengajuan Form Request Dana")
     
+    # Pilih NOP di luar form agar dropdown list nama/cluster otomatis ter-update seketika
+    st.markdown("### 📌 1. Pilih Area Operasional")
+    nop_selected = st.selectbox("Pilih NOP", list(MASTER_DATA.keys()))
+    
+    st.markdown("### 📌 2. Isi Formulir Request")
     with st.form("form_request_dana"):
         col1, col2 = st.columns(2)
         with col1:
             tanggal = st.date_input("Tanggal Pengajuan")
-            nop = st.selectbox("NOP", ["Palangkaraya"])
+            # Dropdown dinamis mengikuti variabel nop_selected di atas
+            cluster = st.selectbox("Cluster", MASTER_DATA[nop_selected]["clusters"])
+            nama = st.selectbox("Nama Petugas", MASTER_DATA[nop_selected]["names"])
             tiket = st.text_input("Nomor Tiket SWFM (cth: BPS-2026-000000034391)")
-            cluster = st.selectbox("Cluster", ["Palangkaraya", "Barito Raya"])
-            nama = st.selectbox("Nama Petugas", LIST_NAMA)
             role = st.selectbox("Role", ["PM", "TE", "MBP", "CME"])
             site_id = st.text_input("Site ID")
             keperluan = st.selectbox("Keperluan Dana", LIST_KEPERLUAN)
@@ -158,31 +172,37 @@ if menu == "📝 Form Request Dana":
             if not tiket.strip():
                 st.error("Nomor Tiket SWFM wajib diisi!")
             else:
-                with st.spinner("Mengunggah foto dan menyimpan data ke Spreadsheet..."):
-                    # Proses Upload Foto
+                with st.spinner(f"Menyimpan ke Database {nop_selected} & Upload Foto..."):
+                    target_spreadsheet = MASTER_DATA[nop_selected]["spreadsheet_id"]
+                    
                     url_km = upload_foto(foto_km)
                     url_evid = upload_foto(foto_evidance)
                     
                     creds = get_credentials()
                     waktu = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
                     data_req = [
-                        waktu, tanggal.strftime("%d/%m/%Y"), nop, tiket, cluster, nama, role, site_id, 
+                        waktu, tanggal.strftime("%d/%m/%Y"), nop_selected, tiket, cluster, nama, role, site_id, 
                         keperluan, kebutuhan, jns_bbm, deskripsi, km_awal, "", lat_berangkat, long_berangkat, 
                         plat, rek_penerima, no_rek, nominal_tf, url_km, url_evid, lat_tujuan, long_tujuan
                     ]
-                    append_data(SHEET_REQUEST, data_req, creds)
-                    st.success(f"✅ Data Teks & Foto Request Dana Tiket **{tiket}** BERHASIL tersimpan!")
+                    
+                    # Lempar ke spreadsheet yang sesuai dengan NOP
+                    append_data(SHEET_REQUEST, data_req, creds, target_spreadsheet)
+                    st.success(f"✅ Data Tiket **{tiket}** BERHASIL tersimpan di Database **{nop_selected}**!")
 
 # ==========================================
 # MENU 2: FORM PJB OPERASIONAL
 # ==========================================
 elif menu == "✅ Form PJB Operasional":
-    st.title("✅ Form PJB Operasional (Pertanggungjawaban)")
+    st.title("✅ Form PJB Operasional")
+    st.markdown("Silakan pilih NOP terlebih dahulu agar sistem tahu *Database* mana yang harus dicari.")
     
-    col_s1, col_s2 = st.columns([3, 1])
+    col_s1, col_s2, col_s3 = st.columns([2, 3, 1])
     with col_s1:
-        cari_tiket = st.text_input("🔍 Masukkan Nomor Tiket SWFM:", placeholder="cth: BPS-2026-000000034391")
+        nop_cari = st.selectbox("📂 Pilih Database (NOP):", list(MASTER_DATA.keys()))
     with col_s2:
+        cari_tiket = st.text_input("🔍 Masukkan Nomor Tiket SWFM:", placeholder="cth: BPS-2026-000000034391")
+    with col_s3:
         st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
         btn_cari = st.button("Cek Tiket", type="primary")
         
@@ -190,15 +210,17 @@ elif menu == "✅ Form PJB Operasional":
         st.session_state.pjb_data = None
 
     if btn_cari and cari_tiket:
-        with st.spinner("Mencari data tiket di server..."):
+        with st.spinner(f"Mencari tiket '{cari_tiket}' di Database {nop_cari}..."):
+            target_spreadsheet = MASTER_DATA[nop_cari]["spreadsheet_id"]
             creds = get_credentials()
-            data_ditemukan = get_data_request(cari_tiket, creds)
+            
+            data_ditemukan = get_data_request(cari_tiket, creds, target_spreadsheet)
             if data_ditemukan:
                 st.session_state.pjb_data = data_ditemukan
-                st.success("🎉 Data ditemukan! Silakan lengkapi form di bawah.")
+                st.success(f"🎉 Data ditemukan di {nop_cari}! Silakan lengkapi form PJB.")
             else:
                 st.session_state.pjb_data = None
-                st.error("❌ Tiket tidak ditemukan.")
+                st.error(f"❌ Tiket '{cari_tiket}' tidak ditemukan di Database {nop_cari}.")
 
     if st.session_state.pjb_data is not None:
         d = st.session_state.pjb_data
@@ -243,8 +265,9 @@ elif menu == "✅ Form PJB Operasional":
             submit_pjb = st.form_submit_button("🚀 Simpan Form PJB", type="primary")
             
         if submit_pjb:
-            with st.spinner("Mengunggah foto dan merekam PJB ke Spreadsheet..."):
-                # Upload Foto
+            with st.spinner("Mengunggah foto dan merekam PJB..."):
+                target_spreadsheet = MASTER_DATA[d["NOP"]]["spreadsheet_id"]
+                
                 url_pengisian = upload_foto(f_pengisian)
                 url_nota_bbm = upload_foto(f_nota_bbm)
                 url_nota_km = upload_foto(f_nota_km)
@@ -262,8 +285,8 @@ elif menu == "✅ Form PJB Operasional":
                     url_penginapan, url_pekerjaan, tot_nilai_pjb, cari_tiket, tot_liter, harga_satuan
                 ]
                 
-                append_data(SHEET_PJB, data_pjb, creds)
-                st.success(f"✅ Data Teks & Foto PJB Tiket **{cari_tiket}** BERHASIL tersimpan!")
+                append_data(SHEET_PJB, data_pjb, creds, target_spreadsheet)
+                st.success(f"✅ Data PJB Tiket **{cari_tiket}** BERHASIL tersimpan di Database {d['NOP']}!")
                 st.session_state.pjb_data = None
                 time.sleep(2)
                 st.rerun()
