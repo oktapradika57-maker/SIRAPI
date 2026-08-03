@@ -9,21 +9,41 @@ from datetime import datetime
 import time
 
 # ==========================================
-# 0. KONFIGURASI HALAMAN
+# 0. KONFIGURASI HALAMAN & UI PROFESIONAL
 # ==========================================
-st.set_page_config(page_title="Portal Operasional", page_icon="💼", layout="wide")
+st.set_page_config(page_title="Sistem Keuangan & Operasional", page_icon="🏦", layout="wide")
 
 st.markdown("""
     <style>
-        .main { background-color: #f8f9fa; }
-        .stButton>button { width: 100%; border-radius: 6px; font-weight: bold; height: 45px; }
-        div.stAlert { border-radius: 6px; }
+        /* Gaya Latar Belakang & Font */
+        .main { background-color: #F4F6F9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        
+        /* Gaya Kartu Header */
+        .header-card {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            padding: 20px; border-radius: 10px; color: white; text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 25px;
+        }
+        
+        /* Gaya Tombol Utama */
+        .stButton>button { 
+            width: 100%; border-radius: 6px; font-weight: bold; height: 45px; 
+            background-color: #2980b9; color: white; border: none; transition: 0.3s;
+        }
+        .stButton>button:hover { background-color: #1c5980; }
+        
+        /* Kotak Peringatan & Status */
+        div.stAlert { border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .locked-box { border-left: 5px solid #e74c3c; padding: 15px; background-color: #fceceb; border-radius: 5px; color: #c0392b; font-weight: bold; margin-bottom: 15px;}
+        .section-title { color: #2c3e50; font-size: 1.2rem; font-weight: 600; border-bottom: 2px solid #bdc3c7; padding-bottom: 5px; margin-top: 20px; margin-bottom: 15px; }
     </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 1. KONFIGURASI CLOUDINARY (SERVER FOTO)
+# 1. KONFIGURASI SERVER & KOORDINATOR
 # ==========================================
+PASSWORD_KOORDINATOR = "Kamiyakin2027"
+
 cloudinary.config(
     cloud_name = "fxm61tjv", 
     api_key = "624877324969231", 
@@ -32,7 +52,7 @@ cloudinary.config(
 )
 
 # ==========================================
-# 2. MASTER DATA (DINAMIS SESUAI NOP)
+# 2. MASTER DATA (DATABASE DINAMIS)
 # ==========================================
 MASTER_DATA = {
     "Palangkaraya": {
@@ -57,242 +77,286 @@ MASTER_DATA = {
     }
 }
 
-LIST_KEPERLUAN = [
-    "Tshoot", "Backup", "Support", "PM", "Program BCP", "Program Quikwin", 
-    "Program G348T", "Pengiriman Material SPMS", "Pembelian Material"
-]
-
+LIST_KEPERLUAN = ["Tshoot", "Backup", "Support", "PM", "Program BCP", "Program Quikwin", "Program G348T", "Pengiriman Material SPMS", "Pembelian Material"]
 SHEET_REQUEST = "Form Request dana"        
 SHEET_PJB = "Form PJB"                     
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 # ==========================================
-# 3. FUNGSI UPLOAD & SPREADSHEET
+# 3. FUNGSI INTI & CACHING SUPER CEPAT
 # ==========================================
 @st.cache_resource
 def get_credentials():
-    creds_json = st.secrets["gcp_json"]
     with open("credentials.json", "w") as f:
-        f.write(creds_json)
+        f.write(st.secrets["gcp_json"])
     return Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
 
+# Tarik data & Cache selama 10 detik agar loading tidak berat tapi data tetap real-time
+@st.cache_data(ttl=10)
+def fetch_spreadsheet_data(spreadsheet_id):
+    creds = get_credentials()
+    client = gspread.authorize(creds)
+    ss = client.open_by_key(spreadsheet_id)
+    
+    try:
+        req_rows = ss.worksheet(SHEET_REQUEST).get_all_values()
+    except: req_rows = []
+    
+    try:
+        pjb_rows = ss.worksheet(SHEET_PJB).get_all_values()
+    except: pjb_rows = []
+    
+    return req_rows, pjb_rows
+
+def get_user_tickets_status(nama, req_rows, pjb_rows):
+    """Fungsi Validasi: Melacak tiket mana saja yang belum di-PJB-kan oleh user"""
+    req_tickets = {}
+    for r in req_rows[1:]:
+        if len(r) > 5 and r[5].strip().upper() == nama.strip().upper():
+            req_tickets[r[3].strip().upper()] = r[1] # Simpan {Tiket: Tanggal}
+            
+    pjb_tickets = set()
+    for r in pjb_rows[1:]:
+        if len(r) > 21 and r[4].strip().upper() == nama.strip().upper():
+            pjb_tickets.add(r[21].strip().upper())
+            
+    outstanding = []
+    history = []
+    for tkt, tgl in req_tickets.items():
+        if tkt not in pjb_tickets:
+            outstanding.append(tkt)
+            history.append({"Tiket": tkt, "Tanggal": tgl, "Status": "🔴 Menunggu PJB"})
+        else:
+            history.append({"Tiket": tkt, "Tanggal": tgl, "Status": "🟢 Selesai"})
+            
+    return outstanding, sorted(history, key=lambda x: x["Status"], reverse=True)
+
 def upload_foto(file):
-    """Konversi foto ke base64 lalu tembak ke Cloudinary"""
     if file is None: return ""
     try:
         encoded = base64.b64encode(file.getvalue()).decode('utf-8')
-        mime_type = file.type
-        file_b64 = f"data:{mime_type};base64,{encoded}"
-        response = cloudinary.uploader.upload(file_b64, resource_type="auto")
-        return response.get("secure_url") 
+        res = cloudinary.uploader.upload(f"data:{file.type};base64,{encoded}", resource_type="auto")
+        return res.get("secure_url") 
     except Exception as e:
         st.error(f"Gagal Upload Foto: {e}")
         return ""
 
-def append_data(sheet_name, data, credentials, spreadsheet_id):
-    """Menyimpan data ke Spreadsheet yang dinamis sesuai NOP"""
-    client = gspread.authorize(credentials)
-    sheet = client.open_by_key(spreadsheet_id).worksheet(sheet_name)
-    sheet.append_row(data)
-
-def get_data_request(tiket, credentials, spreadsheet_id):
-    """Mengambil data tiket dari Spreadsheet yang dinamis sesuai NOP"""
-    client = gspread.authorize(credentials)
-    rows = client.open_by_key(spreadsheet_id).worksheet(SHEET_REQUEST).get_all_values()
-    for row in rows[1:]:
-        if len(row) > 3 and str(row[3]).strip().upper() == str(tiket).strip().upper():
-            return {
-                "NOP": row[2] if len(row) > 2 else "",               
-                "Cluster": row[4] if len(row) > 4 else "",           
-                "Nama": row[5] if len(row) > 5 else "",              
-                "Role": row[6] if len(row) > 6 else "",              
-                "Site ID": row[7] if len(row) > 7 else "",           
-                "Keperluan Dana": row[8] if len(row) > 8 else "",    
-                "Jenis BBM": row[10] if len(row) > 10 else "",       
-                "Deskripsi": row[11] if len(row) > 11 else "",       
-                "Plat": row[16] if len(row) > 16 else ""             
-            }
-    return None
+def append_data(sheet_name, data, spreadsheet_id):
+    creds = get_credentials()
+    client = gspread.authorize(creds)
+    client.open_by_key(spreadsheet_id).worksheet(sheet_name).append_row(data)
+    fetch_spreadsheet_data.clear() # Reset cache agar data terupdate seketika
 
 # ==========================================
-# 4. SIDEBAR NAVIGASI
+# 4. SIDEBAR MENU & VALIDASI TRACKING TIKET
 # ==========================================
 st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2942/2942813.png", width=80)
-st.sidebar.title("Portal Operasional")
-menu = st.sidebar.radio("📌 Pilih Menu Formulir:", ["📝 Form Request Dana", "✅ Form PJB Operasional"])
+st.sidebar.title("Navigasi Portal")
+menu = st.sidebar.radio("📋 Pilih Transaksi:", ["📝 Form Request Dana", "✅ Form PJB Operasional"])
+
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 🔍 Sistem Cek Status Tiket")
+st.sidebar.caption("Lupa nomor tiket? Cek status PJB Anda di sini.")
+cek_nop = st.sidebar.selectbox("📂 NOP", list(MASTER_DATA.keys()), key="cek_nop")
+cek_nama = st.sidebar.selectbox("👤 Nama Anda", MASTER_DATA[cek_nop]["names"], key="cek_nama")
+
+if st.sidebar.button("Cari Histori Saya"):
+    req_r, pjb_r = fetch_spreadsheet_data(MASTER_DATA[cek_nop]["spreadsheet_id"])
+    out_tkt, hist_tkt = get_user_tickets_status(cek_nama, req_r, pjb_r)
+    
+    if hist_tkt:
+        st.sidebar.dataframe(pd.DataFrame(hist_tkt), hide_index=True)
+        if out_tkt:
+            st.sidebar.error(f"⚠️ PERHATIAN: Anda memiliki {len(out_tkt)} tiket yang belum di-PJB-kan!")
+        else:
+            st.sidebar.success("✅ Hebat! Seluruh tiket Anda sudah selesai PJB.")
+    else:
+        st.sidebar.info("Belum ada data pengajuan untuk nama ini.")
 
 # ==========================================
 # MENU 1: FORM REQUEST DANA
 # ==========================================
 if menu == "📝 Form Request Dana":
-    st.title("📝 Pengajuan Form Request Dana")
-    st.markdown("---")
+    st.markdown("<div class='header-card'><h2>📝 Portal Pengajuan Dana Operasional</h2><p>Pastikan data yang dimasukkan akurat dan akuntabel.</p></div>", unsafe_allow_html=True)
     
-    # Layout sama persis seperti versi awal tanpa st.form
+    nop = st.selectbox("📌 1. Pilih Database Regional (NOP)", list(MASTER_DATA.keys()))
+    
+    st.markdown("<div class='section-title'>📋 2. Informasi Petugas & Tiket</div>", unsafe_allow_html=True)
+    
+    # Ambil Data Spreadsheet untuk keperluan Validasi Locking di background
+    target_ss = MASTER_DATA[nop]["spreadsheet_id"]
+    req_r, pjb_r = fetch_spreadsheet_data(target_ss)
+    all_requested_tickets = [r[3].strip().upper() for r in req_r[1:] if len(r) > 3]
+
     col1, col2 = st.columns(2)
-    
     with col1:
-        st.subheader("📌 Informasi Pekerjaan")
         tanggal = st.date_input("Tanggal Pengajuan")
-        nop = st.selectbox("NOP", list(MASTER_DATA.keys()))
-        tiket = st.text_input("Nomor Tiket SWFM (cth: BPS-2026-000000034391)")
-        # Dropdown Cluster & Nama seketika otomatis berubah berdasarkan NOP di atasnya!
-        cluster = st.selectbox("Cluster", MASTER_DATA[nop]["clusters"])
-        nama = st.selectbox("Nama Petugas", MASTER_DATA[nop]["names"])
-        role = st.selectbox("Role", ["PM", "TE", "MBP", "CME"])
-        site_id = st.text_input("Site ID")
-        keperluan = st.selectbox("Keperluan Dana", LIST_KEPERLUAN)
-        kebutuhan = st.number_input("Kebutuhan Dana (Rp)", min_value=0, step=1000)
-        deskripsi = st.text_area("Deskripsi Pekerjaan")
+        cluster = st.selectbox("Cluster Regional", MASTER_DATA[nop]["clusters"])
+        nama = st.selectbox("Nama Petugas / Pemohon", MASTER_DATA[nop]["names"])
+        
+        # VALIDASI 1: CEK APAKAH NAMA INI DIBLOKIR KARENA PJB BELUM SELESAI
+        outstanding_tkt, _ = get_user_tickets_status(nama, req_r, pjb_r)
+        is_locked_user = len(outstanding_tkt) > 0
+        
+        tiket = st.text_input("Nomor Tiket SWFM (WAJIB)")
+        
+        # VALIDASI 2: CEK DOUBLE TIKET
+        is_duplicate_ticket = (tiket.strip().upper() in all_requested_tickets) and tiket.strip() != ""
+        
+        role = st.selectbox("Role Jabatan", ["PM", "TE", "MBP", "CME"])
+        site_id = st.text_input("ID Site / Lokasi")
         
     with col2:
-        st.subheader("🚗 Kendaraan & Lokasi")
-        jns_bbm = st.selectbox("Jenis BBM", ["Mobil", "motor", "genset"])
-        km_awal = st.text_input("KM Awal (Tulis 0 jika tidak req bbm)", value="0")
-        plat = st.text_input("Plat Mobil/Motor")
-        
-        st.markdown("**Koordinat Keberangkatan & Tujuan**")
-        lat_berangkat = st.text_input("Lat Keberangkatan (-1.2654 / tulis 0)", value="0")
-        long_berangkat = st.text_input("Long Keberangkatan (116.8253 / tulis 0)", value="0")
-        lat_tujuan = st.text_input("Lat Tujuan (-1.2654 / tulis 0)", value="0")
-        long_tujuan = st.text_input("Long Tujuan (116.8253 / tulis 0)", value="0")
-        
-        st.markdown("**💳 Informasi Transfer**")
-        rek_penerima = st.selectbox("Rekening Penerima", ["BNI", "BCA", "MANDIRI", "BRI"])
-        no_rek = st.text_input("Nomor Rekening / E-Wallet")
-        nominal_tf = st.number_input("Total Nominal ditransfer (Rp)", min_value=0, step=1000)
-        
-    st.markdown("---")
-    st.subheader("📸 Upload Bukti")
+        keperluan = st.selectbox("Klasifikasi Keperluan Dana", LIST_KEPERLUAN)
+        kebutuhan = st.number_input("Estimasi Kebutuhan Dana (Rp)", min_value=0, step=1000)
+        jns_bbm = st.selectbox("Jenis Kendaraan / BBM", ["Mobil", "motor", "genset"])
+        km_awal = st.text_input("Indikator KM Awal (Tulis 0 jika tidak relevan)", value="0")
+        plat = st.text_input("Plat Nomor Kendaraan")
+        deskripsi = st.text_area("Deskripsi Pekerjaan / Justifikasi")
+
+    st.markdown("<div class='section-title'>📍 3. Data Koordinat & Keuangan</div>", unsafe_allow_html=True)
+    col3, col4 = st.columns(2)
+    with col3:
+        lat_berangkat = st.text_input("Latitude Berangkat", value="0")
+        long_berangkat = st.text_input("Longitude Berangkat", value="0")
+        rek_penerima = st.selectbox("Bank Penerima / E-Wallet", ["BNI", "BCA", "MANDIRI", "BRI"])
+    with col4:
+        lat_tujuan = st.text_input("Latitude Tujuan", value="0")
+        long_tujuan = st.text_input("Longitude Tujuan", value="0")
+        no_rek = st.text_input("Nomor Rekening Tujuan")
+        nominal_tf = st.number_input("Total Nominal Transfer (Rp)", min_value=0, step=1000)
+
+    st.markdown("<div class='section-title'>📸 4. Bukti Lampiran Fisik (Evidance)</div>", unsafe_allow_html=True)
     c_up1, c_up2 = st.columns(2)
-    with c_up1:
-        foto_km = st.file_uploader("Foto KM Awal (Kolom U)", type=["jpg", "png", "jpeg"])
-    with c_up2:
-        foto_evidance = st.file_uploader("Foto Kendaraan/Evidence (Kolom V)", type=["jpg", "png", "jpeg"])
+    with c_up1: foto_km = st.file_uploader("Upload Foto KM Awal", type=["jpg", "png", "jpeg"])
+    with c_up2: foto_evidance = st.file_uploader("Upload Foto Kendaraan/Pekerjaan", type=["jpg", "png", "jpeg"])
     
     st.markdown("<br>", unsafe_allow_html=True)
-    # Tombol submit reguler
-    submit_req = st.button("🚀 Kirim Request Dana", type="primary", use_container_width=True)
+
+    # ================= LOGIKA PENGUNCIAN & SUBMIT =================
+    if is_locked_user:
+        st.markdown(f"<div class='locked-box'>⛔ AKSES DITOLAK: Sdr. {nama} memiliki {len(outstanding_tkt)} tiket yang belum dipertanggungjawabkan (PJB).<br>Tiket tertunggak: {', '.join(outstanding_tkt)}.<br>Harap selesaikan Form PJB terlebih dahulu!</div>", unsafe_allow_html=True)
     
-    if submit_req:
-        if not tiket.strip():
-            st.error("Nomor Tiket SWFM wajib diisi!")
-        else:
-            with st.spinner(f"Menyimpan ke Database {nop} & Upload Foto..."):
-                target_spreadsheet = MASTER_DATA[nop]["spreadsheet_id"]
-                
-                url_km = upload_foto(foto_km)
-                url_evid = upload_foto(foto_evidance)
-                
-                creds = get_credentials()
-                waktu = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-                data_req = [
-                    waktu, tanggal.strftime("%d/%m/%Y"), nop, tiket, cluster, nama, role, site_id, 
-                    keperluan, kebutuhan, jns_bbm, deskripsi, km_awal, "", lat_berangkat, long_berangkat, 
-                    plat, rek_penerima, no_rek, nominal_tf, url_km, url_evid, lat_tujuan, long_tujuan
-                ]
-                
-                append_data(SHEET_REQUEST, data_req, creds, target_spreadsheet)
-                st.success(f"✅ Data Tiket **{tiket}** BERHASIL tersimpan di Database **{nop}**!")
+    elif is_duplicate_ticket:
+        st.warning("⚠️ TIKET GANDA TERDETEKSI: Nomor tiket ini sudah pernah diajukan sebelumnya di dalam sistem!")
+        input_pass = st.text_input("🔑 Masukkan Password Koordinator untuk Membuka Blokir:", type="password")
+        
+        if input_pass == PASSWORD_KOORDINATOR:
+            st.success("Akses Bypass Koordinator Diterima.")
+            btn_submit = st.button("🚀 Paksakan Kirim Request Dana", type="primary")
+            if btn_submit:
+                with st.spinner(f"Memproses pengajuan ke Database {nop}..."):
+                    url_km, url_evid = upload_foto(foto_km), upload_foto(foto_evidance)
+                    waktu = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+                    data_req = [waktu, tanggal.strftime("%d/%m/%Y"), nop, tiket, cluster, nama, role, site_id, keperluan, kebutuhan, jns_bbm, deskripsi, km_awal, "", lat_berangkat, long_berangkat, plat, rek_penerima, no_rek, nominal_tf, url_km, url_evid, lat_tujuan, long_tujuan]
+                    append_data(SHEET_REQUEST, data_req, target_ss)
+                    st.success(f"✅ Transaksi Bypass Berhasil! Tiket {tiket} telah terekam.")
+                    time.sleep(2)
+                    st.rerun()
+    else:
+        # KONDISI NORMAL (TIDAK DIBLOKIR)
+        btn_submit = st.button("🚀 Kirim Form Request Dana", type="primary")
+        if btn_submit:
+            if not tiket.strip(): st.error("Nomor Tiket SWFM wajib diisi!")
+            else:
+                with st.spinner(f"Mengenkripsi & mengirim data ke Database {nop}..."):
+                    url_km, url_evid = upload_foto(foto_km), upload_foto(foto_evidance)
+                    waktu = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+                    data_req = [waktu, tanggal.strftime("%d/%m/%Y"), nop, tiket, cluster, nama, role, site_id, keperluan, kebutuhan, jns_bbm, deskripsi, km_awal, "", lat_berangkat, long_berangkat, plat, rek_penerima, no_rek, nominal_tf, url_km, url_evid, lat_tujuan, long_tujuan]
+                    append_data(SHEET_REQUEST, data_req, target_ss)
+                    st.success(f"✅ Berhasil! Tiket {tiket} telah terekam aman di buku besar operasional.")
+                    time.sleep(2)
+                    st.rerun()
 
 # ==========================================
 # MENU 2: FORM PJB OPERASIONAL
 # ==========================================
 elif menu == "✅ Form PJB Operasional":
-    st.title("✅ Form PJB Operasional")
+    st.markdown("<div class='header-card' style='background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);'><h2>✅ Portal Pertanggungjawaban (PJB)</h2><p>Selesaikan pelaporan keuangan tepat waktu untuk membuka kembali akses pengajuan.</p></div>", unsafe_allow_html=True)
     
-    # Kolom pencarian sejajar
     col_s1, col_s2, col_s3 = st.columns([2, 3, 1])
-    with col_s1:
-        nop_cari = st.selectbox("📂 Pilih Database (NOP):", list(MASTER_DATA.keys()))
-    with col_s2:
-        cari_tiket = st.text_input("🔍 Masukkan Nomor Tiket SWFM:", placeholder="cth: BPS-2026-000000034391")
-    with col_s3:
+    with col_s1: nop_cari = st.selectbox("📂 Pilih Database (NOP):", list(MASTER_DATA.keys()))
+    with col_s2: cari_tiket = st.text_input("🔍 Masukkan Nomor Tiket SWFM:")
+    with col_s3: 
         st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
-        btn_cari = st.button("Cek Tiket", type="primary")
+        btn_cari = st.button("Tarik Data Tiket", type="primary")
         
     if "pjb_data" not in st.session_state:
         st.session_state.pjb_data = None
 
     if btn_cari and cari_tiket:
-        with st.spinner(f"Mencari tiket '{cari_tiket}' di Database {nop_cari}..."):
-            target_spreadsheet = MASTER_DATA[nop_cari]["spreadsheet_id"]
-            creds = get_credentials()
+        with st.spinner(f"Menarik histori tiket '{cari_tiket}' dari Ledger {nop_cari}..."):
+            target_ss = MASTER_DATA[nop_cari]["spreadsheet_id"]
+            req_r, _ = fetch_spreadsheet_data(target_ss)
             
-            data_ditemukan = get_data_request(cari_tiket, creds, target_spreadsheet)
-            if data_ditemukan:
-                st.session_state.pjb_data = data_ditemukan
-                st.success(f"🎉 Data ditemukan di {nop_cari}! Silakan lengkapi form PJB.")
+            # Cari baris tiket
+            ditemukan = None
+            for r in req_r[1:]:
+                if len(r) > 3 and r[3].strip().upper() == cari_tiket.strip().upper():
+                    ditemukan = {"NOP": r[2], "Cluster": r[4], "Nama": r[5], "Role": r[6], "Site ID": r[7], "Keperluan": r[8], "Jenis BBM": r[10], "Deskripsi": r[11], "Plat": r[16]}
+            
+            if ditemukan:
+                st.session_state.pjb_data = ditemukan
+                st.success("🎉 Histori ditemukan! Sistem akan melakukan *Auto-Fill*.")
             else:
                 st.session_state.pjb_data = None
-                st.error(f"❌ Tiket '{cari_tiket}' tidak ditemukan di Database {nop_cari}.")
+                st.error("❌ Tiket tidak ditemukan. Pastikan NOP dan Nomor Tiket benar.")
 
     if st.session_state.pjb_data is not None:
         d = st.session_state.pjb_data
-        
-        st.markdown("---")
+        st.markdown("<div class='section-title'>🔒 Data Terenkripsi (Read-Only)</div>", unsafe_allow_html=True)
         col_a, col_b = st.columns(2)
         with col_a:
-            st.subheader("🔒 Data Terisi Otomatis")
-            tanggal_pjb = st.date_input("Tanggal PJB")
+            tanggal_pjb = st.date_input("Tanggal Pelaporan PJB")
             nop_pjb = st.text_input("NOP", value=d["NOP"], disabled=True)
             cluster_pjb = st.text_input("Cluster", value=d["Cluster"], disabled=True)
             nama_pjb = st.text_input("Nama", value=d["Nama"], disabled=True)
             role_pjb = st.text_input("Role", value=d["Role"], disabled=True)
-            site_pjb = st.text_input("Site ID", value=d["Site ID"], disabled=True)
-            keperluan_pjb = st.text_input("Keperluan", value=d["Keperluan Dana"], disabled=True)
-            jns_bbm_pjb = st.text_input("Jenis BBM", value=d["Jenis BBM"], disabled=True)
-            deskripsi_pjb = st.text_area("Deskripsi", value=d["Deskripsi"], disabled=True)
-            plat_pjb = st.text_input("Plat", value=d["Plat"], disabled=True)
-        
         with col_b:
-            st.subheader("📝 Data Tambahan PJB")
-            km_akhir = st.text_input("KM Akhir", value="0")
-            nominal_pjb = st.number_input("Total Nominal PJB", min_value=0, step=1000)
-            tot_nilai_pjb = st.number_input("Total Nilai PJB (Sesuai nota)", min_value=0, step=1000)
-            tot_liter = st.text_input("Total Liter / Material", value="0")
-            harga_satuan = st.number_input("Harga Satuan", min_value=0, step=500)
+            site_pjb = st.text_input("Site ID", value=d["Site ID"], disabled=True)
+            keperluan_pjb = st.text_input("Keperluan", value=d["Keperluan"], disabled=True)
+            jns_bbm_pjb = st.text_input("Jenis BBM", value=d["Jenis BBM"], disabled=True)
+            plat_pjb = st.text_input("Plat Nomor", value=d["Plat"], disabled=True)
+            deskripsi_pjb = st.text_input("Deskripsi Pekerjaan", value=d["Deskripsi"], disabled=True)
         
-        st.markdown("---")
-        st.subheader("📸 Upload Bukti")
+        st.markdown("<div class='section-title'>📝 Rincian Realisasi (PJB)</div>", unsafe_allow_html=True)
+        col_c, col_d = st.columns(2)
+        with col_c:
+            km_akhir = st.text_input("Indikator KM Akhir", value="0")
+            nominal_pjb = st.number_input("Total Nominal PJB Terpakai (Rp)", min_value=0, step=1000)
+            tot_liter = st.text_input("Total Liter / Jumlah Material", value="0")
+        with col_d:
+            tot_nilai_pjb = st.number_input("Total Nilai Sesuai Nota Faktual (Rp)", min_value=0, step=1000)
+            harga_satuan = st.number_input("Harga Satuan (BBM / Material)", min_value=0, step=500)
+        
+        st.markdown("<div class='section-title'>📸 Lampiran Validasi Nota & Fisik</div>", unsafe_allow_html=True)
         p1, p2, p3 = st.columns(3)
         with p1:
-            f_pengisian = st.file_uploader("Foto Evidence Pengisian", type=["jpg","png","jpeg"])
-            f_nota_bbm = st.file_uploader("Foto Nota BBM", type=["jpg","png","jpeg"])
-            f_nota_km = st.file_uploader("Foto Nota Disanding KM", type=["jpg","png","jpeg"])
+            f_pengisian = st.file_uploader("Evidance Pengisian", type=["jpg","png","jpeg"])
+            f_nota_bbm = st.file_uploader("Nota BBM", type=["jpg","png","jpeg"])
+            f_nota_km = st.file_uploader("Nota Disanding KM", type=["jpg","png","jpeg"])
         with p2:
             f_material = st.file_uploader("Foto Material", type=["jpg","png","jpeg"])
-            f_nota_mat = st.file_uploader("Foto Nota Material Disanding", type=["jpg","png","jpeg"])
+            f_nota_mat = st.file_uploader("Nota Material Disanding", type=["jpg","png","jpeg"])
         with p3:
-            f_penginapan = st.file_uploader("Foto Nota Penginapan", type=["jpg","png","jpeg"])
-            f_pekerjaan = st.file_uploader("Foto Evidence Pekerjaan", type=["jpg","png","jpeg"])
+            f_penginapan = st.file_uploader("Nota Penginapan", type=["jpg","png","jpeg"])
+            f_pekerjaan = st.file_uploader("Evidance Pekerjaan", type=["jpg","png","jpeg"])
         
         st.markdown("<br>", unsafe_allow_html=True)
-        submit_pjb = st.button("🚀 Simpan Form PJB", type="primary", use_container_width=True)
+        submit_pjb = st.button("🚀 Sahkan Pelaporan PJB", type="primary", use_container_width=True)
         
         if submit_pjb:
-            with st.spinner("Mengunggah foto dan merekam PJB..."):
-                target_spreadsheet = MASTER_DATA[d["NOP"]]["spreadsheet_id"]
+            with st.spinner("Mengunggah faktur dan mengamankan pelaporan..."):
+                target_ss = MASTER_DATA[d["NOP"]]["spreadsheet_id"]
+                url_1, url_2, url_3 = upload_foto(f_pengisian), upload_foto(f_nota_bbm), upload_foto(f_nota_km)
+                url_4, url_5 = upload_foto(f_material), upload_foto(f_nota_mat)
+                url_6, url_7 = upload_foto(f_penginapan), upload_foto(f_pekerjaan)
                 
-                url_pengisian = upload_foto(f_pengisian)
-                url_nota_bbm = upload_foto(f_nota_bbm)
-                url_nota_km = upload_foto(f_nota_km)
-                url_material = upload_foto(f_material)
-                url_nota_mat = upload_foto(f_nota_mat)
-                url_penginapan = upload_foto(f_penginapan)
-                url_pekerjaan = upload_foto(f_pekerjaan)
-                
-                creds = get_credentials()
                 waktu_pjb = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-                data_pjb = [
-                    waktu_pjb, tanggal_pjb.strftime("%d/%m/%Y"), d["NOP"], d["Cluster"], d["Nama"], d["Role"], 
-                    d["Site ID"], d["Keperluan Dana"], d["Jenis BBM"], d["Deskripsi"], km_akhir, nominal_pjb, 
-                    d["Plat"], url_pengisian, url_nota_bbm, url_nota_km, url_material, url_nota_mat, 
-                    url_penginapan, url_pekerjaan, tot_nilai_pjb, cari_tiket, tot_liter, harga_satuan
-                ]
+                data_pjb = [waktu_pjb, tanggal_pjb.strftime("%d/%m/%Y"), d["NOP"], d["Cluster"], d["Nama"], d["Role"], d["Site ID"], d["Keperluan"], d["Jenis BBM"], d["Deskripsi"], km_akhir, nominal_pjb, d["Plat"], url_1, url_2, url_3, url_4, url_5, url_6, url_7, tot_nilai_pjb, cari_tiket, tot_liter, harga_satuan]
                 
-                append_data(SHEET_PJB, data_pjb, creds, target_spreadsheet)
-                st.success(f"✅ Data PJB Tiket **{cari_tiket}** BERHASIL tersimpan di Database {d['NOP']}!")
+                append_data(SHEET_PJB, data_pjb, target_ss)
+                st.success(f"✅ Pelaporan Akuntansi PJB Tiket {cari_tiket} berhasil ditutup!")
                 st.session_state.pjb_data = None
                 time.sleep(2)
                 st.rerun()
