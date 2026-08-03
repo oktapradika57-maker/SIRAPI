@@ -11,7 +11,7 @@ import time
 # ==========================================
 # 0. KONFIGURASI HALAMAN
 # ==========================================
-st.set_page_config(page_title="Portal Operasional", page_icon="💼", layout="wide")
+st.set_page_config(page_title="SIRAPI", page_icon="💼", layout="wide")
 
 st.markdown("""
     <style>
