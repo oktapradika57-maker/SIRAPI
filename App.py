@@ -11,7 +11,7 @@ import time
 # ==========================================
 # 0. KONFIGURASI HALAMAN & UI PROFESIONAL
 # ==========================================
-st.set_page_config(page_title="Sistem Keuangan & Operasional", page_icon="🏦", layout="wide")
+st.set_page_config(page_title="SiRAPI", page_icon="🏦", layout="wide")
 
 st.markdown("""
     <style>
@@ -189,7 +189,7 @@ if menu == "📝 Form Request Dana":
     with col2:
         keperluan = st.selectbox("Klasifikasi Keperluan Dana", LIST_KEPERLUAN)
         kebutuhan = st.number_input("Estimasi Kebutuhan Dana (Rp)", min_value=0, step=1000)
-        jns_bbm = st.selectbox("Jenis Kendaraan / BBM", ["Mobil", "motor", "genset"])
+        jns_bbm = st.selectbox("Jenis Kendaraan / BBM", ["Mobil", "motor", "genset","Lainnya"])
         km_awal = st.text_input("Indikator KM Awal (Tulis 0 jika tidak relevan)", value="0")
         plat = st.text_input("Plat Nomor Kendaraan")
         deskripsi = st.text_area("Deskripsi Pekerjaan / Justifikasi")
