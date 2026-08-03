@@ -234,30 +234,44 @@ if menu == "📝 Form Request Dana":
     st.markdown("<br>", unsafe_allow_html=True)
 
     # ================= LOGIKA PENGUNCIAN & SUBMIT =================
-    if is_locked_user:
-        st.markdown(f"<div class='locked-box'>⛔ AKSES DITOLAK: Sdr. {nama} memiliki {len(outstanding_tkt)} tiket yang belum dipertanggungjawabkan (PJB).<br>Tiket tertunggak: {', '.join(outstanding_tkt)}.<br>Harap selesaikan Form PJB terlebih dahulu!</div>", unsafe_allow_html=True)
     
-    elif is_duplicate_ticket:
-        st.warning("⚠️ TIKET GANDA TERDETEKSI: Nomor tiket ini sudah pernah diajukan sebelumnya di dalam sistem!")
-        input_pass = st.text_input("🔑 Masukkan Password Koordinator untuk Membuka Blokir:", type="password")
+    # JIKA USER TERKUNCI (PJB Belum Selesai ATAU Tiket Double)
+    if is_locked_user or is_duplicate_ticket:
+        
+        if is_locked_user:
+            st.markdown(f"<div class='locked-box'>⛔ AKSES DITOLAK: Sdr. {nama} memiliki {len(outstanding_tkt)} tiket yang belum dipertanggungjawabkan (PJB).<br>Tiket tertunggak: {', '.join(outstanding_tkt)}.<br>Harap selesaikan Form PJB terlebih dahulu!</div>", unsafe_allow_html=True)
+            
+        if is_duplicate_ticket:
+            st.warning("⚠️ TIKET GANDA TERDETEKSI: Nomor tiket ini sudah pernah diajukan sebelumnya di dalam sistem!")
+            
+        st.info("💡 Hubungi Koordinator untuk mendapatkan izin bypass (membuka blokir).")
+        
+        # MUNCULKAN KOTAK PASSWORD
+        input_pass = st.text_input("🔑 Masukkan Password Koordinator untuk Membuka Blokir Khusus:", type="password")
         
         if input_pass == PASSWORD_KOORDINATOR:
-            st.success("Akses Bypass Koordinator Diterima.")
+            st.success("✅ Akses Bypass Koordinator Diterima.")
             btn_submit = st.button("🚀 Paksakan Kirim Request Dana", type="primary")
+            
             if btn_submit:
-                with st.spinner(f"Memproses pengajuan ke Database {nop}..."):
-                    url_km, url_evid = upload_foto(foto_km), upload_foto(foto_evidance)
-                    waktu = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-                    data_req = [waktu, tanggal.strftime("%d/%m/%Y"), nop, tiket, cluster, nama, role, site_id, keperluan, kebutuhan, jns_bbm, deskripsi, km_awal, "", lat_berangkat, long_berangkat, plat, rek_penerima, no_rek, nominal_tf, url_km, url_evid, lat_tujuan, long_tujuan]
-                    append_data(SHEET_REQUEST, data_req, target_ss)
-                    st.success(f"✅ Transaksi Bypass Berhasil! Tiket {tiket} telah terekam.")
-                    time.sleep(2)
-                    st.rerun()
+                if not tiket.strip(): 
+                    st.error("Nomor Tiket SWFM wajib diisi!")
+                else:
+                    with st.spinner(f"Memproses pengajuan khusus ke Database {nop}..."):
+                        url_km, url_evid = upload_foto(foto_km), upload_foto(foto_evidance)
+                        waktu = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+                        data_req = [waktu, tanggal.strftime("%d/%m/%Y"), nop, tiket, cluster, nama, role, site_id, keperluan, kebutuhan, jns_bbm, deskripsi, km_awal, "", lat_berangkat, long_berangkat, plat, rek_penerima, no_rek, nominal_tf, url_km, url_evid, lat_tujuan, long_tujuan]
+                        append_data(SHEET_REQUEST, data_req, target_ss)
+                        st.success(f"✅ Transaksi Bypass Berhasil! Tiket {tiket} telah terekam.")
+                        time.sleep(2)
+                        st.rerun()
+    
+    # JIKA USER NORMAL (TIDAK ADA BLOKIR APAPUN)
     else:
-        # KONDISI NORMAL (TIDAK DIBLOKIR)
         btn_submit = st.button("🚀 Kirim Form Request Dana", type="primary")
         if btn_submit:
-            if not tiket.strip(): st.error("Nomor Tiket SWFM wajib diisi!")
+            if not tiket.strip(): 
+                st.error("Nomor Tiket SWFM wajib diisi!")
             else:
                 with st.spinner(f"Mengenkripsi & mengirim data ke Database {nop}..."):
                     url_km, url_evid = upload_foto(foto_km), upload_foto(foto_evidance)
