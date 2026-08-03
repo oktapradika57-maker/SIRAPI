@@ -124,8 +124,8 @@ menu = st.sidebar.radio("📌 Pilih Menu Formulir:", ["📝 Form Request Dana", 
 # ==========================================
 # MENU 1: FORM REQUEST DANA
 # ==========================================
-if menu == "📝 Form Request dana":
-    st.title("📝 Pengajuan Form Request dana")
+if menu == "📝 Form Request Dana":
+    st.title("📝 Pengajuan Form Request Dana")
     st.markdown("---")
     
     # Layout sama persis seperti versi awal tanpa st.form
