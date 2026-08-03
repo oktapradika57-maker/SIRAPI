@@ -34,7 +34,7 @@ cloudinary.config(
 # 2. KONFIGURASI GOOGLE SHEETS
 # ==========================================
 SPREADSHEET_ID = "1HvgVicTWwO4RMQI6ZR3Mu3IgGicwjcLZl9mDN1auvJU"
-SHEET_REQUEST = "Form Request Dana"        
+SHEET_REQUEST = "Form Request dana"        
 SHEET_PJB = "Form PJB"                     
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
