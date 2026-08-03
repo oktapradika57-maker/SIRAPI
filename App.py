@@ -1,10 +1,10 @@
 import streamlit as st
 import pandas as pd
 import gspread
-import io
+import base64
+import cloudinary
+import cloudinary.uploader
 from google.oauth2.service_account import Credentials
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseUpload
 from datetime import datetime
 import time
 
@@ -13,24 +13,33 @@ import time
 # ==========================================
 st.set_page_config(page_title="Portal Operasional", page_icon="💼", layout="wide")
 
+st.markdown("""
+    <style>
+        .main { background-color: #f8f9fa; }
+        .stButton>button { width: 100%; border-radius: 6px; font-weight: bold; height: 45px; }
+    </style>
+""", unsafe_allow_html=True)
+
 # ==========================================
-# 1. KONFIGURASI UTAMA
+# 1. KONFIGURASI CLOUDINARY (SERVER FOTO)
+# ==========================================
+cloudinary.config(
+    cloud_name = "fxm61tjv", 
+    api_key = "624877324969231", 
+    api_secret = "LIFO6pfEg9fOM3nbsY8FBbVTpSI",
+    secure = True
+)
+
+# ==========================================
+# 2. KONFIGURASI GOOGLE SHEETS
 # ==========================================
 SPREADSHEET_ID = "1HvgVicTWwO4RMQI6ZR3Mu3IgGicwjcLZl9mDN1auvJU"
-SHEET_REQUEST = "Form Request dana"        
+SHEET_REQUEST = "Form Request Dana"        
 SHEET_PJB = "Form PJB"                     
-
-# ID FOLDER GOOGLE DRIVE ANDA
-DRIVE_FOLDER_REQUEST = "1Hjgt0LaHBjKMnTyPNLYxRo2MdATlCz01ugu1eKgJ9Fyh-D3Mbye87MRwBbRpf4_qd_R0zvGX"
-DRIVE_FOLDER_PJB = "1zPv_DLi4Knyl7FCYLmma1a1Jk8zAV3-Q37Nn2NMCR0pU79dGBPNXQcIK4edI_MefKWRvH7cI"
-
-SCOPES = [
-    "https://www.googleapis.com/auth/spreadsheets",
-    "https://www.googleapis.com/auth/drive"
-]
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 # ==========================================
-# 2. DATA MASTER
+# 3. DATA MASTER
 # ==========================================
 LIST_NAMA = [
     "ADI BOWO SANTOSO", "AHMAD", "AHMAD MUZAKIR", "AHMAD SETIAWAN", "ALFI SYAHRI", 
@@ -48,7 +57,7 @@ LIST_KEPERLUAN = [
 ]
 
 # ==========================================
-# 3. FUNGSI KONEKSI & UPLOAD NATIVE GOOGLE
+# 4. FUNGSI UPLOAD & SPREADSHEET (ANTI GAGAL)
 # ==========================================
 @st.cache_resource
 def get_credentials():
@@ -57,40 +66,20 @@ def get_credentials():
         f.write(creds_json)
     return Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
 
-def upload_to_drive_native(file, folder_id, credentials):
-    if file is None: 
-        return ""
+def upload_foto(file):
+    """Fungsi super aman: ubah foto ke teks base64 lalu tembak ke Cloudinary"""
+    if file is None: return ""
     try:
-        service = build('drive', 'v3', credentials=credentials)
+        # Konversi foto agar aman dikirim
+        encoded = base64.b64encode(file.getvalue()).decode('utf-8')
+        mime_type = file.type
+        file_b64 = f"data:{mime_type};base64,{encoded}"
         
-        file_metadata = {
-            'name': f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{file.name}",
-            'parents': [folder_id]
-        }
-        
-        media = MediaIoBaseUpload(
-            io.BytesIO(file.getvalue()),
-            mimetype=file.type,
-            resumable=True
-        )
-        
-        uploaded_file = service.files().create(
-            body=file_metadata,
-            media_body=media,
-            fields='id, webViewLink'
-        ).execute()
-        
-        file_id = uploaded_file.get('id')
-        
-        # Berikan izin agar link bisa dibuka publik
-        service.permissions().create(
-            fileId=file_id,
-            body={'role': 'reader', 'type': 'anyone'}
-        ).execute()
-        
-        return uploaded_file.get('webViewLink')
+        # Upload ke server Cloudinary
+        response = cloudinary.uploader.upload(file_b64, resource_type="auto")
+        return response.get("secure_url") # Link gambar langsung bisa dibuka siapa saja
     except Exception as e:
-        st.error(f"Gagal Upload Foto ({file.name}): {e}")
+        st.error(f"Gagal Upload Foto: {e}")
         return ""
 
 def append_data(sheet_name, data, credentials):
@@ -117,7 +106,7 @@ def get_data_request(tiket, credentials):
     return None
 
 # ==========================================
-# 4. SIDEBAR NAVIGASI
+# 5. SIDEBAR NAVIGASI
 # ==========================================
 st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2942/2942813.png", width=80)
 st.sidebar.title("Portal Operasional")
@@ -156,7 +145,7 @@ if menu == "📝 Form Request Dana":
             nominal_tf = st.number_input("Total Nominal ditransfer (Rp)", min_value=0, step=1000)
             
         st.markdown("---")
-        st.subheader("📸 Upload Bukti (Langsung Masuk Google Drive)")
+        st.subheader("📸 Upload Bukti")
         c_up1, c_up2 = st.columns(2)
         with c_up1:
             foto_km = st.file_uploader("Foto KM Awal (Kolom U)", type=["jpg", "png", "jpeg"])
@@ -170,10 +159,11 @@ if menu == "📝 Form Request Dana":
                 st.error("Nomor Tiket SWFM wajib diisi!")
             else:
                 with st.spinner("Mengunggah foto dan menyimpan data ke Spreadsheet..."):
-                    creds = get_credentials()
-                    url_km = upload_to_drive_native(foto_km, DRIVE_FOLDER_REQUEST, creds)
-                    url_evid = upload_to_drive_native(foto_evidance, DRIVE_FOLDER_REQUEST, creds)
+                    # Proses Upload Foto
+                    url_km = upload_foto(foto_km)
+                    url_evid = upload_foto(foto_evidance)
                     
+                    creds = get_credentials()
                     waktu = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
                     data_req = [
                         waktu, tanggal.strftime("%d/%m/%Y"), nop, tiket, cluster, nama, role, site_id, 
@@ -237,7 +227,7 @@ elif menu == "✅ Form PJB Operasional":
                 harga_satuan = st.number_input("Harga Satuan", min_value=0, step=500)
             
             st.markdown("---")
-            st.subheader("📸 Upload Bukti (Langsung Masuk Google Drive)")
+            st.subheader("📸 Upload Bukti")
             p1, p2, p3 = st.columns(3)
             with p1:
                 f_pengisian = st.file_uploader("Foto Evidence Pengisian", type=["jpg","png","jpeg"])
@@ -254,15 +244,16 @@ elif menu == "✅ Form PJB Operasional":
             
         if submit_pjb:
             with st.spinner("Mengunggah foto dan merekam PJB ke Spreadsheet..."):
-                creds = get_credentials()
-                url_pengisian = upload_to_drive_native(f_pengisian, DRIVE_FOLDER_PJB, creds)
-                url_nota_bbm = upload_to_drive_native(f_nota_bbm, DRIVE_FOLDER_PJB, creds)
-                url_nota_km = upload_to_native = upload_to_drive_native(f_nota_km, DRIVE_FOLDER_PJB, creds)
-                url_material = upload_to_drive_native(f_material, DRIVE_FOLDER_PJB, creds)
-                url_nota_mat = upload_to_drive_native(f_nota_mat, DRIVE_FOLDER_PJB, creds)
-                url_penginapan = upload_to_drive_native(f_penginapan, DRIVE_FOLDER_PJB, creds)
-                url_pekerjaan = upload_to_drive_native(f_pekerjaan, DRIVE_FOLDER_PJB, creds)
+                # Upload Foto
+                url_pengisian = upload_foto(f_pengisian)
+                url_nota_bbm = upload_foto(f_nota_bbm)
+                url_nota_km = upload_foto(f_nota_km)
+                url_material = upload_foto(f_material)
+                url_nota_mat = upload_foto(f_nota_mat)
+                url_penginapan = upload_foto(f_penginapan)
+                url_pekerjaan = upload_foto(f_pekerjaan)
                 
+                creds = get_credentials()
                 waktu_pjb = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
                 data_pjb = [
                     waktu_pjb, tanggal_pjb.strftime("%d/%m/%Y"), d["NOP"], d["Cluster"], d["Nama"], d["Role"], 
