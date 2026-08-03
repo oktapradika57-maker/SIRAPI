@@ -11,7 +11,7 @@ import time
 # ==========================================
 # 0. KONFIGURASI HALAMAN & UI PROFESIONAL
 # ==========================================
-st.set_page_config(page_title="SiRAPI", page_icon="🏦", layout="wide")
+st.set_page_config(page_title="Sistem Keuangan & Operasional", page_icon="🏦", layout="wide")
 
 st.markdown("""
     <style>
@@ -59,7 +59,7 @@ MASTER_DATA = {
     "Palangkaraya": {
         "spreadsheet_id": "1HvgVicTWwO4RMQI6ZR3Mu3IgGicwjcLZl9mDN1auvJU",
         "clusters": ["Palangkaraya", "Barito Raya"],
-        "names": ["ADI BOWO SANTOSO", "AHMAD", "AHMAD MUZAKIR", "AHMAD SETIAWAN", "ALFI SYAHRI", "ARMADI", "AULIA RAHMAN", "DARLI SUTANTO", "DIDI RIYADI", "FAHMI", "FRANS EJHA ADITYA", "GYLLBRHED ALFARY LOLOMSAIT", "HARUN NURASYID", "HORY YUSMANTO", "INDRA", "JAMES JIMBRIS TAMAILANG", "JUMADI", "KHILAL DAWAI KATIRI", "LEONARD HARA", "M. RIFANI", "MUHAMMAD MUKHLIS", "MUHAMMAD MUKTI", "MUNAWIR AHMAD", "MURJANI", "NURHAYAT", "OKY BANGKIT PAMUNGKAS", "PRADILA KANDI", "PUJIANTO", "PUTRA WARDANA", "REYNALDI RICARDO PUTRA", "RIKI HIDAYAT", "RIKO SETIADI", "SAILILLAH", "SARUL SAPUTRA", "SARWONO", "TAKLIM", "TIVIANSYAH", "TRISNO SUSANTO", "YAHYA MUHAMAD"]
+        "names": ["ADI BOWO SANTOSO", "AHMAD", "AHMAD MUZAKIR", "AHMAD SETIAWAN", "ALFI SYAHRI", "ARMADI", "AULIA RAHMAN", "DARLI SUTANTO", "DIDI RIYADI", "FAHMI", "FRANS EJHA ADITYA", "GYLLBRHED ALFARY LOLOMSAIT", "HARUN NURASYID", "HORY YUSMANTO", "INDRA", "JAMES JIMBRIS TAMAILANG", "JUMADI", "KHILAL DAWAI KATIRI", "LEONARD HARA", "M. RIFANI", "MUHAMMAD MUKHLIS", "MUHAMMAD MUKTI", "MUNAWIR AHMAD", "MURJANI", "NURHAYAT", "OKY BANGKIT PAMUNGKAS", "PRADILA KANDI", "PUJIANTO", "PUTRA WARDANA", "REYNALDI RICARDO PUTRA", "RIKI HIDAYAT", "RIKO SETIADI", "SAILILLAH", "SARUL SAPUTRA", "SARWONO", "TAKLIM", "TIVIANSYAH", "TRISNO SUSANTO", "YAHYA MUHAMAD", "OKTA PRDIKA", "M KIKI FIRMANSYAH", "MAWARDAH", "HD"]
     },
     "Pangkalanbun": {
         "spreadsheet_id": "1bc0lDhR5iMtXZsKiKIdEwPY8JTaASeHFtaJSeXkywE4",
@@ -79,7 +79,7 @@ MASTER_DATA = {
 }
 
 LIST_KEPERLUAN = ["Tshoot", "Backup", "Support", "PM", "Program BCP", "Program Quikwin", "Program G348T", "Pengiriman Material SPMS", "Pembelian Material"]
-SHEET_REQUEST = "Form Request dana"        
+SHEET_REQUEST = "Form Request Dana"        
 SHEET_PJB = "Form PJB"                     
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
@@ -102,6 +102,17 @@ def fetch_spreadsheet_data(spreadsheet_id):
     try: pjb_rows = ss.worksheet(SHEET_PJB).get_all_values()
     except: pjb_rows = []
     return req_rows, pjb_rows
+
+@st.cache_data
+def load_site_data():
+    """Fungsi Membaca File Excel Site ID & Koordinat (Khusus Palangkaraya)"""
+    try:
+        df = pd.read_excel("Hasil_910_Site.xlsx")
+        df = df.fillna(0) # Mencegah error jika ada kolom koordinat yang kosong
+        site_dict = df.set_index('Site ID')[['Latitude Tujuan', 'Longtitude Tujuan']].to_dict('index')
+        return site_dict, df['Site ID'].astype(str).tolist()
+    except Exception as e:
+        return {}, []
 
 def get_user_tickets_status(nama, req_rows, pjb_rows):
     req_tickets = {}
@@ -166,13 +177,18 @@ if st.sidebar.button("Cari Histori Saya"):
 # MENU 1: FORM REQUEST DANA
 # ==========================================
 if menu == "📝 Form Request Dana":
-    st.markdown("<div class='header-card'><h2>📝 SiRAPI Pengajuan Dana Operasional</h2><p>Pastikan data yang dimasukkan akurat dan akuntabel.</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='header-card'><h2>📝 Portal Pengajuan Dana Operasional</h2><p>Pastikan data yang dimasukkan akurat dan akuntabel.</p></div>", unsafe_allow_html=True)
     nop = st.selectbox("📌 1. Pilih Database Regional (NOP)", list(MASTER_DATA.keys()))
     
     st.markdown("<div class='section-title'>📋 2. Informasi Petugas & Tiket</div>", unsafe_allow_html=True)
     target_ss = MASTER_DATA[nop]["spreadsheet_id"]
     req_r, pjb_r = fetch_spreadsheet_data(target_ss)
     all_requested_tickets = [r[3].strip().upper() for r in req_r[1:] if len(r) > 3]
+
+    # Muat Data Excel Site ID & Koordinat ke Memori (Jika NOP Palangkaraya)
+    site_dict, site_list = load_site_data()
+    auto_lat = "0"
+    auto_long = "0"
 
     col1, col2 = st.columns(2)
     with col1:
@@ -184,12 +200,20 @@ if menu == "📝 Form Request Dana":
         tiket = st.text_input("Nomor Tiket SWFM (WAJIB)")
         is_duplicate_ticket = (tiket.strip().upper() in all_requested_tickets) and tiket.strip() != ""
         role = st.selectbox("Role Jabatan", ["PM", "TE", "MBP", "CME"])
-        site_id = st.text_input("ID Site / Lokasi")
+        
+        # LOGIKA KHUSUS SITE ID (PALANGKARAYA)
+        if nop == "Palangkaraya" and len(site_list) > 0:
+            site_id = st.selectbox("ID Site / Lokasi", ["-- Pilih Site ID --"] + site_list)
+            if site_id != "-- Pilih Site ID --" and site_id in site_dict:
+                auto_lat = str(site_dict[site_id].get("Latitude Tujuan", "0"))
+                auto_long = str(site_dict[site_id].get("Longtitude Tujuan", "0"))
+        else:
+            site_id = st.text_input("ID Site / Lokasi")
         
     with col2:
         keperluan = st.selectbox("Klasifikasi Keperluan Dana", LIST_KEPERLUAN)
         kebutuhan = st.number_input("Estimasi Kebutuhan Dana (Rp)", min_value=0, step=1000)
-        jns_bbm = st.selectbox("Jenis Kendaraan / BBM", ["Mobil", "motor", "genset","Lainnya"])
+        jns_bbm = st.selectbox("Jenis Kendaraan / BBM", ["Mobil", "motor", "genset"])
         km_awal = st.text_input("Indikator KM Awal (Tulis 0 jika tidak relevan)", value="0")
         plat = st.text_input("Plat Nomor Kendaraan")
         deskripsi = st.text_area("Deskripsi Pekerjaan / Justifikasi")
@@ -201,8 +225,9 @@ if menu == "📝 Form Request Dana":
         long_berangkat = st.text_input("Longitude Berangkat", value="0")
         rek_penerima = st.selectbox("Bank Penerima / E-Wallet", ["BNI", "BCA", "MANDIRI", "BRI"])
     with col4:
-        lat_tujuan = st.text_input("Latitude Tujuan", value="0")
-        long_tujuan = st.text_input("Longitude Tujuan", value="0")
+        # OTOMATIS TERISI DARI PILIHAN DROPDOWN SITE ID DI ATAS
+        lat_tujuan = st.text_input("Latitude Tujuan", value=auto_lat)
+        long_tujuan = st.text_input("Longitude Tujuan", value=auto_long)
         no_rek = st.text_input("Nomor Rekening Tujuan")
         nominal_tf = st.number_input("Total Nominal Transfer (Rp)", min_value=0, step=1000)
 
@@ -226,6 +251,7 @@ if menu == "📝 Form Request Dana":
             btn_submit = st.button("🚀 Paksakan Kirim Request Dana", type="primary")
             if btn_submit:
                 if not tiket.strip(): st.error("Nomor Tiket SWFM wajib diisi!")
+                elif nop == "Palangkaraya" and site_id == "-- Pilih Site ID --": st.error("Site ID wajib dipilih untuk NOP Palangkaraya!")
                 else:
                     with st.spinner(f"Memproses pengajuan khusus ke Database {nop}..."):
                         url_km, url_evid = upload_foto(foto_km), upload_foto(foto_evidance)
@@ -239,6 +265,7 @@ if menu == "📝 Form Request Dana":
         btn_submit = st.button("🚀 Kirim Form Request Dana", type="primary")
         if btn_submit:
             if not tiket.strip(): st.error("Nomor Tiket SWFM wajib diisi!")
+            elif nop == "Palangkaraya" and site_id == "-- Pilih Site ID --": st.error("Site ID wajib dipilih untuk NOP Palangkaraya!")
             else:
                 with st.spinner(f"Mengenkripsi & mengirim data ke Database {nop}..."):
                     url_km, url_evid = upload_foto(foto_km), upload_foto(foto_evidance)
@@ -368,43 +395,34 @@ elif menu == "📊 Neraca / Buku Kas (Admin)":
                 _, pjb_rows = fetch_spreadsheet_data(target_ss)
                 
                 if len(pjb_rows) > 1:
-                    # Rangkai Data ke Tabel Pandas
                     cols = ["Waktu Input", "Tanggal PJB", "NOP", "Cluster", "Nama", "Role", "Site ID", "Keperluan", "Jenis BBM", "Deskripsi", "KM Akhir", "Nominal PJB", "Plat", "U1","U2","U3","U4","U5","U6","U7", "Nilai Nota", "Tiket", "Liter", "Harga Satuan"]
                     
-                    # Bersihkan & rapikan baris
                     clean_rows = []
                     for r in pjb_rows[1:]:
                         r_padded = r + [""] * (24 - len(r))
                         clean_rows.append(r_padded[:24])
                         
                     df = pd.DataFrame(clean_rows, columns=cols)
-                    
-                    # Filter berdasarkan Tanggal
                     df['Tanggal PJB'] = pd.to_datetime(df['Tanggal PJB'], format='%d/%m/%Y', errors='coerce')
                     mask = (df['Tanggal PJB'].dt.date >= start_date) & (df['Tanggal PJB'].dt.date <= end_date)
                     df_filtered = df.loc[mask].copy()
                     
-                    # Kalkulasi
                     df_filtered['Nominal PJB'] = pd.to_numeric(df_filtered['Nominal PJB'], errors='coerce').fillna(0)
                     total_pengeluaran = df_filtered['Nominal PJB'].sum()
                     sisa_saldo = um_nominal - total_pengeluaran
                     
-                    # Tampilan Metrik Keuangan
                     st.markdown(f"<div class='section-title'>📉 Ringkasan Saldo Operasional: {um_nobis}</div>", unsafe_allow_html=True)
                     m1, m2, m3 = st.columns(3)
                     m1.metric("💰 Total Uang Muka Masuk", f"Rp {um_nominal:,.0f}")
                     m2.metric("💸 Total PJB (Pengeluaran)", f"Rp {total_pengeluaran:,.0f}")
                     m3.metric("🧾 Sisa Saldo Tersedia", f"Rp {sisa_saldo:,.0f}", delta=sisa_saldo, delta_color="normal")
                     
-                    # Tabel Rincian Data
                     st.markdown("<div class='section-title'>📄 Rincian Pengeluaran PJB</div>", unsafe_allow_html=True)
                     show_df = df_filtered[['Tanggal PJB', 'Tiket', 'Nama', 'Cluster', 'Keperluan', 'Nominal PJB', 'Deskripsi']].copy()
                     show_df['Tanggal PJB'] = show_df['Tanggal PJB'].dt.strftime('%d/%m/%Y')
                     show_df['Nominal PJB'] = show_df['Nominal PJB'].apply(lambda x: f"Rp {x:,.0f}")
                     st.dataframe(show_df, use_container_width=True, hide_index=True)
-                    
                 else:
                     st.warning("Data PJB pada wilayah ini masih kosong.")
-                    
     elif pass_admin != "":
         st.error("❌ Akses Ditolak: Password yang Anda masukkan tidak sesuai untuk wilayah ini.")
