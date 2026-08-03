@@ -11,7 +11,7 @@ import time
 # ==========================================
 # 0. KONFIGURASI HALAMAN
 # ==========================================
-st.set_page_config(page_title="SIRAPI", page_icon="💼", layout="wide")
+st.set_page_config(page_title="Portal Operasional", page_icon="💼", layout="wide")
 
 st.markdown("""
     <style>
@@ -32,7 +32,7 @@ cloudinary.config(
 )
 
 # ==========================================
-# 2. MASTER DATA (DINAMIS BERDASARKAN NOP)
+# 2. MASTER DATA (DINAMIS SESUAI NOP)
 # ==========================================
 MASTER_DATA = {
     "Palangkaraya": {
@@ -62,7 +62,7 @@ LIST_KEPERLUAN = [
     "Program G348T", "Pengiriman Material SPMS", "Pembelian Material"
 ]
 
-SHEET_REQUEST = "Form Request dana"        
+SHEET_REQUEST = "Form Request Dana"        
 SHEET_PJB = "Form PJB"                     
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
@@ -124,79 +124,84 @@ menu = st.sidebar.radio("📌 Pilih Menu Formulir:", ["📝 Form Request Dana", 
 # ==========================================
 # MENU 1: FORM REQUEST DANA
 # ==========================================
-if menu == "📝 Form Request Dana":
-    st.title("📝 Pengajuan Form Request Dana")
+if menu == "📝 Form Request dana":
+    st.title("📝 Pengajuan Form Request dana")
+    st.markdown("---")
     
-    # Pilih NOP di luar form agar dropdown list nama/cluster otomatis ter-update seketika
-    st.markdown("### 📌 1. Pilih Area Operasional")
-    nop_selected = st.selectbox("Pilih NOP", list(MASTER_DATA.keys()))
+    # Layout sama persis seperti versi awal tanpa st.form
+    col1, col2 = st.columns(2)
     
-    st.markdown("### 📌 2. Isi Formulir Request")
-    with st.form("form_request_dana"):
-        col1, col2 = st.columns(2)
-        with col1:
-            tanggal = st.date_input("Tanggal Pengajuan")
-            # Dropdown dinamis mengikuti variabel nop_selected di atas
-            cluster = st.selectbox("Cluster", MASTER_DATA[nop_selected]["clusters"])
-            nama = st.selectbox("Nama Petugas", MASTER_DATA[nop_selected]["names"])
-            tiket = st.text_input("Nomor Tiket SWFM (cth: BPS-2026-000000034391)")
-            role = st.selectbox("Role", ["PM", "TE", "MBP", "CME"])
-            site_id = st.text_input("Site ID")
-            keperluan = st.selectbox("Keperluan Dana", LIST_KEPERLUAN)
-            kebutuhan = st.number_input("Kebutuhan Dana (Rp)", min_value=0, step=1000)
-            deskripsi = st.text_area("Deskripsi Pekerjaan")
-            
-        with col2:
-            jns_bbm = st.selectbox("Jenis BBM", ["Mobil", "motor", "genset"])
-            km_awal = st.text_input("KM Awal (Tulis 0 jika tidak req bbm)", value="0")
-            plat = st.text_input("Plat Mobil/Motor")
-            lat_berangkat = st.text_input("Lat Keberangkatan (-1.2654 / tulis 0)", value="0")
-            long_berangkat = st.text_input("Long Keberangkatan (116.8253 / tulis 0)", value="0")
-            lat_tujuan = st.text_input("Lat Tujuan (-1.2654 / tulis 0)", value="0")
-            long_tujuan = st.text_input("Long Tujuan (116.8253 / tulis 0)", value="0")
-            rek_penerima = st.selectbox("Rekening Penerima", ["BNI", "BCA", "MANDIRI", "BRI"])
-            no_rek = st.text_input("Nomor Rekening / E-Wallet")
-            nominal_tf = st.number_input("Total Nominal ditransfer (Rp)", min_value=0, step=1000)
-            
-        st.markdown("---")
-        st.subheader("📸 Upload Bukti")
-        c_up1, c_up2 = st.columns(2)
-        with c_up1:
-            foto_km = st.file_uploader("Foto KM Awal (Kolom U)", type=["jpg", "png", "jpeg"])
-        with c_up2:
-            foto_evidance = st.file_uploader("Foto Kendaraan/Evidence (Kolom V)", type=["jpg", "png", "jpeg"])
+    with col1:
+        st.subheader("📌 Informasi Pekerjaan")
+        tanggal = st.date_input("Tanggal Pengajuan")
+        nop = st.selectbox("NOP", list(MASTER_DATA.keys()))
+        tiket = st.text_input("Nomor Tiket SWFM (cth: BPS-2026-000000034391)")
+        # Dropdown Cluster & Nama seketika otomatis berubah berdasarkan NOP di atasnya!
+        cluster = st.selectbox("Cluster", MASTER_DATA[nop]["clusters"])
+        nama = st.selectbox("Nama Petugas", MASTER_DATA[nop]["names"])
+        role = st.selectbox("Role", ["PM", "TE", "MBP", "CME"])
+        site_id = st.text_input("Site ID")
+        keperluan = st.selectbox("Keperluan Dana", LIST_KEPERLUAN)
+        kebutuhan = st.number_input("Kebutuhan Dana (Rp)", min_value=0, step=1000)
+        deskripsi = st.text_area("Deskripsi Pekerjaan")
         
-        submit_req = st.form_submit_button("🚀 Kirim Request Dana", type="primary")
+    with col2:
+        st.subheader("🚗 Kendaraan & Lokasi")
+        jns_bbm = st.selectbox("Jenis BBM", ["Mobil", "motor", "genset"])
+        km_awal = st.text_input("KM Awal (Tulis 0 jika tidak req bbm)", value="0")
+        plat = st.text_input("Plat Mobil/Motor")
         
-        if submit_req:
-            if not tiket.strip():
-                st.error("Nomor Tiket SWFM wajib diisi!")
-            else:
-                with st.spinner(f"Menyimpan ke Database {nop_selected} & Upload Foto..."):
-                    target_spreadsheet = MASTER_DATA[nop_selected]["spreadsheet_id"]
-                    
-                    url_km = upload_foto(foto_km)
-                    url_evid = upload_foto(foto_evidance)
-                    
-                    creds = get_credentials()
-                    waktu = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-                    data_req = [
-                        waktu, tanggal.strftime("%d/%m/%Y"), nop_selected, tiket, cluster, nama, role, site_id, 
-                        keperluan, kebutuhan, jns_bbm, deskripsi, km_awal, "", lat_berangkat, long_berangkat, 
-                        plat, rek_penerima, no_rek, nominal_tf, url_km, url_evid, lat_tujuan, long_tujuan
-                    ]
-                    
-                    # Lempar ke spreadsheet yang sesuai dengan NOP
-                    append_data(SHEET_REQUEST, data_req, creds, target_spreadsheet)
-                    st.success(f"✅ Data Tiket **{tiket}** BERHASIL tersimpan di Database **{nop_selected}**!")
+        st.markdown("**Koordinat Keberangkatan & Tujuan**")
+        lat_berangkat = st.text_input("Lat Keberangkatan (-1.2654 / tulis 0)", value="0")
+        long_berangkat = st.text_input("Long Keberangkatan (116.8253 / tulis 0)", value="0")
+        lat_tujuan = st.text_input("Lat Tujuan (-1.2654 / tulis 0)", value="0")
+        long_tujuan = st.text_input("Long Tujuan (116.8253 / tulis 0)", value="0")
+        
+        st.markdown("**💳 Informasi Transfer**")
+        rek_penerima = st.selectbox("Rekening Penerima", ["BNI", "BCA", "MANDIRI", "BRI"])
+        no_rek = st.text_input("Nomor Rekening / E-Wallet")
+        nominal_tf = st.number_input("Total Nominal ditransfer (Rp)", min_value=0, step=1000)
+        
+    st.markdown("---")
+    st.subheader("📸 Upload Bukti")
+    c_up1, c_up2 = st.columns(2)
+    with c_up1:
+        foto_km = st.file_uploader("Foto KM Awal (Kolom U)", type=["jpg", "png", "jpeg"])
+    with c_up2:
+        foto_evidance = st.file_uploader("Foto Kendaraan/Evidence (Kolom V)", type=["jpg", "png", "jpeg"])
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    # Tombol submit reguler
+    submit_req = st.button("🚀 Kirim Request Dana", type="primary", use_container_width=True)
+    
+    if submit_req:
+        if not tiket.strip():
+            st.error("Nomor Tiket SWFM wajib diisi!")
+        else:
+            with st.spinner(f"Menyimpan ke Database {nop} & Upload Foto..."):
+                target_spreadsheet = MASTER_DATA[nop]["spreadsheet_id"]
+                
+                url_km = upload_foto(foto_km)
+                url_evid = upload_foto(foto_evidance)
+                
+                creds = get_credentials()
+                waktu = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+                data_req = [
+                    waktu, tanggal.strftime("%d/%m/%Y"), nop, tiket, cluster, nama, role, site_id, 
+                    keperluan, kebutuhan, jns_bbm, deskripsi, km_awal, "", lat_berangkat, long_berangkat, 
+                    plat, rek_penerima, no_rek, nominal_tf, url_km, url_evid, lat_tujuan, long_tujuan
+                ]
+                
+                append_data(SHEET_REQUEST, data_req, creds, target_spreadsheet)
+                st.success(f"✅ Data Tiket **{tiket}** BERHASIL tersimpan di Database **{nop}**!")
 
 # ==========================================
 # MENU 2: FORM PJB OPERASIONAL
 # ==========================================
 elif menu == "✅ Form PJB Operasional":
     st.title("✅ Form PJB Operasional")
-    st.markdown("Silakan pilih NOP terlebih dahulu agar sistem tahu *Database* mana yang harus dicari.")
     
+    # Kolom pencarian sejajar
     col_s1, col_s2, col_s3 = st.columns([2, 3, 1])
     with col_s1:
         nop_cari = st.selectbox("📂 Pilih Database (NOP):", list(MASTER_DATA.keys()))
@@ -225,45 +230,46 @@ elif menu == "✅ Form PJB Operasional":
     if st.session_state.pjb_data is not None:
         d = st.session_state.pjb_data
         
-        with st.form("form_pjb_operasional"):
-            col_a, col_b = st.columns(2)
-            with col_a:
-                st.subheader("🔒 Data Terisi Otomatis")
-                tanggal_pjb = st.date_input("Tanggal PJB")
-                nop_pjb = st.text_input("NOP", value=d["NOP"], disabled=True)
-                cluster_pjb = st.text_input("Cluster", value=d["Cluster"], disabled=True)
-                nama_pjb = st.text_input("Nama", value=d["Nama"], disabled=True)
-                role_pjb = st.text_input("Role", value=d["Role"], disabled=True)
-                site_pjb = st.text_input("Site ID", value=d["Site ID"], disabled=True)
-                keperluan_pjb = st.text_input("Keperluan", value=d["Keperluan Dana"], disabled=True)
-                jns_bbm_pjb = st.text_input("Jenis BBM", value=d["Jenis BBM"], disabled=True)
-                deskripsi_pjb = st.text_area("Deskripsi", value=d["Deskripsi"], disabled=True)
-                plat_pjb = st.text_input("Plat", value=d["Plat"], disabled=True)
-            
-            with col_b:
-                st.subheader("📝 Data Tambahan PJB")
-                km_akhir = st.text_input("KM Akhir", value="0")
-                nominal_pjb = st.number_input("Total Nominal PJB", min_value=0, step=1000)
-                tot_nilai_pjb = st.number_input("Total Nilai PJB (Sesuai nota)", min_value=0, step=1000)
-                tot_liter = st.text_input("Total Liter / Material", value="0")
-                harga_satuan = st.number_input("Harga Satuan", min_value=0, step=500)
-            
-            st.markdown("---")
-            st.subheader("📸 Upload Bukti")
-            p1, p2, p3 = st.columns(3)
-            with p1:
-                f_pengisian = st.file_uploader("Foto Evidence Pengisian", type=["jpg","png","jpeg"])
-                f_nota_bbm = st.file_uploader("Foto Nota BBM", type=["jpg","png","jpeg"])
-                f_nota_km = st.file_uploader("Foto Nota Disanding KM", type=["jpg","png","jpeg"])
-            with p2:
-                f_material = st.file_uploader("Foto Material", type=["jpg","png","jpeg"])
-                f_nota_mat = st.file_uploader("Foto Nota Material Disanding", type=["jpg","png","jpeg"])
-            with p3:
-                f_penginapan = st.file_uploader("Foto Nota Penginapan", type=["jpg","png","jpeg"])
-                f_pekerjaan = st.file_uploader("Foto Evidence Pekerjaan", type=["jpg","png","jpeg"])
-            
-            submit_pjb = st.form_submit_button("🚀 Simpan Form PJB", type="primary")
-            
+        st.markdown("---")
+        col_a, col_b = st.columns(2)
+        with col_a:
+            st.subheader("🔒 Data Terisi Otomatis")
+            tanggal_pjb = st.date_input("Tanggal PJB")
+            nop_pjb = st.text_input("NOP", value=d["NOP"], disabled=True)
+            cluster_pjb = st.text_input("Cluster", value=d["Cluster"], disabled=True)
+            nama_pjb = st.text_input("Nama", value=d["Nama"], disabled=True)
+            role_pjb = st.text_input("Role", value=d["Role"], disabled=True)
+            site_pjb = st.text_input("Site ID", value=d["Site ID"], disabled=True)
+            keperluan_pjb = st.text_input("Keperluan", value=d["Keperluan Dana"], disabled=True)
+            jns_bbm_pjb = st.text_input("Jenis BBM", value=d["Jenis BBM"], disabled=True)
+            deskripsi_pjb = st.text_area("Deskripsi", value=d["Deskripsi"], disabled=True)
+            plat_pjb = st.text_input("Plat", value=d["Plat"], disabled=True)
+        
+        with col_b:
+            st.subheader("📝 Data Tambahan PJB")
+            km_akhir = st.text_input("KM Akhir", value="0")
+            nominal_pjb = st.number_input("Total Nominal PJB", min_value=0, step=1000)
+            tot_nilai_pjb = st.number_input("Total Nilai PJB (Sesuai nota)", min_value=0, step=1000)
+            tot_liter = st.text_input("Total Liter / Material", value="0")
+            harga_satuan = st.number_input("Harga Satuan", min_value=0, step=500)
+        
+        st.markdown("---")
+        st.subheader("📸 Upload Bukti")
+        p1, p2, p3 = st.columns(3)
+        with p1:
+            f_pengisian = st.file_uploader("Foto Evidence Pengisian", type=["jpg","png","jpeg"])
+            f_nota_bbm = st.file_uploader("Foto Nota BBM", type=["jpg","png","jpeg"])
+            f_nota_km = st.file_uploader("Foto Nota Disanding KM", type=["jpg","png","jpeg"])
+        with p2:
+            f_material = st.file_uploader("Foto Material", type=["jpg","png","jpeg"])
+            f_nota_mat = st.file_uploader("Foto Nota Material Disanding", type=["jpg","png","jpeg"])
+        with p3:
+            f_penginapan = st.file_uploader("Foto Nota Penginapan", type=["jpg","png","jpeg"])
+            f_pekerjaan = st.file_uploader("Foto Evidence Pekerjaan", type=["jpg","png","jpeg"])
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        submit_pjb = st.button("🚀 Simpan Form PJB", type="primary", use_container_width=True)
+        
         if submit_pjb:
             with st.spinner("Mengunggah foto dan merekam PJB..."):
                 target_spreadsheet = MASTER_DATA[d["NOP"]]["spreadsheet_id"]
