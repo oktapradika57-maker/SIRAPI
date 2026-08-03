@@ -11,7 +11,7 @@ import time
 # ==========================================
 # 0. KONFIGURASI HALAMAN & UI PROFESIONAL
 # ==========================================
-st.set_page_config(page_title="SiRAPI", page_icon="🏦", layout="wide")
+st.set_page_config(page_title="SiRAPI", page_icon="💰", layout="wide")
 
 st.markdown("""
     <style>
@@ -138,7 +138,7 @@ def get_user_tickets_status(nama, req_rows, pjb_rows):
     for tkt, tgl in req_tickets.items():
         if tkt not in pjb_tickets:
             outstanding.append(tkt)
-            history.append({"Tiket": tkt, "Tanggal": tgl, "Status": "🔴 Menunggu PJB!!!"})
+            history.append({"Tiket": tkt, "Tanggal": tgl, "Status": "🔴 Menunggu PJB"})
         else:
             history.append({"Tiket": tkt, "Tanggal": tgl, "Status": "🟢 Selesai"})
     return outstanding, sorted(history, key=lambda x: x["Status"], reverse=True)
@@ -208,7 +208,7 @@ if menu == "📝 Form Request Dana":
             is_locked_user = len(outstanding_tkt) > 0
             tiket = st.text_input("Nomor Tiket SWFM (WAJIB)")
             is_duplicate_ticket = (tiket.strip().upper() in all_requested_tickets) and tiket.strip() != ""
-            role = st.selectbox("Role Jabatan", ["-- Pilih Role --", "PM", "TE", "MBP", "CME"])
+            role = st.selectbox("Role Jabatan", ["-- Pilih Role --", "PM", "TE", "MBP", "CME","Koordinator","Helpdesk","Admin"])
             
             if nop == "Palangkaraya" and len(site_list) > 0:
                 site_id = st.selectbox("ID Site / Lokasi", ["-- Pilih Site ID --"] + site_list)
@@ -245,7 +245,6 @@ if menu == "📝 Form Request Dana":
         
         st.markdown("<br>", unsafe_allow_html=True)
 
-        # Cek Validasi Form Bawaan (Wajib Pilih)
         form_invalid = (nama == "-- Pilih Nama --" or cluster == "-- Pilih Cluster --" or role == "-- Pilih Role --" or keperluan == "-- Pilih Keperluan --")
 
         if is_locked_user or is_duplicate_ticket:
@@ -291,7 +290,7 @@ if menu == "📝 Form Request Dana":
 # MENU 2: FORM PJB OPERASIONAL
 # ==========================================
 elif menu == "✅ Form PJB Operasional":
-    st.markdown("<div class='header-card' style='background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);'><h2>✅ SiRAPI Pertanggungjawaban (PJB)</h2><p>Selesaikan pelaporan keuangan tepat waktu untuk membuka kembali akses pengajuan.</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='header-card' style='background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);'><h2>✅ Portal Pertanggungjawaban (PJB)</h2><p>Selesaikan pelaporan keuangan tepat waktu untuk membuka kembali akses pengajuan.</p></div>", unsafe_allow_html=True)
     
     nop_cari = st.selectbox("📂 1. Pilih Database (NOP):", ["-- Pilih NOP --"] + list(MASTER_DATA.keys()))
     
@@ -299,7 +298,6 @@ elif menu == "✅ Form PJB Operasional":
         target_ss = MASTER_DATA[nop_cari]["spreadsheet_id"]
         req_r, pjb_r, _ = fetch_spreadsheet_data(target_ss)
         
-        # Tampilkan Tabel Outstanding PJB per Wilayah
         pjb_tickets_all = {r[21].strip().upper() for r in pjb_r[1:] if len(r) > 21}
         pending_list = []
         for r in req_r[1:]:
@@ -453,7 +451,13 @@ elif menu == "📊 Neraca / Buku Kas (Admin)":
                 df_pjb_filtered = pd.DataFrame()
                 if len(pjb_rows) > 1:
                     cols = ["Waktu Input", "Tanggal PJB", "NOP", "Cluster", "Nama", "Role", "Site ID", "Keperluan", "Jenis BBM", "Deskripsi", "KM Akhir", "Nominal PJB", "Plat", "U1","U2","U3","U4","U5","U6","U7", "Nilai Nota", "Tiket", "Liter", "Harga Satuan"]
-                    clean_rows = [r + [""] * (24 - len(r)) for r in pjb_rows[1:]]
+                    
+                    # LOGIKA PEMOTONGAN & PENAMBAHAN KOLOM OTOMATIS (Mencegah ValueError)
+                    clean_rows = []
+                    for r in pjb_rows[1:]:
+                        r_padded = (r + [""] * 24)[:24]
+                        clean_rows.append(r_padded)
+                        
                     df = pd.DataFrame(clean_rows, columns=cols)
                     
                     df['Tanggal PJB'] = pd.to_datetime(df['Tanggal PJB'], format='%d/%m/%Y', errors='coerce')
