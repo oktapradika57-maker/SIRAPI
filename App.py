@@ -166,7 +166,7 @@ if st.sidebar.button("Cari Histori Saya"):
 # MENU 1: FORM REQUEST DANA
 # ==========================================
 if menu == "📝 Form Request Dana":
-    st.markdown("<div class='header-card'><h2>📝 Portal Pengajuan Dana Operasional</h2><p>Pastikan data yang dimasukkan akurat dan akuntabel.</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='header-card'><h2>📝 SiRAPI Pengajuan Dana Operasional</h2><p>Pastikan data yang dimasukkan akurat dan akuntabel.</p></div>", unsafe_allow_html=True)
     nop = st.selectbox("📌 1. Pilih Database Regional (NOP)", list(MASTER_DATA.keys()))
     
     st.markdown("<div class='section-title'>📋 2. Informasi Petugas & Tiket</div>", unsafe_allow_html=True)
