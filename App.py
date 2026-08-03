@@ -11,7 +11,7 @@ import time
 # ==========================================
 # 0. KONFIGURASI HALAMAN & UI PROFESIONAL
 # ==========================================
-st.set_page_config(page_title="Sistem Keuangan & Operasional", page_icon="🏦", layout="wide")
+st.set_page_config(page_title="SiRapi", page_icon="🏦", layout="wide")
 
 st.markdown("""
     <style>
@@ -177,7 +177,7 @@ if st.sidebar.button("Cari Histori Saya"):
 # MENU 1: FORM REQUEST DANA
 # ==========================================
 if menu == "📝 Form Request Dana":
-    st.markdown("<div class='header-card'><h2>📝 Portal Pengajuan Dana Operasional</h2><p>Pastikan data yang dimasukkan akurat dan akuntabel.</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='header-card'><h2>📝 Sistem Rekapitulasi Anggaran dan Pertanggungjawaban Informasi</h2><p>Pastikan data yang dimasukkan akurat dan akuntabel.</p></div>", unsafe_allow_html=True)
     nop = st.selectbox("📌 1. Pilih Database Regional (NOP)", list(MASTER_DATA.keys()))
     
     st.markdown("<div class='section-title'>📋 2. Informasi Petugas & Tiket</div>", unsafe_allow_html=True)
@@ -280,7 +280,7 @@ if menu == "📝 Form Request Dana":
 # MENU 2: FORM PJB OPERASIONAL
 # ==========================================
 elif menu == "✅ Form PJB Operasional":
-    st.markdown("<div class='header-card' style='background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);'><h2>✅ Portal Pertanggungjawaban (PJB)</h2><p>Selesaikan pelaporan keuangan tepat waktu untuk membuka kembali akses pengajuan.</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='header-card' style='background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);'><h2>✅ SiRAPI Pertanggungjawaban (PJB)</h2><p>Selesaikan pelaporan keuangan tepat waktu untuk membuka kembali akses pengajuan.</p></div>", unsafe_allow_html=True)
     
     col_s1, col_s2, col_s3 = st.columns([2, 3, 1])
     with col_s1: nop_cari = st.selectbox("📂 Pilih Database (NOP):", list(MASTER_DATA.keys()))
