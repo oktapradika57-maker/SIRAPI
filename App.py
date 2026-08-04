@@ -42,7 +42,7 @@ st.markdown("""
 # ==========================================
 # 1. KONFIGURASI SERVER, KOORDINATOR & ADMIN
 # ==========================================
-PASSWORD_KOORDINATOR = "Kamiyakin2027"
+PASSWORD_KOORDINATOR = "Kamikaze"
 PASSWORD_LIVE = "liveaction"
 
 ADMIN_PASSWORDS = {
