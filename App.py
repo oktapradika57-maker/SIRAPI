@@ -20,7 +20,6 @@ st.markdown("""
     <style>
         .main { background-color: #F4F7F6; font-family: 'Segoe UI', sans-serif; }
         
-        /* 3D Header Card */
         .header-card {
             background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
             padding: 25px; border-radius: 15px; color: white; text-align: center;
@@ -28,7 +27,6 @@ st.markdown("""
             margin-bottom: 25px; animation: slideDown 0.8s ease-out;
         }
         
-        /* 3D Metric Boxes (Live Monitoring) */
         .metric-3d {
             background: linear-gradient(145deg, #ffffff, #e6e6e6);
             padding: 20px; border-radius: 15px; text-align: center;
@@ -40,7 +38,6 @@ st.markdown("""
         .metric-title { font-size: 14px; color: #7f8c8d; font-weight: bold; text-transform: uppercase; }
         .metric-value { font-size: 24px; color: #2c3e50; font-weight: 900; }
         
-        /* Sidebar Menu Buttons */
         .sidebar-btn { width: 100%; border-radius: 8px; font-weight: bold; height: 45px; margin-bottom:10px; background-color: #ecf0f1; border: 1px solid #bdc3c7; color: #34495e; transition: 0.3s;}
         .sidebar-btn:hover { background-color: #3498db; color: white; border-color: #2980b9; }
         
@@ -68,6 +65,11 @@ MASTER_DATA = {
 }
 
 LIST_KEPERLUAN = ["-- Pilih Keperluan --", "Tshoot", "Backup", "Support", "PM", "Program BCP", "Program Quikwin", "Program G348T", "Pengiriman Material SPMS", "Pembelian Material"]
+
+# PERBAIKAN NAMA SHEET (d kecil)
+SHEET_REQUEST = "Form Request dana"        
+SHEET_PJB = "Form PJB"
+SHEET_UM = "Data UM"
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 # ==========================================
@@ -92,7 +94,6 @@ def haversine(lat1, lon1, lat2, lon2):
     return R * (2 * math.atan2(math.sqrt(a), math.sqrt(1 - a)))
 
 def decode_polyline(polyline_str):
-    """Penerjemah rute jalan raya otomatis"""
     index, lat, lng, coordinates = 0, 0, 0, []
     while index < len(polyline_str):
         changes = {'lat': 0, 'lng': 0}
@@ -110,7 +111,6 @@ def decode_polyline(polyline_str):
     return coordinates
 
 def get_route_and_distance(lon1, lat1, lon2, lat2):
-    """Satelit Auto-Routing OSRM"""
     try:
         url = f"http://router.project-osrm.org/route/v1/driving/{lon1},{lat1};{lon2},{lat2}?overview=simplified"
         res = requests.get(url, timeout=5).json()
@@ -119,7 +119,7 @@ def get_route_and_distance(lon1, lat1, lon2, lat2):
             poly = decode_polyline(res["routes"][0]["geometry"])
             return dist_km, poly
     except: pass
-    dist_km = haversine(lat1, lon1, lat2, lon2) * 1.3 # Estimasi jika jalan raya gagal
+    dist_km = haversine(lat1, lon1, lat2, lon2) * 1.3 
     return dist_km, [[lon1, lat1], [lon2, lat2]]
 
 @st.cache_resource
@@ -130,11 +130,11 @@ def get_credentials():
 @st.cache_data(ttl=10)
 def fetch_spreadsheet_data(spreadsheet_id):
     client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
-    try: req = client.worksheet("Form Request Dana").get_all_values()
+    try: req = client.worksheet(SHEET_REQUEST).get_all_values()
     except: req = []
-    try: pjb = client.worksheet("Form PJB").get_all_values()
+    try: pjb = client.worksheet(SHEET_PJB).get_all_values()
     except: pjb = []
-    try: um = client.worksheet("Data UM").get_all_values()
+    try: um = client.worksheet(SHEET_UM).get_all_values()
     except: um = []
     try: rekap = client.worksheet("Rekap PJB").get_all_values()
     except: rekap = []
@@ -147,13 +147,24 @@ def load_excel_data():
         site_dict = df_site.set_index('Site ID')[['Latitude Tujuan', 'Longtitude Tujuan']].to_dict('index')
         site_list = df_site['Site ID'].astype(str).tolist()
     except: site_dict, site_list = {}, []
-    
     try:
         df_tim = pd.read_excel("lonlat tim.xlsx").fillna(0)
         tim_dict = df_tim.set_index('Nama')[['Latitude', 'Longtitude']].to_dict('index')
     except: tim_dict = {}
-    
     return site_dict, site_list, tim_dict
+
+def get_user_tickets_status(nama, req_rows, pjb_rows):
+    if nama == "-- Pilih Nama --": return [], []
+    req_tickets = {r[3].strip().upper(): r[1] for r in req_rows[1:] if len(r) > 5 and r[5].strip().upper() == nama.strip().upper()}
+    pjb_tickets = {r[21].strip().upper() for r in pjb_rows[1:] if len(r) > 21 and r[4].strip().upper() == nama.strip().upper()}
+    outstanding, history = [], []
+    for tkt, tgl in req_tickets.items():
+        if tkt not in pjb_tickets:
+            outstanding.append(tkt)
+            history.append({"Tiket": tkt, "Tanggal": tgl, "Status": "🔴 Menunggu PJB"})
+        else:
+            history.append({"Tiket": tkt, "Tanggal": tgl, "Status": "🟢 Selesai"})
+    return outstanding, sorted(history, key=lambda x: x["Status"], reverse=True)
 
 def upload_foto(file):
     if file is None: return ""
@@ -188,10 +199,9 @@ if cek_nop != "-- Pilih Area --":
     if st.sidebar.button("Cari Histori"):
         if cek_nama != "-- Pilih Nama --":
             req_r, pjb_r, _, _ = fetch_spreadsheet_data(MASTER_DATA[cek_nop]["spreadsheet_id"])
-            req_tkt = {r[3].strip().upper(): r[1] for r in req_r[1:] if len(r) > 5 and r[5].strip().upper() == cek_nama.strip().upper()}
-            pjb_tkt = {r[21].strip().upper() for r in pjb_r[1:] if len(r) > 21 and r[4].strip().upper() == cek_nama.strip().upper()}
-            out_tkt = [t for t in req_tkt if t not in pjb_tkt]
-            if req_tkt:
+            out_tkt, hist_tkt = get_user_tickets_status(cek_nama, req_r, pjb_r)
+            if hist_tkt:
+                st.sidebar.dataframe(pd.DataFrame(hist_tkt), hide_index=True)
                 if out_tkt: st.sidebar.error(f"⚠️ {len(out_tkt)} tiket tertunggak (Belum PJB)!")
                 else: st.sidebar.success("✅ Seluruh tiket aman!")
             else: st.sidebar.info("Tidak ada data.")
@@ -202,7 +212,6 @@ if cek_nop != "-- Pilih Area --":
 if st.session_state.page == "📝 Form Request Dana":
     st.markdown("<div class='header-card'><h2>📝 PORTAL PENGAJUAN DANA</h2><p>Rekam Jejak Keuangan & Kalkulasi Geospasial Secara Real-Time.</p></div>", unsafe_allow_html=True)
     
-    # LINK MENU PINTAR
     col_l1, col_l2 = st.columns([4,1])
     with col_l2:
         if st.button("👉 Tuju ke Form PJB", type="secondary"): 
@@ -227,12 +236,13 @@ if st.session_state.page == "📝 Form Request Dana":
             cluster = st.selectbox("Cluster Regional", ["-- Pilih Cluster --"] + MASTER_DATA[nop]["clusters"])
             nama = st.selectbox("Nama Petugas / Pemohon", ["-- Pilih Nama --"] + MASTER_DATA[nop]["names"])
             
-            # AUTO FILL KOORDINAT KEBERANGKATAN DARI lonlat tim.xlsx
             if nama != "-- Pilih Nama --" and nama in tim_dict:
                 auto_lat_brgkt = str(tim_dict[nama].get("Latitude", "0"))
                 auto_long_brgkt = str(tim_dict[nama].get("Longtitude", "0"))
                 
-            outstanding_tkt = [r[3].strip().upper() for r in req_r[1:] if len(r) > 5 and r[5].strip().upper() == nama.strip().upper() and r[3].strip().upper() not in {p[21].strip().upper() for p in pjb_r[1:] if len(p)>21}]
+            outstanding_tkt, _ = get_user_tickets_status(nama, req_r, pjb_r)
+            is_locked_user = len(outstanding_tkt) > 0
+            
             tiket = st.text_input("Nomor Tiket SWFM (WAJIB)")
             is_duplicate = (tiket.strip().upper() in all_requested_tickets) and tiket.strip() != ""
             role = st.selectbox("Role Jabatan", ["-- Pilih Role --", "PM", "TE", "MBP", "CME"])
@@ -267,7 +277,6 @@ if st.session_state.page == "📝 Form Request Dana":
             no_rek = st.text_input("Nomor Rekening Tujuan")
             nominal_tf = st.number_input("Total Nominal Transfer (Rp)", min_value=0, step=1000)
 
-        # ================= RUTING SATELIT & BBM =================
         jarak_final_text = ""
         invalid_coords = False
         if is_vehicle:
@@ -287,13 +296,14 @@ if st.session_state.page == "📝 Form Request Dana":
                 m2.markdown(f"<div class='metric-3d'><div class='metric-title'>BBM Boros Maksimal</div><div class='metric-value'>{bbm_req:.1f} Liter</div></div>", unsafe_allow_html=True)
                 m3.markdown(f"<div class='metric-3d'><div class='metric-title'>Tipe Kendaraan</div><div class='metric-value'>{jns_bbm.upper()}</div></div>", unsafe_allow_html=True)
                 
-                layer_points = pdk.Layer("ScatterplotLayer", data=[{"pos": [c_lon1, c_lat1], "color": [255,50,50]}, {"pos": [c_lon2, c_lat2], "color": [50,255,50]}], get_position="pos", get_color="color", get_radius=400)
+                # PETA LEBIH KECIL (HEIGHT = 350, ZOOM DISESUAIKAN)
+                layer_points = pdk.Layer("ScatterplotLayer", data=[{"pos": [c_lon1, c_lat1], "color": [255,50,50]}, {"pos": [c_lon2, c_lat2], "color": [50,255,50]}], get_position="pos", get_color="color", get_radius=300)
                 layer_route = pdk.Layer("PathLayer", data=[{"path": poly_coords, "color": [52, 152, 219]}], get_path="path", get_width=5, get_color="color")
-                view = pdk.ViewState(latitude=(c_lat1+c_lat2)/2, longitude=(c_lon1+c_lon2)/2, zoom=10, pitch=45)
-                st.pydeck_chart(pdk.Deck(layers=[layer_route, layer_points], initial_view_state=view))
+                view = pdk.ViewState(latitude=(c_lat1+c_lat2)/2, longitude=(c_lon1+c_lon2)/2, zoom=8, pitch=45)
+                st.pydeck_chart(pdk.Deck(layers=[layer_route, layer_points], initial_view_state=view), use_container_width=True, height=350)
             else:
                 invalid_coords = True
-                st.warning("⚠️ Kendaraan darat membutuhkan koordinat yang valid (Tidak boleh 0)!")
+                st.warning("⚠️ Untuk kendaraan Mobil/Motor, Harap lengkapi Koordinat Keberangkatan & Tujuan.")
 
         st.markdown("<div class='section-title'>📸 4. Bukti Lampiran Fisik</div>", unsafe_allow_html=True)
         c_up1, c_up2 = st.columns(2)
@@ -303,34 +313,29 @@ if st.session_state.page == "📝 Form Request Dana":
         st.markdown("<br>", unsafe_allow_html=True)
         form_invalid = (nama == "-- Pilih Nama --" or cluster == "-- Pilih Cluster --" or role == "-- Pilih Role --" or keperluan == "-- Pilih Keperluan --")
 
-        if len(outstanding_tkt) > 0 or is_duplicate:
-            if len(outstanding_tkt) > 0: st.markdown(f"<div class='locked-box'>⛔ AKSES DITOLAK: Sdr. {nama} memiliki {len(outstanding_tkt)} tiket yang belum PJB!</div>", unsafe_allow_html=True)
+        if is_locked_user or is_duplicate:
+            if is_locked_user: st.markdown(f"<div class='locked-box'>⛔ AKSES DITOLAK: Sdr. {nama} memiliki {len(outstanding_tkt)} tiket yang belum PJB!</div>", unsafe_allow_html=True)
             if is_duplicate: st.warning("⚠️ TIKET GANDA TERDETEKSI!")
             
             input_pass = st.text_input("🔑 Password Koordinator Khusus (Bypass):", type="password")
             if input_pass == PASSWORD_KOORDINATOR:
-                btn_submit = st.button("🚀 Paksakan Kirim Request Dana", type="primary")
-                if btn_submit:
-                    if form_invalid or not tiket.strip() or (nop == "Palangkaraya" and site_id == "-- Pilih Site ID --") or invalid_coords: st.error("Harap lengkapi semua data dan koordinat!")
+                if st.button("🚀 Paksakan Kirim Request Dana", type="primary"):
+                    if form_invalid or not tiket.strip() or (nop == "Palangkaraya" and site_id == "-- Pilih Site ID --") or invalid_coords: st.error("Lengkapi form dengan benar!")
                     else:
-                        with st.spinner("Memproses pengajuan ke server..."):
+                        with st.spinner("Memproses..."):
                             waktu = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-                            # Simpan Jarak ke Index ke-13
                             data_req = [waktu, tanggal.strftime("%d/%m/%Y"), nop, tiket, cluster, nama, role, site_id, keperluan, kebutuhan, jns_bbm, deskripsi, km_awal, jarak_final_text, lat_berangkat, long_berangkat, plat, rek_penerima, no_rek, nominal_tf, upload_foto(foto_km), upload_foto(foto_evidance), lat_tujuan, long_tujuan]
-                            append_data("Form Request Dana", data_req, target_ss)
-                            st.success(f"✅ Tiket {tiket} terekam!")
-                            time.sleep(2); st.rerun()
+                            append_data(SHEET_REQUEST, data_req, target_ss)
+                            st.success(f"✅ Tiket {tiket} terekam!"); time.sleep(2); st.rerun()
         else:
-            btn_submit = st.button("🚀 Kirim Form Request Dana", type="primary")
-            if btn_submit:
-                if form_invalid or not tiket.strip() or (nop == "Palangkaraya" and site_id == "-- Pilih Site ID --") or invalid_coords: st.error("Harap lengkapi semua data dan koordinat!")
+            if st.button("🚀 Kirim Form Request Dana", type="primary"):
+                if form_invalid or not tiket.strip() or (nop == "Palangkaraya" and site_id == "-- Pilih Site ID --") or invalid_coords: st.error("Lengkapi form dengan benar!")
                 else:
-                    with st.spinner("Mengirim data ke database..."):
+                    with st.spinner("Memproses..."):
                         waktu = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
                         data_req = [waktu, tanggal.strftime("%d/%m/%Y"), nop, tiket, cluster, nama, role, site_id, keperluan, kebutuhan, jns_bbm, deskripsi, km_awal, jarak_final_text, lat_berangkat, long_berangkat, plat, rek_penerima, no_rek, nominal_tf, upload_foto(foto_km), upload_foto(foto_evidance), lat_tujuan, long_tujuan]
-                        append_data("Form Request Dana", data_req, target_ss)
-                        st.success(f"✅ Tiket {tiket} sukses masuk!")
-                        time.sleep(2); st.rerun()
+                        append_data(SHEET_REQUEST, data_req, target_ss)
+                        st.success(f"✅ Tiket {tiket} sukses masuk!"); time.sleep(2); st.rerun()
 
 # ==========================================
 # PAGE 2: FORM PJB OPERASIONAL
@@ -372,7 +377,6 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                 tgl_pjb = st.date_input("Tanggal PJB")
                 st.text_input("Nama Petugas", d["Nama"], disabled=True)
                 st.text_input("Cluster & Role", f'{d["Cluster"]} - {d["Role"]}', disabled=True)
-                # TAMPILKAN JARAK ROUTING YANG TEREKAM
                 st.text_input("Estimasi Jarak Tempuh (Sistem)", value=d["Jarak"], disabled=True)
             with col_b:
                 st.text_input("Site ID Tujuan", d["Site"], disabled=True)
@@ -400,16 +404,15 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                 with st.spinner("Mengunci data ke server..."):
                     waktu = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
                     data_pjb = [waktu, tgl_pjb.strftime("%d/%m/%Y"), d["NOP"], d["Cluster"], d["Nama"], d["Role"], d["Site"], d["Keperluan"], d["BBM"], d["Desc"], km_akhir, nominal_pjb, d["Plat"], upload_foto(f_isi), upload_foto(f_nota_bbm), upload_foto(f_km), upload_foto(f_mat), upload_foto(f_notamat), upload_foto(f_inap), upload_foto(f_kerja), tot_nilai_nota, cari_tiket, tot_liter, harga_satuan]
-                    append_data("Form PJB", [(r+[""]*24)[:24] for r in [data_pjb]][0], target_ss)
-                    st.success("✅ PJB Sukses!")
-                    st.session_state.pjb_data = None
+                    append_data(SHEET_PJB, [(r+[""]*24)[:24] for r in [data_pjb]][0], target_ss)
+                    st.success("✅ PJB Sukses!"); st.session_state.pjb_data = None
                     time.sleep(2); st.rerun()
 
 # ==========================================
-# PAGE 3: NERACA / BUKU KAS (ADMIN)
+# PAGE 3: NERACA / BUKU KAS (KONSEP STABIL)
 # ==========================================
 elif st.session_state.page == "📊 Neraca / Buku Kas":
-    st.markdown("<div class='header-card header-admin'><h2>📊 BUKU KAS & NERACA</h2><p>Rekonsiliasi Historis Area</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='header-card header-admin'><h2>📊 BUKU KAS & NERACA</h2><p>Laporan Rekonsiliasi Saldo Keuangan Area</p></div>", unsafe_allow_html=True)
     col_adm1, col_adm2 = st.columns([1, 2])
     with col_adm1: nop_admin = st.selectbox("📂 Wilayah (NOP):", ["-- Pilih NOP --"] + list(MASTER_DATA.keys()))
     with col_adm2:
@@ -418,45 +421,62 @@ elif st.session_state.page == "📊 Neraca / Buku Kas":
     if nop_admin != "-- Pilih NOP --" and pass_admin == ADMIN_PASSWORDS[nop_admin]:
         target_ss = MASTER_DATA[nop_admin]["spreadsheet_id"]
         
+        st.markdown("<div class='section-title'>📥 1. Input Penambahan Uang Muka (UM)</div>", unsafe_allow_html=True)
         with st.form("form_tambah_um"):
-            st.markdown("### 📥 Tambah Uang Muka (UM)")
             col_u1, col_u2, col_u3 = st.columns([1, 2, 1])
-            with col_u1: tgl_um = st.date_input("Tanggal Masuk")
+            with col_u1: tgl_um = st.date_input("Tanggal UM Masuk")
             with col_u2: um_nobis = st.text_input("Deskripsi / Dasar Dokumen UM")
-            with col_u3: um_nominal = st.number_input("Nominal (Rp)", min_value=0, step=1000)
-            if st.form_submit_button("Rekam UM"):
+            with col_u3: um_nominal = st.number_input("Nominal UM (Rp)", min_value=0, step=1000)
+            
+            if st.form_submit_button("💾 Rekam UM ke Buku Kas"):
                 if um_nominal > 0 and um_nobis:
-                    append_data("Data UM", [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), tgl_um.strftime("%d/%m/%Y"), um_nobis, um_nominal], target_ss)
+                    append_data(SHEET_UM, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), tgl_um.strftime("%d/%m/%Y"), um_nobis, um_nominal], target_ss)
                     st.success("✅ UM Terekam!"); time.sleep(1); st.rerun()
                 else: st.error("Isi form dengan benar!")
                 
-        st.markdown("<div class='section-title'>📅 Laporan Neraca Historis</div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-title'>📅 2. Laporan Neraca & Kalkulasi Periode</div>", unsafe_allow_html=True)
         col_d1, col_d2 = st.columns(2)
-        with col_d1: start_date = st.date_input("Dari Tanggal")
-        with col_d2: end_date = st.date_input("Sampai Tanggal")
+        with col_d1: start_date = st.date_input("Dari Tanggal PJB/UM")
+        with col_d2: end_date = st.date_input("Sampai Tanggal PJB/UM")
         
-        if st.button("🔄 Kalkulasi Data", type="primary"):
-            _, pjb_r, um_r, _ = fetch_spreadsheet_data(target_ss)
-            tot_um, tot_pjb = 0, 0
-            
-            if len(um_r) > 1:
-                df_um = pd.DataFrame(um_r[1:], columns=["Waktu", "Tanggal", "Deskripsi", "Nominal"])
-                df_um['Tanggal'] = pd.to_datetime(df_um['Tanggal'], format='%d/%m/%Y', errors='coerce')
-                df_um = df_um[(df_um['Tanggal'].dt.date >= start_date) & (df_um['Tanggal'].dt.date <= end_date)].copy()
-                df_um['Nominal'] = df_um['Nominal'].apply(clean_nominal)
-                tot_um = df_um['Nominal'].sum()
+        if st.button("🔄 Kalkulasi Neraca", type="primary"):
+            with st.spinner("Mensinkronisasi buku besar..."):
+                _, pjb_r, um_r, _ = fetch_spreadsheet_data(target_ss)
+                tot_um, tot_pjb = 0, 0
                 
-            if len(pjb_r) > 1:
-                df_pjb = pd.DataFrame([(r + [""] * 24)[:24] for r in pjb_r[1:]], columns=["Waktu Input", "Tanggal PJB", "NOP", "Cluster", "Nama", "Role", "Site ID", "Keperluan", "Jenis BBM", "Deskripsi", "KM Akhir", "Nominal PJB", "Plat", "U1","U2","U3","U4","U5","U6","U7", "Nilai Nota", "Tiket", "Liter", "Harga Satuan"])
-                df_pjb['Tanggal PJB'] = pd.to_datetime(df_pjb['Tanggal PJB'], format='%d/%m/%Y', errors='coerce')
-                df_pjb = df_pjb[(df_pjb['Tanggal PJB'].dt.date >= start_date) & (df_pjb['Tanggal PJB'].dt.date <= end_date)].copy()
-                df_pjb['Nominal PJB'] = df_pjb['Nominal PJB'].apply(clean_nominal)
-                tot_pjb = df_pjb['Nominal PJB'].sum()
+                if len(um_r) > 1:
+                    df_um = pd.DataFrame(um_r[1:], columns=["Waktu", "Tanggal", "Deskripsi", "Nominal"])
+                    df_um['Tanggal'] = pd.to_datetime(df_um['Tanggal'], format='%d/%m/%Y', errors='coerce')
+                    df_um_filt = df_um[(df_um['Tanggal'].dt.date >= start_date) & (df_um['Tanggal'].dt.date <= end_date)].copy()
+                    df_um_filt['Nominal'] = df_um_filt['Nominal'].apply(clean_nominal)
+                    tot_um = df_um_filt['Nominal'].sum()
+                    
+                if len(pjb_r) > 1:
+                    df_pjb = pd.DataFrame([(r + [""] * 24)[:24] for r in pjb_r[1:]], columns=["Waktu Input", "Tanggal PJB", "NOP", "Cluster", "Nama", "Role", "Site ID", "Keperluan", "Jenis BBM", "Deskripsi", "KM Akhir", "Nominal PJB", "Plat", "U1","U2","U3","U4","U5","U6","U7", "Nilai Nota", "Tiket", "Liter", "Harga Satuan"])
+                    df_pjb['Tanggal PJB'] = pd.to_datetime(df_pjb['Tanggal PJB'], format='%d/%m/%Y', errors='coerce')
+                    df_pjb_filt = df_pjb[(df_pjb['Tanggal PJB'].dt.date >= start_date) & (df_pjb['Tanggal PJB'].dt.date <= end_date)].copy()
+                    df_pjb_filt['Nominal PJB'] = df_pjb_filt['Nominal PJB'].apply(clean_nominal)
+                    tot_pjb = df_pjb_filt['Nominal PJB'].sum()
                 
-            m1, m2, m3 = st.columns(3)
-            m1.markdown(f"<div class='metric-3d'><div class='metric-title'>Total UM Masuk</div><div class='metric-value'>Rp {tot_um:,.0f}</div></div>", unsafe_allow_html=True)
-            m2.markdown(f"<div class='metric-3d'><div class='metric-title'>Total Pengeluaran</div><div class='metric-value'>Rp {tot_pjb:,.0f}</div></div>", unsafe_allow_html=True)
-            m3.markdown(f"<div class='metric-3d'><div class='metric-title'>Sisa Kas Tercatat</div><div class='metric-value'>Rp {tot_um - tot_pjb:,.0f}</div></div>", unsafe_allow_html=True)
+                m1, m2, m3 = st.columns(3)
+                m1.markdown(f"<div class='metric-3d'><div class='metric-title'>Total UM Diterima</div><div class='metric-value'>Rp {tot_um:,.0f}</div></div>", unsafe_allow_html=True)
+                m2.markdown(f"<div class='metric-3d'><div class='metric-title'>Total PJB Terserap</div><div class='metric-value'>Rp {tot_pjb:,.0f}</div></div>", unsafe_allow_html=True)
+                m3.markdown(f"<div class='metric-3d'><div class='metric-title'>Sisa Kas Tercatat</div><div class='metric-value'>Rp {tot_um - tot_pjb:,.0f}</div></div>", unsafe_allow_html=True)
+                
+                st.markdown("---")
+                col_t1, col_t2 = st.columns(2)
+                with col_t1:
+                    st.markdown("**📗 Rincian Pemasukan (UM)**")
+                    if tot_um > 0:
+                        df_u = df_um_filt[['Tanggal', 'Deskripsi', 'Nominal']].copy()
+                        df_u['Tanggal'] = df_u['Tanggal'].dt.strftime('%d/%m/%Y')
+                        st.dataframe(df_u, hide_index=True, use_container_width=True)
+                with col_t2:
+                    st.markdown("**📕 Rincian Pengeluaran (PJB)**")
+                    if tot_pjb > 0:
+                        df_p = df_pjb_filt[['Tanggal PJB', 'Tiket', 'Nama', 'Nominal PJB']].copy()
+                        df_p['Tanggal PJB'] = df_p['Tanggal PJB'].dt.strftime('%d/%m/%Y')
+                        st.dataframe(df_p, hide_index=True, use_container_width=True)
 
 # ==========================================
 # PAGE 4: LIVE MONITORING (DASHBOARD SAHAM)
@@ -475,55 +495,58 @@ elif st.session_state.page == "📈 Live Monitoring":
         with cd1: start_live = st.date_input("Tarik Data Mulai")
         with cd2: end_live = st.date_input("Hingga")
         
-        with st.spinner("Fetching Live Market Data..."):
-            _, pjb_r, um_r, rekap_r = fetch_spreadsheet_data(MASTER_DATA[nop_live]["spreadsheet_id"])
-            
-            total_um = sum([clean_nominal(r[3]) for r in um_r[1:] if len(r)>3])
-            batas_harian = total_um / 7 if total_um > 0 else 0
-            
-            # PENGELUARAN HARI INI (Total PJB Hari ini)
-            today_str = datetime.now().strftime("%d/%m/%Y")
-            pengeluaran_today = sum([clean_nominal(r[11]) for r in pjb_r[1:] if len(r)>11 and r[1].strip() == today_str])
-            
-            # TOTAL PENYERAPAN (PJB) DALAM PERIODE
-            tot_serap_periode = 0
-            df_trend = pd.DataFrame()
-            if len(pjb_r) > 1:
-                df_p = pd.DataFrame([(r + [""] * 24)[:24] for r in pjb_r[1:]], columns=["W","Tanggal","N","C","Nm","R","S","K","B","D","K2","Nominal","P","u","u","u","u","u","u","u","N2","T","L","H"])
-                df_p['Tanggal'] = pd.to_datetime(df_p['Tanggal'], format='%d/%m/%Y', errors='coerce')
-                df_p = df_p[(df_p['Tanggal'].dt.date >= start_live) & (df_p['Tanggal'].dt.date <= end_live)].copy()
-                df_p['Nominal'] = df_p['Nominal'].apply(clean_nominal)
-                tot_serap_periode = df_p['Nominal'].sum()
+        if st.button("📊 Tampilkan Analitik Live", type="primary", use_container_width=True):
+            with st.spinner("Fetching Live Market Data..."):
+                _, pjb_r, um_r, rekap_r = fetch_spreadsheet_data(MASTER_DATA[nop_live]["spreadsheet_id"])
                 
-                # Untuk Grafik
-                df_trend = df_p.groupby(df_p['Tanggal'].dt.date)['Nominal'].sum().reset_index()
-                df_trend.set_index('Tanggal', inplace=True)
-            
-            # SISA KAS EQUITY (Tarik langsung dari Sheet 'Rekap PJB' Kolom P / Index 15)
-            sisa_kas_real = 0
-            if len(rekap_r) > 1:
-                # Ambil baris terakhir yang masuk range periode
-                for r in reversed(rekap_r[1:]):
-                    try:
-                        tgl_r = datetime.strptime(r[0].strip(), "%d/%m/%Y").date()
-                        if start_live <= tgl_r <= end_live and len(r) > 15:
-                            sisa_kas_real = clean_nominal(r[15])
-                            break
-                    except: pass
-            
-            # PREDIKSI HARI HABIS
-            avg_expense = df_trend['Nominal'].mean() if not df_trend.empty else 0
-            sisa_hari = (sisa_kas_real / avg_expense) if avg_expense > 0 else 999
-            
-            st.markdown("---")
-            m1, m2, m3, m4 = st.columns(4)
-            m1.markdown(f"<div class='metric-3d' style='border-left:5px solid #2ecc71;'><div class='metric-title'>Total Uang Muka</div><div class='metric-value'>Rp {total_um:,.0f}</div></div>", unsafe_allow_html=True)
-            m2.markdown(f"<div class='metric-3d' style='border-left:5px solid #e74c3c;'><div class='metric-title'>Penyerapan (Periode)</div><div class='metric-value'>Rp {tot_serap_periode:,.0f}</div></div>", unsafe_allow_html=True)
-            m3.markdown(f"<div class='metric-3d' style='border-left:5px solid #f1c40f;'><div class='metric-title'>Maksimal 1 Hari</div><div class='metric-value'>Rp {batas_harian:,.0f}</div></div>", unsafe_allow_html=True)
-            m4.markdown(f"<div class='metric-3d' style='border-left:5px solid #9b59b6;'><div class='metric-title'>Pengeluaran Hari Ini</div><div class='metric-value'>Rp {pengeluaran_today:,.0f}</div></div>", unsafe_allow_html=True)
-            
-            st.markdown(f"<div style='background-color:#1e1e1e; padding:30px; border-radius:15px; border:2px solid #333; text-align:center;'><h3 style='color:#7f8c8d; margin:0;'>SISA KAS (DARI REKAP PJB KOLOM P)</h3><h1 style='color:#00ff00; font-size:50px; margin:0;'>Rp {sisa_kas_real:,.0f}</h1><p style='color:white; font-size:18px;'>Perkiraan dana akan habis dalam: <b style='color:#e74c3c;'>{sisa_hari:.1f} Hari</b></p></div>", unsafe_allow_html=True)
-            
-            if not df_trend.empty:
-                st.markdown("<br><h4 style='color:#2c3e50;'>📈 Grafik Penyerapan (Burn Rate)</h4>", unsafe_allow_html=True)
-                st.line_chart(df_trend, use_container_width=True)
+                # Filter UM untuk Total Capital Periode Ini
+                total_um = 0
+                if len(um_r) > 1:
+                    d_um = pd.DataFrame(um_r[1:], columns=["Waktu", "Tanggal", "Deskripsi", "Nominal"])
+                    d_um['Tanggal'] = pd.to_datetime(d_um['Tanggal'], format='%d/%m/%Y', errors='coerce')
+                    d_um = d_um[(d_um['Tanggal'].dt.date >= start_live) & (d_um['Tanggal'].dt.date <= end_live)]
+                    total_um = d_um['Nominal'].apply(clean_nominal).sum()
+                
+                batas_harian = total_um / 7 if total_um > 0 else 0
+                
+                # Pengeluaran HARI INI mutlak
+                today_str = datetime.now().strftime("%d/%m/%Y")
+                pengeluaran_today = sum([clean_nominal(r[11]) for r in pjb_r[1:] if len(r)>11 and r[1].strip() == today_str])
+                
+                # Penyerapan di periode filter
+                tot_serap_periode = 0
+                df_trend = pd.DataFrame()
+                if len(pjb_r) > 1:
+                    df_p = pd.DataFrame([(r + [""] * 24)[:24] for r in pjb_r[1:]], columns=["W","Tanggal","N","C","Nm","R","S","K","B","D","K2","Nominal","P","u","u","u","u","u","u","u","N2","T","L","H"])
+                    df_p['Tanggal'] = pd.to_datetime(df_p['Tanggal'], format='%d/%m/%Y', errors='coerce')
+                    df_p = df_p[(df_p['Tanggal'].dt.date >= start_live) & (df_p['Tanggal'].dt.date <= end_live)].copy()
+                    df_p['Nominal'] = df_p['Nominal'].apply(clean_nominal)
+                    tot_serap_periode = df_p['Nominal'].sum()
+                    df_trend = df_p.groupby(df_p['Tanggal'].dt.date)['Nominal'].sum().reset_index()
+                    df_trend.set_index('Tanggal', inplace=True)
+                
+                # Sisa Kas dari REKAP PJB KOLOM P, Filter Kolom A
+                sisa_kas_real = 0
+                if len(rekap_r) > 1:
+                    for r in rekap_r[1:]:
+                        if len(r) > 15:
+                            try:
+                                t_tgl = pd.to_datetime(r[0].strip(), dayfirst=True).date()
+                                if start_live <= t_tgl <= end_live: sisa_kas_real = clean_nominal(r[15])
+                            except: pass
+                
+                avg_expense = df_trend['Nominal'].mean() if not df_trend.empty else 0
+                sisa_hari = (sisa_kas_real / avg_expense) if avg_expense > 0 else 999
+                
+                st.markdown("---")
+                m1, m2, m3, m4 = st.columns(4)
+                m1.markdown(f"<div class='metric-3d' style='border-left:5px solid #2ecc71;'><div class='metric-title'>Total Capital (UM)</div><div class='metric-value'>Rp {total_um:,.0f}</div></div>", unsafe_allow_html=True)
+                m2.markdown(f"<div class='metric-3d' style='border-left:5px solid #e74c3c;'><div class='metric-title'>Penyerapan</div><div class='metric-value'>Rp {tot_serap_periode:,.0f}</div></div>", unsafe_allow_html=True)
+                m3.markdown(f"<div class='metric-3d' style='border-left:5px solid #f1c40f;'><div class='metric-title'>Maksimal 1 Hari</div><div class='metric-value'>Rp {batas_harian:,.0f}</div></div>", unsafe_allow_html=True)
+                m4.markdown(f"<div class='metric-3d' style='border-left:5px solid #9b59b6;'><div class='metric-title'>Pengeluaran Hari Ini</div><div class='metric-value'>Rp {pengeluaran_today:,.0f}</div></div>", unsafe_allow_html=True)
+                
+                st.markdown(f"<div style='background-color:#1e1e1e; padding:30px; border-radius:15px; border:2px solid #333; text-align:center;'><h3 style='color:#7f8c8d; margin:0;'>SISA KAS (REKAP PJB)</h3><h1 style='color:#00ff00; font-size:50px; margin:0;'>Rp {sisa_kas_real:,.0f}</h1><p style='color:white; font-size:18px;'>Perkiraan dana akan habis dalam: <b style='color:#e74c3c;'>{sisa_hari:.1f} Hari Operasional</b></p></div>", unsafe_allow_html=True)
+                
+                if not df_trend.empty:
+                    st.markdown("<br><h4 style='color:#2c3e50;'>📈 Grafik Burn Rate Periode Terpilih</h4>", unsafe_allow_html=True)
+                    st.line_chart(df_trend, use_container_width=True)
