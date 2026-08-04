@@ -50,7 +50,7 @@ st.markdown("""
 PASSWORD_KOORDINATOR = "Kamiyakin2027"
 PASSWORD_LIVE = "liveaction"
 ADMIN_PASSWORDS = {"Palangkaraya": "okkidah", "Pangkalanbun": "yurontur", "Tarakan": "donpablo", "Pontianak": "kingaloy"}
-CUTOFF_DATE = datetime(2026, 8, 1).date() # LOCK SYSTEM MULAI 1 AGUSTUS 2026
+CUTOFF_DATE = datetime(2026, 8, 1).date()
 
 cloudinary.config(cloud_name="fxm61tjv", api_key="624877324969231", api_secret="LIFO6pfEg9fOM3nbsY8FBbVTpSI", secure=True)
 
@@ -75,8 +75,14 @@ def parse_date(date_str):
     except: return datetime(1970, 1, 1).date()
 
 def clean_nominal(val):
+    """Pembersih Angka Akurat: Mengatasi Format Ribuan dan Desimal Indonesia"""
     if pd.isna(val) or val == "": return 0
-    v = str(val).replace('Rp', '').replace('.', '').replace(',', '').strip()
+    v = str(val).replace('Rp', '').replace(' ', '').strip()
+    # Hapus desimal koma nol nol (,00) atau titik nol nol (.00) yang memicu bug ratusan juta
+    if v.endswith(',00'): v = v[:-3]
+    if v.endswith('.00'): v = v[:-3]
+    # Hapus sisa titik atau koma ribuan
+    v = v.replace('.', '').replace(',', '')
     try: return int(v)
     except: return 0
 
@@ -153,7 +159,6 @@ def load_excel_data():
     return site_dict, site_list, tim_dict
 
 def get_user_tickets_status(nama, req_rows, pjb_rows):
-    """FUNGSI TRACKING BLOKIR: Hanya membaca tiket mulai 1 Agustus 2026"""
     if nama == "-- Pilih Nama --": return [], []
     req_tickets = {}
     for r in req_rows[1:]:
@@ -188,8 +193,12 @@ def append_data(sheet_name, data, spreadsheet_id):
 # ==========================================
 if 'page' not in st.session_state: st.session_state.page = "📝 Form Request Dana"
 
-st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2830/2830305.png", width=120)
-st.sidebar.markdown("<h4 style='text-align:center;'>PT Kinarya Utama Teknik</h4>", unsafe_allow_html=True)
+# LOGO RESMI KINARYA UTAMA TEKNIK
+try:
+    st.sidebar.image("koperasi-jasa-konstruksi-tower-event-organizer-network-monitoring-telekomunikasi-kisel-group-logo-kut.webp", use_container_width=True)
+except:
+    st.sidebar.markdown("<h3 style='text-align:center;'>PT Kinarya Utama Teknik</h3>", unsafe_allow_html=True)
+    
 st.sidebar.markdown("<hr>", unsafe_allow_html=True)
 
 st.sidebar.markdown("### 📋 MENU OPERASIONAL")
@@ -298,7 +307,6 @@ if st.session_state.page == "📝 Form Request Dana":
                 with st.spinner("Satelit sedang menarik data jalan raya..."):
                     jarak_km_oneway, poly_coords = get_route_and_distance(c_lon1, c_lat1, c_lon2, c_lat2)
                 
-                # HITUNGAN PULANG PERGI (PP)
                 jarak_km_pp = jarak_km_oneway * 2
                 bbm_req = (jarak_km_pp / 7) if jns_bbm.lower() == 'mobil' else (jarak_km_pp / 15)
                 jarak_final_text = f"{jarak_km_pp:.1f} Km (PP)"
@@ -309,7 +317,6 @@ if st.session_state.page == "📝 Form Request Dana":
                 m2.markdown(f"<div class='metric-3d'><div class='metric-title'>BBM Estimasi (PP)</div><div class='metric-value'>{bbm_req:.1f} Liter</div></div>", unsafe_allow_html=True)
                 m3.markdown(f"<div class='metric-3d'><div class='metric-title'>Tipe Kendaraan</div><div class='metric-value'>{jns_bbm.upper()}</div></div>", unsafe_allow_html=True)
                 
-                # PETA DENGAN TITIK BESAR & TEKS LABEL
                 map_data_points = [
                     {"pos": [c_lon1, c_lat1], "color": [255, 30, 30], "name": "Titik Awal"},
                     {"pos": [c_lon2, c_lat2], "color": [30, 255, 30], "name": f"Tujuan: {site_id}"}
@@ -318,7 +325,6 @@ if st.session_state.page == "📝 Form Request Dana":
                 layer_points = pdk.Layer("ScatterplotLayer", data=map_data_points, get_position="pos", get_color="color", get_radius=600)
                 layer_text = pdk.Layer("TextLayer", data=map_data_points, get_position="pos", get_text="name", get_size=20, get_color=[0, 0, 0], get_alignment_baseline="'bottom'", get_offset=[0, -20])
                 layer_route = pdk.Layer("PathLayer", data=[{"path": poly_coords, "color": [52, 152, 219]}], get_path="path", get_width=5, get_color="color")
-                
                 view = pdk.ViewState(latitude=(c_lat1+c_lat2)/2, longitude=(c_lon1+c_lon2)/2, zoom=9, pitch=45)
                 st.pydeck_chart(pdk.Deck(layers=[layer_route, layer_points, layer_text], initial_view_state=view), use_container_width=True, height=380)
             else:
@@ -370,7 +376,6 @@ elif st.session_state.page == "✅ Form PJB Operasional":
         
         pjb_tickets_all = {r[21].strip().upper() for r in pjb_r[1:] if len(r) > 21}
         
-        # HANYA TAMPILKAN PENDING DARI AGUSTUS 2026 UNTUK TIM
         pending_list = []
         for r in req_r[1:]:
             if len(r)>5 and r[3].strip() != "" and r[3].strip().upper() not in pjb_tickets_all:
@@ -496,7 +501,7 @@ elif st.session_state.page == "📊 Neraca / Buku Kas":
                 m2.markdown(f"<div class='metric-3d' style='border-left:5px solid #e74c3c;'><div class='metric-title'>Penyerapan (Kolom P)</div><div class='metric-value'>Rp {tot_pjb:,.0f}</div></div>", unsafe_allow_html=True)
                 m3.markdown(f"<div class='metric-3d'><div class='metric-title'>Sisa Kas (UM - Penyerapan)</div><div class='metric-value'>Rp {sisa_kas:,.0f}</div></div>", unsafe_allow_html=True)
                 
-                # ANALISA AGING > 7 HARI (TAMPILKAN SEMUA TANPA TERHALANG CUTOFF)
+                # ANALISA AGING > 7 HARI (TAMPILKAN SEMUA UNTUK ADMIN)
                 st.markdown("---")
                 st.markdown("### ⚠️ Analisa Potensi Aging PJB (> 7 Hari)")
                 pjb_tickets_all = {r[21].strip().upper() for r in pjb_r[1:] if len(r) > 21}
@@ -551,7 +556,7 @@ elif st.session_state.page == "📈 Live Monitoring":
                 
                 batas_harian = total_um / 7 if total_um > 0 else 0
                 
-                # PENYERAPAN MUTLAK DARI KOLOM P BERDASARKAN FILTER KOLOM Q
+                # PENYERAPAN MUTLAK DARI KOLOM P (Index 15) BERDASARKAN FILTER KOLOM Q (Index 16)
                 tot_serap_periode = 0
                 if len(rekap_r) > 1:
                     if filter_q_live != "-- Semua Periode --":
@@ -566,7 +571,7 @@ elif st.session_state.page == "📈 Live Monitoring":
                 # SISA KAS
                 sisa_kas_real = total_um - tot_serap_periode
                 
-                # PENGAMBILAN DATA TREND (Chart Harian PJB Aktual berdasarkan tanggal)
+                # PENGAMBILAN DATA TREND CHART HARIAN
                 df_trend = pd.DataFrame()
                 if len(pjb_r) > 1:
                     df_p = pd.DataFrame([(r + [""] * 24)[:24] for r in pjb_r[1:]], columns=["W","Tanggal","N","C","Nm","R","S","K","B","D","K2","Nominal","P","u","u","u","u","u","u","u","N2","T","L","H"])
@@ -588,7 +593,7 @@ elif st.session_state.page == "📈 Live Monitoring":
                 
                 st.markdown(f"<div style='background-color:#1e1e1e; padding:30px; border-radius:15px; border:2px solid #333; text-align:center;'><h3 style='color:#7f8c8d; margin:0;'>SISA KAS (UM - PENYERAPAN)</h3><h1 style='color:#00ff00; font-size:50px; margin:0;'>Rp {sisa_kas_real:,.0f}</h1><p style='color:white; font-size:18px;'>Perkiraan dana akan habis dalam: <b style='color:#e74c3c;'>{sisa_hari:.1f} Hari Operasional</b></p></div>", unsafe_allow_html=True)
                 
-                # DAFTAR MERAH AGING > 5 HARI (TAMPILKAN SEMUA TANPA TERHALANG CUTOFF)
+                # DAFTAR MERAH AGING > 5 HARI (DITAMPILKAN SEMUA UNTUK ADMIN)
                 st.markdown("<br><h4 style='color:#e74c3c; border-bottom: 2px solid #e74c3c; padding-bottom:5px;'>🚨 DAFTAR MERAH: Tim dengan Aging PJB > 5 Hari</h4>", unsafe_allow_html=True)
                 
                 pjb_tickets_all = {r[21].strip().upper() for r in pjb_r[1:] if len(r) > 21}
