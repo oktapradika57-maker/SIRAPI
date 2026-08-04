@@ -528,7 +528,7 @@ elif st.session_state.page == "📈 Live Monitoring":
     st.markdown("<div class='header-card' style='background: linear-gradient(135deg, #000000 0%, #434343 100%); color:#00ff00;'><h2>📈 LIVE FINANCIAL MONITORING</h2><p>Wall-Street Style Dashboard - PT Kinarya Utama Teknik</p></div>", unsafe_allow_html=True)
     
     col_l1, col_l2 = st.columns([1, 2])
-    with col_l1: nop_live = st.selectbox("🌐 Market (NOP):", ["-- Pilih NOP --"] + list(MASTER_DATA.keys()))
+    with col_l1: nop_live = st.selectbox("🌐 Live (NOP):", ["-- Pilih NOP --"] + list(MASTER_DATA.keys()))
     with col_l2:
         if nop_live != "-- Pilih NOP --": pass_live = st.text_input("🔑 Live-Action Password:", type="password")
             
