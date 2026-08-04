@@ -14,7 +14,7 @@ import time
 # ==========================================
 # 0. KONFIGURASI HALAMAN & UI ELEGAN (ERP GRADE)
 # ==========================================
-st.set_page_config(page_title="ERP Kinarya Utama Teknik", page_icon="🏢", layout="wide")
+st.set_page_config(page_title="SiRAPI", page_icon="📊", layout="wide")
 
 st.markdown("""
     <style>
@@ -60,7 +60,7 @@ st.markdown("""
 # ==========================================
 # 1. KONFIGURASI SERVER, CUT-OFF & ADMIN
 # ==========================================
-PASSWORD_KOORDINATOR = "Kamiyakin2027"
+PASSWORD_KOORDINATOR = "20260805"
 PASSWORD_LIVE = "liveaction"
 ADMIN_PASSWORDS = {"Palangkaraya": "okkidah", "Pangkalanbun": "yurontur", "Tarakan": "donpablo", "Pontianak": "kingaloy"}
 CUTOFF_DATE = datetime(2026, 8, 1).date()
