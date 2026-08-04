@@ -50,7 +50,7 @@ st.markdown("""
 PASSWORD_KOORDINATOR = "Kamiyakin2027"
 PASSWORD_LIVE = "liveaction"
 ADMIN_PASSWORDS = {"Palangkaraya": "okkidah", "Pangkalanbun": "yurontur", "Tarakan": "donpablo", "Pontianak": "kingaloy"}
-CUTOFF_DATE = datetime(2026, 8, 1).date() # HANYA LOCK TIKET SEJAK 1 AGUSTUS 2026
+CUTOFF_DATE = datetime(2026, 8, 1).date() # LOCK SYSTEM MULAI 1 AGUSTUS 2026
 
 cloudinary.config(cloud_name="fxm61tjv", api_key="624877324969231", api_secret="LIFO6pfEg9fOM3nbsY8FBbVTpSI", secure=True)
 
@@ -71,7 +71,6 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 # 3. FUNGSI INTI, DATE PARSER & CACHING
 # ==========================================
 def parse_date(date_str):
-    """Penerjemah Tanggal Tangguh"""
     try: return datetime.strptime(date_str.strip(), "%d/%m/%Y").date()
     except: return datetime(1970, 1, 1).date()
 
@@ -154,7 +153,7 @@ def load_excel_data():
     return site_dict, site_list, tim_dict
 
 def get_user_tickets_status(nama, req_rows, pjb_rows):
-    """FUNGSI TRACKING CERDAS: Hanya membaca tiket mulai 1 Agustus 2026"""
+    """FUNGSI TRACKING BLOKIR: Hanya membaca tiket mulai 1 Agustus 2026"""
     if nama == "-- Pilih Nama --": return [], []
     req_tickets = {}
     for r in req_rows[1:]:
@@ -189,7 +188,6 @@ def append_data(sheet_name, data, spreadsheet_id):
 # ==========================================
 if 'page' not in st.session_state: st.session_state.page = "📝 Form Request Dana"
 
-# FOTO BISA DIGANTI NANTI, pakai link generic sementara
 st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2830/2830305.png", width=120)
 st.sidebar.markdown("<h4 style='text-align:center;'>PT Kinarya Utama Teknik</h4>", unsafe_allow_html=True)
 st.sidebar.markdown("<hr>", unsafe_allow_html=True)
@@ -372,7 +370,7 @@ elif st.session_state.page == "✅ Form PJB Operasional":
         
         pjb_tickets_all = {r[21].strip().upper() for r in pjb_r[1:] if len(r) > 21}
         
-        # HANYA TAMPILKAN PENDING DARI AGUSTUS 2026
+        # HANYA TAMPILKAN PENDING DARI AGUSTUS 2026 UNTUK TIM
         pending_list = []
         for r in req_r[1:]:
             if len(r)>5 and r[3].strip() != "" and r[3].strip().upper() not in pjb_tickets_all:
@@ -461,37 +459,44 @@ elif st.session_state.page == "📊 Neraca / Buku Kas":
                     st.success("✅ UM Terekam!"); time.sleep(1); st.rerun()
                 else: st.error("Isi form dengan benar!")
                 
-        st.markdown("<div class='section-title'>📅 2. Laporan Neraca & Filter (Sync Rekap PJB)</div>", unsafe_allow_html=True)
-        col_d1, col_d2 = st.columns(2)
-        with col_d1: start_date = st.date_input("Dari Tanggal")
-        with col_d2: end_date = st.date_input("Sampai Tanggal")
+        _, req_r, pjb_r, um_r, rekap_r = None, *fetch_spreadsheet_data(target_ss)
+        
+        # MENDAPATKAN LIST PERIODE DARI KOLOM Q (Index 16) REKAP PJB
+        unique_periode = list(set([r[16].strip() for r in rekap_r[1:] if len(r) > 16 and r[16].strip() != ""]))
+        
+        st.markdown("<div class='section-title'>📅 2. Laporan Neraca & Filter</div>", unsafe_allow_html=True)
+        col_d1, col_d2, col_d3 = st.columns(3)
+        with col_d1: start_date = st.date_input("Dari Tanggal (Untuk UM)")
+        with col_d2: end_date = st.date_input("Sampai Tanggal (Untuk UM)")
+        with col_d3: filter_q_neraca = st.selectbox("📌 Filter Penyerapan PJB (Dari Kolom Q)", ["-- Semua Periode --"] + sorted(unique_periode))
         
         if st.button("🔄 Kalkulasi Neraca & Aging", type="primary"):
             with st.spinner("Mensinkronisasi buku besar..."):
-                req_r, pjb_r, um_r, rekap_r = fetch_spreadsheet_data(target_ss)
                 
-                # TOTAL UM & PENYERAPAN BERDASARKAN FILTER TANGGAL
-                tot_um, tot_pjb = 0, 0
+                # TOTAL UM BERDASARKAN TANGGAL
+                tot_um = 0
                 if len(um_r) > 1:
                     df_um = pd.DataFrame(um_r[1:], columns=["Waktu", "Tanggal", "Deskripsi", "Nominal"])
                     df_um['Tanggal'] = pd.to_datetime(df_um['Tanggal'], format='%d/%m/%Y', errors='coerce')
                     df_um_filt = df_um[(df_um['Tanggal'].dt.date >= start_date) & (df_um['Tanggal'].dt.date <= end_date)].copy()
                     tot_um = df_um_filt['Nominal'].apply(clean_nominal).sum()
                 
-                # Penyerapan dari REKAP PJB Kolom P (Index 15) untuk periode ini
+                # TOTAL PENYERAPAN BERDASARKAN FILTER KOLOM Q (MUTLAK DARI KOLOM P / Index 15)
+                tot_pjb = 0
                 if len(rekap_r) > 1:
-                    for r in rekap_r[1:]:
-                        if len(r) > 15:
-                            tgl = parse_date(r[0])
-                            if start_date <= tgl <= end_date:
-                                tot_pjb += clean_nominal(r[15])
+                    if filter_q_neraca != "-- Semua Periode --":
+                        tot_pjb = sum([clean_nominal(r[15]) for r in rekap_r[1:] if len(r) > 16 and r[16].strip() == filter_q_neraca])
+                    else:
+                        tot_pjb = sum([clean_nominal(r[15]) for r in rekap_r[1:] if len(r) > 15])
+                
+                sisa_kas = tot_um - tot_pjb
                 
                 m1, m2, m3 = st.columns(3)
-                m1.markdown(f"<div class='metric-3d'><div class='metric-title'>Total UM (Periode)</div><div class='metric-value'>Rp {tot_um:,.0f}</div></div>", unsafe_allow_html=True)
-                m2.markdown(f"<div class='metric-3d'><div class='metric-title'>Penyerapan Rekap (Kolom P)</div><div class='metric-value'>Rp {tot_pjb:,.0f}</div></div>", unsafe_allow_html=True)
-                m3.markdown(f"<div class='metric-3d'><div class='metric-title'>Sisa Kas Tercatat</div><div class='metric-value'>Rp {tot_um - tot_pjb:,.0f}</div></div>", unsafe_allow_html=True)
+                m1.markdown(f"<div class='metric-3d'><div class='metric-title'>Total Kas (UM)</div><div class='metric-value'>Rp {tot_um:,.0f}</div></div>", unsafe_allow_html=True)
+                m2.markdown(f"<div class='metric-3d' style='border-left:5px solid #e74c3c;'><div class='metric-title'>Penyerapan (Kolom P)</div><div class='metric-value'>Rp {tot_pjb:,.0f}</div></div>", unsafe_allow_html=True)
+                m3.markdown(f"<div class='metric-3d'><div class='metric-title'>Sisa Kas (UM - Penyerapan)</div><div class='metric-value'>Rp {sisa_kas:,.0f}</div></div>", unsafe_allow_html=True)
                 
-                # ANALISA AGING > 7 HARI
+                # ANALISA AGING > 7 HARI (TAMPILKAN SEMUA TANPA TERHALANG CUTOFF)
                 st.markdown("---")
                 st.markdown("### ⚠️ Analisa Potensi Aging PJB (> 7 Hari)")
                 pjb_tickets_all = {r[21].strip().upper() for r in pjb_r[1:] if len(r) > 21}
@@ -501,16 +506,15 @@ elif st.session_state.page == "📊 Neraca / Buku Kas":
                 for r in req_r[1:]:
                     if len(r)>5 and r[3].strip() != "" and r[3].strip().upper() not in pjb_tickets_all:
                         req_date = parse_date(r[1])
-                        if req_date >= CUTOFF_DATE:
-                            aging_days = (today - req_date).days
-                            if aging_days >= 7:
-                                aging_7_list.append({"Nama": r[5], "Tiket": r[3], "Tgl Req": r[1], "Aging": f"{aging_days} Hari"})
+                        aging_days = (today - req_date).days
+                        if aging_days >= 7:
+                            aging_7_list.append({"Nama": r[5], "Tiket": r[3], "Tgl Req": r[1], "Aging": f"{aging_days} Hari"})
                 
                 if aging_7_list:
-                    st.error(f"Terdapat {len(aging_7_list)} Tiket dengan usia menggantung lebih dari 7 hari!")
+                    st.error(f"🚨 Ditemukan {len(aging_7_list)} Tiket dengan usia menggantung lebih dari 7 hari!")
                     st.dataframe(pd.DataFrame(aging_7_list), hide_index=True, use_container_width=True)
                 else:
-                    st.success("Luar biasa! Tidak ada tiket dengan aging di atas 7 hari.")
+                    st.success("✅ Luar biasa! Tidak ada tiket dengan aging di atas 7 hari.")
 
 # ==========================================
 # PAGE 4: LIVE MONITORING (DASHBOARD SAHAM)
@@ -524,14 +528,19 @@ elif st.session_state.page == "📈 Live Monitoring":
         if nop_live != "-- Pilih NOP --": pass_live = st.text_input("🔑 Live-Action Password:", type="password")
             
     if nop_live != "-- Pilih NOP --" and pass_live == PASSWORD_LIVE:
-        st.markdown("<div class='section-title'>📅 Filter Periode (Sync Rekap PJB Kolom A)</div>", unsafe_allow_html=True)
-        cd1, cd2 = st.columns(2)
-        with cd1: start_live = st.date_input("Tarik Data Mulai")
-        with cd2: end_live = st.date_input("Hingga")
+        _, req_r, pjb_r, um_r, rekap_r = None, *fetch_spreadsheet_data(MASTER_DATA[nop_live]["spreadsheet_id"])
+        
+        # MENDAPATKAN LIST PERIODE DARI KOLOM Q (Index 16) REKAP PJB
+        unique_periode = list(set([r[16].strip() for r in rekap_r[1:] if len(r) > 16 and r[16].strip() != ""]))
+        
+        st.markdown("<div class='section-title'>📅 Filter Periode Dashboard</div>", unsafe_allow_html=True)
+        cd1, cd2, cd3 = st.columns(3)
+        with cd1: start_live = st.date_input("Tarik UM (Mulai)")
+        with cd2: end_live = st.date_input("Hingga Tanggal (UM & Chart)")
+        with cd3: filter_q_live = st.selectbox("📌 Filter Penyerapan (Kolom Q - Rekap PJB)", ["-- Semua Periode --"] + sorted(unique_periode))
         
         if st.button("📊 Tampilkan Analitik Live", type="primary", use_container_width=True):
             with st.spinner("Fetching Live Market Data..."):
-                req_r, pjb_r, um_r, rekap_r = fetch_spreadsheet_data(MASTER_DATA[nop_live]["spreadsheet_id"])
                 
                 # TOTAL UM PERIODE
                 total_um = 0
@@ -542,14 +551,13 @@ elif st.session_state.page == "📈 Live Monitoring":
                 
                 batas_harian = total_um / 7 if total_um > 0 else 0
                 
-                # PENYERAPAN DARI REKAP PJB KOLOM P
+                # PENYERAPAN MUTLAK DARI KOLOM P BERDASARKAN FILTER KOLOM Q
                 tot_serap_periode = 0
                 if len(rekap_r) > 1:
-                    for r in rekap_r[1:]:
-                        if len(r) > 15:
-                            tgl = parse_date(r[0])
-                            if start_live <= tgl <= end_live:
-                                tot_serap_periode += clean_nominal(r[15])
+                    if filter_q_live != "-- Semua Periode --":
+                        tot_serap_periode = sum([clean_nominal(r[15]) for r in rekap_r[1:] if len(r) > 16 and r[16].strip() == filter_q_live])
+                    else:
+                        tot_serap_periode = sum([clean_nominal(r[15]) for r in rekap_r[1:] if len(r) > 15])
                                 
                 # PENGELUARAN HARI INI
                 today_str = datetime.now().strftime("%d/%m/%Y")
@@ -558,7 +566,7 @@ elif st.session_state.page == "📈 Live Monitoring":
                 # SISA KAS
                 sisa_kas_real = total_um - tot_serap_periode
                 
-                # PENGAMBILAN DATA TREND (Untuk Chart Harian)
+                # PENGAMBILAN DATA TREND (Chart Harian PJB Aktual berdasarkan tanggal)
                 df_trend = pd.DataFrame()
                 if len(pjb_r) > 1:
                     df_p = pd.DataFrame([(r + [""] * 24)[:24] for r in pjb_r[1:]], columns=["W","Tanggal","N","C","Nm","R","S","K","B","D","K2","Nominal","P","u","u","u","u","u","u","u","N2","T","L","H"])
@@ -580,7 +588,9 @@ elif st.session_state.page == "📈 Live Monitoring":
                 
                 st.markdown(f"<div style='background-color:#1e1e1e; padding:30px; border-radius:15px; border:2px solid #333; text-align:center;'><h3 style='color:#7f8c8d; margin:0;'>SISA KAS (UM - PENYERAPAN)</h3><h1 style='color:#00ff00; font-size:50px; margin:0;'>Rp {sisa_kas_real:,.0f}</h1><p style='color:white; font-size:18px;'>Perkiraan dana akan habis dalam: <b style='color:#e74c3c;'>{sisa_hari:.1f} Hari Operasional</b></p></div>", unsafe_allow_html=True)
                 
-                # LIST AGING 5 HARI (LIVE MONITORING)
+                # DAFTAR MERAH AGING > 5 HARI (TAMPILKAN SEMUA TANPA TERHALANG CUTOFF)
+                st.markdown("<br><h4 style='color:#e74c3c; border-bottom: 2px solid #e74c3c; padding-bottom:5px;'>🚨 DAFTAR MERAH: Tim dengan Aging PJB > 5 Hari</h4>", unsafe_allow_html=True)
+                
                 pjb_tickets_all = {r[21].strip().upper() for r in pjb_r[1:] if len(r) > 21}
                 today_date = datetime.now().date()
                 
@@ -588,15 +598,15 @@ elif st.session_state.page == "📈 Live Monitoring":
                 for r in req_r[1:]:
                     if len(r)>5 and r[3].strip() != "" and r[3].strip().upper() not in pjb_tickets_all:
                         req_date = parse_date(r[1])
-                        if req_date >= CUTOFF_DATE:
-                            aging_days = (today_date - req_date).days
-                            if aging_days >= 5:
-                                aging_5_list.append({"Nama Petugas": r[5], "Nomor Tiket": r[3], "Aging": f"{aging_days} Hari", "Tgl Request": r[1]})
+                        aging_days = (today_date - req_date).days
+                        if aging_days >= 5:
+                            aging_5_list.append({"Nama Petugas": r[5], "Nomor Tiket": r[3], "Aging": f"{aging_days} Hari", "Tgl Request": r[1]})
                 
                 if aging_5_list:
-                    st.markdown("<br><h4 style='color:#e74c3c;'>🚨 DAFTAR MERAH: Aging PJB > 5 Hari</h4>", unsafe_allow_html=True)
                     st.dataframe(pd.DataFrame(aging_5_list), hide_index=True, use_container_width=True)
+                else:
+                    st.success("✅ Terkendali! Tidak ada tim yang memegang tiket menggantung lebih dari 5 hari.")
 
                 if not df_trend.empty:
-                    st.markdown("<br><h4 style='color:#2c3e50;'>📈 Grafik Burn Rate Periode Terpilih</h4>", unsafe_allow_html=True)
+                    st.markdown("<br><h4 style='color:#2c3e50;'>📈 Grafik Burn Rate Harian Aktual</h4>", unsafe_allow_html=True)
                     st.line_chart(df_trend, use_container_width=True)
