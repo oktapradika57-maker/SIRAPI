@@ -1,663 +1,568 @@
 import streamlit as st
 import pandas as pd
-import gspread
-import base64
-import cloudinary
-import cloudinary.uploader
 import requests
-import math
-import pydeck as pdk
-from google.oauth2.service_account import Credentials
-from datetime import datetime
+import re
+import difflib
+import altair as alt
 import time
+from datetime import datetime, timedelta, date
+
+# --- KONFIGURASI HALAMAN (Wajib di baris paling atas) ---
+st.set_page_config(layout="wide", page_title="Enterprise Dashboard 348", page_icon="🚀")
 
 # ==========================================
-# 0. KONFIGURASI HALAMAN & UI ELEGAN (ERP GRADE)
+# 🔒 SISTEM LOGIN (PROFESIONAL & CLEAN)
 # ==========================================
-st.set_page_config(page_title="ERP Kinarya Utama Teknik", page_icon="🏢", layout="wide")
+if 'logged_in' not in st.session_state:
+    st.session_state['logged_in'] = False
+if 'username' not in st.session_state:
+    st.session_state['username'] = ""
+
+if not st.session_state['logged_in']:
+    st.markdown("""
+        <style>
+            [data-testid="collapsedControl"] { display: none; }
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            header {visibility: hidden;}
+        </style>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("<br><br><br><br>", unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1, 1.2, 1])
+    
+    with col2:
+        st.markdown("""
+        <div style='text-align: center; margin-bottom: 20px;'>
+            <h1 style='font-weight: 900; font-size: 42px; color: #0072ff;'>🚀 TASK FORCE 348</h1>
+            <p style='color: #666; font-size: 16px; font-weight: 600;'>INTEGRATED MONITORING SYSTEM</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        with st.form("login_form_pro", clear_on_submit=False):
+            st.markdown("### 🔒 Secure Authentication")
+            username_input = st.text_input("Username", placeholder="Masukkan Username")
+            password_input = st.text_input("Password", type="password", placeholder="••••••••")
+            
+            # Tombol login agar bisa menggunakan "Enter" di keyboard
+            submitted = st.form_submit_button("Access Dashboard", use_container_width=True)
+            
+            if submitted:
+                is_valid_user1 = (username_input == "KinaryaUT" and password_input == "G348T")
+                is_valid_user2 = (username_input == "Kut2026" and password_input == "Hit&hup")
+                
+                if is_valid_user1 or is_valid_user2:
+                    st.success("✅ Autentikasi Berhasil! Memuat Dashboard...")
+                    time.sleep(1)
+                    st.session_state['logged_in'] = True
+                    st.session_state['username'] = username_input
+                    st.rerun()
+                else:
+                    st.error("🚨 Kredensial tidak valid. Akses ditolak.")
+    
+    st.stop() 
+
+# ==========================================
+# 🚀 KONTEN UTAMA DASHBOARD
+# ==========================================
+with st.sidebar:
+    st.markdown("### 👤 User Profile")
+    st.success(f"Log: **{st.session_state['username']}**")
+    if st.button("🚪 Logout Securely", use_container_width=True):
+        st.session_state['logged_in'] = False
+        st.session_state['username'] = ""
+        st.rerun()
 
 st.markdown("""
-    <style>
-        .main { background-color: #F8FAFC; font-family: 'Inter', 'Segoe UI', sans-serif; }
-        
-        .header-card {
-            background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%);
-            padding: 30px; border-radius: 16px; color: white; text-align: center;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1); margin-bottom: 30px;
-            border-bottom: 4px solid #3B82F6; animation: fadeInDown 0.6s ease-out;
-        }
-        
-        .metric-3d {
-            background: #ffffff; padding: 25px; border-radius: 16px; text-align: center;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); margin-bottom: 15px;
-            border: 1px solid #E2E8F0; border-top: 5px solid #3B82F6;
-        }
-        .metric-3d:hover { transform: translateY(-5px); box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); }
-        .metric-title { font-size: 0.875rem; color: #64748B; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;}
-        .metric-value { font-size: 1.8rem; color: #0F172A; font-weight: 900; }
-        
-        .sidebar-btn { width: 100%; border-radius: 10px; font-weight: 700; height: 48px; margin-bottom:12px; background-color: #F1F5F9; border: 1px solid #CBD5E1; color: #334155; transition: 0.2s;}
-        .sidebar-btn:hover { background-color: #3B82F6; color: white; border-color: #2563EB; box-shadow: 0 4px 6px rgba(59, 130, 246, 0.3); }
-        
-        .stTabs [data-baseweb="tab-list"] { gap: 8px; }
-        .stTabs [data-baseweb="tab"] { height: 50px; white-space: pre-wrap; background-color: #F1F5F9; border-radius: 8px 8px 0px 0px; padding: 10px 20px; font-weight: 600; color: #475569; }
-        .stTabs [aria-selected="true"] { background-color: #3B82F6 !important; color: white !important; }
-        
-        div.stAlert { border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: none; }
-        .section-title { color: #1E293B; font-size: 1.25rem; font-weight: 800; border-bottom: 2px solid #E2E8F0; padding-bottom: 8px; margin-top: 30px; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 0.05em;}
-        .footer-brand { position: relative; bottom: 0; width: 100%; text-align: center; font-size: 13px; color: #94A3B8; margin-top: 50px; font-weight: bold;}
-        
-        @keyframes fadeInDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
-    </style>
+<style>
+    .block-container { padding-top: 1.5rem !important; padding-bottom: 2rem !important; }
+    [data-testid="stMetricValue"] { font-size: 28px !important; font-weight: bold; }
+</style>
 """, unsafe_allow_html=True)
 
-# ==========================================
-# 1. KONFIGURASI SERVER, CUT-OFF & ADMIN
-# ==========================================
-PASSWORD_KOORDINATOR = "Kamiyakin2027"
-PASSWORD_LIVE = "liveaction"
-ADMIN_PASSWORDS = {"Palangkaraya": "okkidah", "Pangkalanbun": "yurontur", "Tarakan": "donpablo", "Pontianak": "kingaloy"}
-CUTOFF_DATE = datetime(2026, 8, 1).date()
+# --- KREDENSIAL & DATA SOURCE MASTER ---
+GOOGLE_SHEET_ID = "1FGKOzWoUrbf3PXN_ahgG1t-83JZT4H4sioQepePbBxM"
+APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxCQUGt5_Jybed2AwFP4xXFru6GxuMoSwQpUZ63aK9o0WlUFnumOoseRWwgRmxZZ9XYtQ/exec"
+SUPABASE_URL = "https://sfyfijndolnwqklqnpmj.supabase.co"
+SUPABASE_KEY = "sb_publishable_digs5GILs-TEe4lEpPj4qQ_VRrQ7FCm"
+SUPABASE_TABLE_DAPOT = "dapot_data"
+SUPABASE_TABLE_INAP = "inap_data"
 
-cloudinary.config(cloud_name="fxm61tjv", api_key="624877324969231", api_secret="LIFO6pfEg9fOM3nbsY8FBbVTpSI", secure=True)
+# --- FUNGSI STANDARISASI ---
+def format_site_id(site_id):
+    if pd.isna(site_id) or str(site_id).strip() == "": return "-"
+    s = str(site_id).strip().upper().replace(" ", "").replace("-", "").replace("_", "")
+    match = re.search(r'([A-Z]{2,4})(\d+)', s)
+    if match: return f"{match.group(1)}{match.group(2).zfill(3)}"
+    return re.sub(r'^K+P', 'KKP', s)
 
-MASTER_DATA = {
-    "Palangkaraya": {"spreadsheet_id": "1HvgVicTWwO4RMQI6ZR3Mu3IgGicwjcLZl9mDN1auvJU", "clusters": ["Palangkaraya", "Barito Raya"], "names": ["ADI BOWO SANTOSO", "AHMAD", "AHMAD MUZAKIR", "AHMAD SETIAWAN", "ALFI SYAHRI", "ARMADI", "AULIA RAHMAN", "DARLI SUTANTO", "DIDI RIYADI", "FAHMI", "FRANS EJHA ADITYA", "GYLLBRHED ALFARY LOLOMSAIT", "HARUN NURASYID", "HORY YUSMANTO", "INDRA", "JAMES JIMBRIS TAMAILANG", "JUMADI", "KHILAL DAWAI KATIRI", "LEONARD HARA", "M. RIFANI", "MUHAMMAD MUKHLIS", "MUHAMMAD MUKTI", "MUNAWIR AHMAD", "MURJANI", "NURHAYAT", "OKY BANGKIT PAMUNGKAS", "PRADILA KANDI", "PUJIANTO", "PUTRA WARDANA", "REYNALDI RICARDO PUTRA", "RIKI HIDAYAT", "RIKO SETIADI", "SAILILLAH", "SARUL SAPUTRA", "SARWONO", "TAKLIM", "TIVIANSYAH", "TRISNO SUSANTO", "YAHYA MUHAMAD", "OKTA PRDIKA", "M KIKI FIRMANSYAH", "MAWARDAH", "HD"]},
-    "Pangkalanbun": {"spreadsheet_id": "1bc0lDhR5iMtXZsKiKIdEwPY8JTaASeHFtaJSeXkywE4", "clusters": ["Ketapang", "Sampit", "Pangkalanbun"], "names": ["RIRIH HARIANTO", "MUKHAMAD ABDUL KHOLIP", "YAMA DEWANTA", "BAGUS SANTOSO", "IMRON SETIAWAN", "JOENDRIS HERDIAN KARA", "STEVEN HERDIAN KARA", "YUDIONO", "DADANG WAHYU SYAHPUTRA", "CAVIN ANDREAN EKA PUTRA", "RAHMAT RIYAN WAHYUDIN", "SUWITO", "DIDIK PRIYONO", "GUNTUR WAHYU PRADANA", "UTI MUHAMMAD KHAIRUL HUDA", "IDRUS MAULANA", "M. RIZKY", "TRIYONO", "ERIK SETIAWAN", "AGUS SUGANDA", "AJI SAPUTRA", "DIAN WAHYUDI", "HAFID BUDIANTO", "IWAN ZAINAL ABIDIN", "DANDI PUTRA", "PONIRAN", "PARYADI KUSUMA", "HERWANI", "DIAN WILDANI", "IPAN HARIONO", "FIRDAUS", "RONI YUDI ISYANTO", "AYU NUR ISLAMIAH", "ARDIANSYAH.", "DAYU SHANDY", "WAHYUDI", "TAJAM SAPUTRA", "MUJHAHID ALWI", "NANDA FIRMANSYAH", "WAHYU RAHMADANI", "TEGUH WICAKSONO", "FERI HARIADI", "NASUKI", "ANDARIANTO PUJI SURO", "BONDAN PRAMUDYA ANANTATUR", "SOLEKHAN", "RIZAL IHZAMAHENDRA", "MUHAMMAD ROIS FERDIANSYAH", "WIDI ARYANTO", "FHANNY AGUSTIAWAN"]},
-    "Tarakan": {"spreadsheet_id": "1lRj1YdZGQwY5vHg8P4wudK9V1O_lJuEYjdyHkXoB-Wg", "clusters": ["Tarakan Inner", "Tarakan Outer"], "names": ["HENDRA WIRTASI SIMANULLANG", "ARIZONA ROSADI", "KUKUH BHASKARA", "NATAL SIMBOLON", "HERMAWAN", "IRVAN DINATA VANDITYAWAN", "ENDRAS SAPTA", "AHMADI", "EDI PANJI ERMAYANA", "HANS RISKY RONI TUAH GIRSANG", "IRMANSYAH B. SANGAJI", "REMO REMOLDUS MANALU", "MOHAMMAD RAFAI", "FIRMAN SYAHRUL", "AZMIR", "PETRUS RESI KELORE", "ANIR REZKY", "AHDAN", "PARJON SIMANULLANG", "RUSDI", "HASRIADI", "PURO SUGONDO", "ALIMUDIN M. SAER", "KORNELIUS USI KELORE", "RUSDIANSYAH", "JONTES YUSDA SIMANULLANG", "NANI SETIANINGSIH", "UNGGUL NUGRAHA", "YOGABITA INDOTENO", "JHON KENNEDI SIMANULLANG", "RAFI MUHAMAD SYARIF", "AGRIVA", "SEPTIAN ALVITO", "M. DEDI RIZALDI", "SAHARUDDIN.", "MUHAMMAD RASYID", "SUPRIADI", "JULIMAT SIHITE", "EFNI NURYADIN", "ERWIN SAPUTRA ARIANSYAH", "ALVEUS", "SUPRIADI BANDANGAN"]},
-    "Pontianak": {"spreadsheet_id": "1VmoWPImNFMjnaIQpBXEVYdMiTEzsz3P4tpmzfA0EMDE", "clusters": ["Sintang", "Singkawang", "Pontianak"], "names": ["ALOYSIUS", "RUDI", "RONIYANTO", "SUKADI", "HAIRIL", "AZMI ASHADIQI", "SUYADI", "ARIEF DARUL IKHWAN", "MUHAMMAD AL FATAH", "YUDIANSYAH", "RAHMAD INDRA IRAWAN", "MATIUS MARTIN", "RYVAEEL DEWANGGA", "AMIRDA ANGGA SAPUTRA", "IZHARUDDIN", "VINSENSIUS YOGI", "GUSTI ARIZAL", "MUHAMMAD MIFTAHUDIN, A.MD", "BAYU ANGGARA PUTRA", "YONI IRAWAN", "SUGANDI", "IRVAN ANDRIYANA", "ALDIANSYAH", "ABANG HAMDANI", "ABANG KUSDIANSYAH", "SUMAN", "SANGGARA ISMARAWARI", "IBIN", "VALENTINUS PETRO", "DWI KURNIAWAN ISMANTO", "ARISAFRIADI", "DONATUS DONI", "NUR AHMAD KARDIYANTO", "AGRI PERDANA", "AKHSANUL FIKI", "ALI ALAMSYAH", "MUHAMMAD FIRZHA GIANNI HARSYA", "RICKY ARDILAY", "FAISAL", "WIJI SANTOSO", "HISYAM MUTHOYIB", "ARIF RAHMAN NUGROHO", "TOTOK SUGIARTO", "PURWANDI SETIAWAN", "JULIANTO BHAKTI PUTRO, SH", "ILHAMMUDIN", "AGUNG", "ROSIDI", "ABRAR ELZAH FATHALIF", "HENDRI YULIANSYAH", "JAMIL", "GORO SUKARTONO", "OKTAPIANUS JUMIN", "ONNIE SYAEFUDDIN", "BUDI", "ULUL AMRY", "RUHIAT, A.MD", "SUPIANDI", "WAHYUDI", "SUHENDRIK", "M. ARKAM", "SYAFRI APRIJAL", "ARIANTO SUMANTRI", "TUTU AGE ANDIKA", "VIRANDA SAPTA, A.MD", "TOTO HERMANSYAH", "KURNIAWAN", "ROBI ISKANDAR MASDIANSYAH", "MUTIIN CHANDRA", "MISJANI", "KHAIRUL FARISD", "ANDRA", "DODI RATMAYANTO", "WAWAN DARYANA", "MISWARDI", "JUPRILIAUS PICO", "DEDY PURNOMO", "EDI KURNIAWAN", "DEDE GUNAWAN", "WANDALA JAGOARDI PANDALO", "KARIYADI", "REZQI AL BARQAH", "FIRMANSYAH, SP"]}
-}
+def clean_label_name(name):
+    if "Log Rectifier" in name: return "Log Recty"
+    return re.sub(r'\s*\(.*?\)\s*', '', str(name)).strip()
 
-LIST_KEPERLUAN = ["-- Pilih Keperluan --", "Tshoot", "Backup", "Support", "PM", "Program BCP", "Program Quikwin", "Program G348T", "Pengiriman Material SPMS", "Pembelian Material"]
-SHEET_REQUEST = "Form Request dana"        
-SHEET_PJB = "Form PJB"
-SHEET_UM = "Data UM"
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+def cari_site_terdekat(site_appsheet, list_site_supabase):
+    if site_appsheet == "-": return None
+    cocok = difflib.get_close_matches(site_appsheet, list_site_supabase, n=1, cutoff=0.6)
+    return cocok[0] if cocok else None
 
-# ==========================================
-# 3. FUNGSI INTI, PEMBERSIH ANGKA & CACHING
-# ==========================================
-def parse_date(date_str):
-    try: return datetime.strptime(date_str.strip(), "%d/%m/%Y").date()
-    except: return datetime(1970, 1, 1).date()
+def konversi_link_gdrive(url_tunggal):
+    if not url_tunggal or str(url_tunggal).strip() == "": return None, None, None, None
+    link_bytes = str(url_tunggal).strip()
+    file_id = None
+    if "id=" in link_bytes:
+        id_match = re.search(r'id=([a-zA-Z0-9_-]+)', link_bytes)
+        if id_match: file_id = id_match.group(1)
+    elif "drive.google.com/file/d/" in link_bytes:
+        id_match = re.search(r'/file/d/([a-zA-Z0-9_-]+)', link_bytes)
+        if id_match: file_id = id_match.group(1)
+            
+    if file_id:
+        thumb_url = f"https://drive.google.com/thumbnail?id={file_id}&sz=w400"
+        zoom_url = f"https://drive.google.com/thumbnail?id={file_id}&sz=w1600"
+        dl_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+        return thumb_url, zoom_url, dl_url, None
+    return link_bytes, link_bytes, link_bytes, None
 
-def clean_nominal(val):
-    if pd.isna(val) or val == "": return 0
-    v = str(val).replace('Rp', '').replace(' ', '').strip()
-    if v.endswith(',00'): v = v[:-3]
-    if v.endswith('.00'): v = v[:-3]
-    v = v.replace('.', '').replace(',', '')
-    try: return int(v)
-    except: return 0
+def dapatkan_nilai_teknis(row, kolom_sheet, kolom_supabase):
+    val_sheet = None
+    if kolom_sheet in row: val_sheet = row.get(kolom_sheet)
+    elif "Type Batter" in kolom_sheet and "Type Battery" in row: val_sheet = row.get("Type Battery")
+    elif "Type Batteri.1" in kolom_sheet and "Type Battery 2" in row: val_sheet = row.get("Type Battery 2")
+    elif "Type Batteri.1" in kolom_sheet and "Type Battery.1" in row: val_sheet = row.get("Type Battery.1")
+        
+    if pd.notna(val_sheet) and str(val_sheet).strip() not in ["", "-", "nan", "None"]:
+        return str(val_sheet).strip()
+    
+    val_sup = row.get(f"{kolom_supabase}_dapot") if f"{kolom_supabase}_dapot" in row else row.get(kolom_supabase)
+    if pd.notna(val_sup) and str(val_sup).strip() not in ["", "-", "nan", "None"]:
+        return str(val_sup).strip()
+    
+    return "Cek data Utama ⚠️"
 
-def clean_coord(val):
+def update_tech_specs_gsheet(site_id_asli, dict_specs):
     try:
-        if pd.isna(val) or val == "": return 0.0
-        return float(str(val).replace(',', '.').strip())
-    except: return 0.0
+        payload = {"site_id": str(site_id_asli).strip(), "tech_specs": dict_specs}
+        response = requests.post(APPS_SCRIPT_URL, json=payload, timeout=15)
+        if response.status_code == 200 and "Sukses" in response.text: return True, "Sukses"
+        return False, response.text
+    except Exception as e: return False, str(e)
 
-def haversine(lat1, lon1, lat2, lon2):
-    R = 6371.0 
-    dlat, dlon = math.radians(lat2 - lat1), math.radians(lon2 - lon1)
-    a = math.sin(dlat / 2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2)**2
-    return R * (2 * math.atan2(math.sqrt(a), math.sqrt(1 - a)))
+# --- PULL DATA DARI GOOGLE SHEETS & SUPABASE ---
+@st.cache_data(ttl=60)
+def load_data_from_google_sheets():
+    url = f"https://docs.google.com/spreadsheets/d/{GOOGLE_SHEET_ID}/export?format=csv"
+    try: return pd.read_csv(url)
+    except: return pd.DataFrame()
 
-def decode_polyline(polyline_str):
-    index, lat, lng, coordinates = 0, 0, 0, []
-    while index < len(polyline_str):
-        changes = {'lat': 0, 'lng': 0}
-        for unit in ['lat', 'lng']:
-            shift, result = 0, 0
-            while True:
-                byte = ord(polyline_str[index]) - 63
-                index += 1
-                result |= (byte & 0x1f) << shift
-                shift += 5
-                if not byte >= 0x20: break
-            changes[unit] = ~(result >> 1) if (result & 1) else (result >> 1)
-        lat += changes['lat']; lng += changes['lng']
-        coordinates.append([lng / 100000.0, lat / 100000.0])
-    return coordinates
+@st.cache_data(ttl=60)
+def load_backup_data():
+    url_backup = f"https://docs.google.com/spreadsheets/d/{GOOGLE_SHEET_ID}/export?format=csv&gid=445265067"
+    try: return pd.read_csv(url_backup)
+    except: return pd.DataFrame()
 
-def get_route_and_distance(lon1, lat1, lon2, lat2):
+@st.cache_data(ttl=60)
+def load_bcp_data():
+    # Menggunakan metode query tqx agar lebih stabil menarik Sheet BCP
+    url_bcp = f"https://docs.google.com/spreadsheets/d/{GOOGLE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=BCP"
+    try: return pd.read_csv(url_bcp)
+    except: return pd.DataFrame()
+
+@st.cache_data(ttl=600)
+def load_data_from_supabase_dapot():
+    url = f"{SUPABASE_URL}/rest/v1/{SUPABASE_TABLE_DAPOT}?select=*&limit=5000"
+    headers = { "apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}" }
     try:
-        url = f"http://router.project-osrm.org/route/v1/driving/{lon1},{lat1};{lon2},{lat2}?overview=simplified"
-        res = requests.get(url, timeout=5).json()
-        if res.get("code") == "Ok":
-            dist_km = res["routes"][0]["distance"] / 1000
-            poly = decode_polyline(res["routes"][0]["geometry"])
-            return dist_km, poly
+        res = requests.get(url, headers=headers)
+        if res.status_code == 200: return pd.DataFrame(res.json())
+        return pd.DataFrame()
+    except: return pd.DataFrame()
+
+def fetch_inap_for_site(site_clean, site_asli):
+    variants = set()
+    for s in [site_clean, site_asli]:
+        if pd.isna(s) or str(s).strip() in ["", "-", "nan"]: continue
+        v = str(s).strip().upper()
+        variants.update([v, v.replace(" ", "")])
+        match_space = re.search(r'([A-Z]{2,4})[-_ ]*(\d+)', v.replace(" ", ""))
+        if match_space:
+            letters, digits = match_space.group(1), match_space.group(2)
+            padded_digits = digits.zfill(3)
+            variants.update([f"{letters}{padded_digits}", f"{letters} {padded_digits}", f"{letters}-{padded_digits}"])
+    if not variants: return pd.DataFrame()
+    or_filter = ",".join([f"site_id.eq.{v}" for v in variants])
+    url = f"{SUPABASE_URL}/rest/v1/{SUPABASE_TABLE_INAP}"
+    headers = { "apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}" }
+    params = { "or": f"({or_filter})", "limit": 2000 }
+    
+    try:
+        res = requests.get(url, headers=headers, params=params, timeout=10)
+        if res.status_code == 200: return pd.DataFrame(res.json())
     except: pass
-    dist_km = haversine(lat1, lon1, lat2, lon2) * 1.3 
-    return dist_km, [[lon1, lat1], [lon2, lat2]]
+    return pd.DataFrame()
 
-@st.cache_resource
-def get_credentials():
-    with open("credentials.json", "w") as f: f.write(st.secrets["gcp_json"])
-    return Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
+# --- PROSES DATA & PENGGABUNGAN ---
+df_sheet_main = load_data_from_google_sheets()
+df_backup = load_backup_data()
+df_bcp = load_bcp_data()
+df_sup_dapot = load_data_from_supabase_dapot()
 
-@st.cache_data(ttl=10)
-def fetch_spreadsheet_data(spreadsheet_id):
-    client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
-    try: req = client.worksheet(SHEET_REQUEST).get_all_values()
-    except: req = []
-    try: pjb = client.worksheet(SHEET_PJB).get_all_values()
-    except: pjb = []
-    try: um = client.worksheet(SHEET_UM).get_all_values()
-    except: um = []
-    try: rekap = client.worksheet("Rekap PJB").get_all_values()
-    except: rekap = []
-    return req, pjb, um, rekap
+frames = []
+if not df_sheet_main.empty: frames.append(df_sheet_main)
+if not df_backup.empty: frames.append(df_backup)
 
-@st.cache_data
-def load_excel_data():
-    try:
-        df_site = pd.read_excel("Hasil_910_Site.xlsx").fillna(0)
-        site_dict = df_site.set_index('Site ID')[['Latitude Tujuan', 'Longtitude Tujuan']].to_dict('index')
-        site_list = df_site['Site ID'].astype(str).tolist()
-    except: site_dict, site_list = {}, []
-    try:
-        df_tim = pd.read_excel("lonlat tim.xlsx").fillna(0)
-        tim_dict = df_tim.set_index('Nama')[['Latitude', 'Longtitude']].to_dict('index')
-    except: tim_dict = {}
-    return site_dict, site_list, tim_dict
+if frames:
+    df_sheet = pd.concat(frames, ignore_index=True)
+else:
+    st.error("🚨 Gagal memuat data utama dari Google Sheets! Periksa koneksi Anda.")
+    st.stop()
 
-def get_user_tickets_status(nama, req_rows, pjb_rows):
-    """
-    LOGIKA CERDAS:
-    1. Membaca SEMUA history untuk ditampilkan di Sidebar (Menunggu PJB).
-    2. HANYA mengunci (lock) nama pengguna jika tiket yang menggantung >= 1 Agustus 2026.
-    """
-    if nama == "-- Pilih Nama --": return [], [], []
-    req_tickets = {}
-    for r in req_rows[1:]:
-        if len(r) > 5 and r[5].strip().upper() == nama.strip().upper():
-            req_tickets[r[3].strip().upper()] = r[1]
-                
-    pjb_tickets = {r[21].strip().upper() for r in pjb_rows[1:] if len(r) > 21 and r[4].strip().upper() == nama.strip().upper()}
+kolom_site_sheet = 'Site' if 'Site' in df_sheet.columns else ([c for c in df_sheet.columns if "site" in c.lower() or "id" in c.lower()] + [df_sheet.columns[0]])[0]
+df_sheet['site_clean_sheet'] = df_sheet[kolom_site_sheet].apply(format_site_id)
+
+if not df_sup_dapot.empty:
+    df_sup_dapot['site_clean_sup'] = df_sup_dapot['site_id'].apply(format_site_id)
+    list_site_sup = df_sup_dapot['site_clean_sup'].dropna().unique().tolist()
+    mapping_fuzzy = {site_s: (site_s if site_s in list_site_sup else cari_site_terdekat(site_s, list_site_sup)) for site_s in df_sheet['site_clean_sheet'].unique()}
+    df_sheet['matched_site_sup'] = df_sheet['site_clean_sheet'].map(mapping_fuzzy)
+    df_merged = pd.merge(df_sheet, df_sup_dapot, left_on='matched_site_sup', right_on='site_clean_sup', how='left', suffixes=('', '_dapot'))
+else:
+    df_merged = df_sheet.copy()
+    df_merged['matched_site_sup'] = None
+
+def susun_nama_dropdown(row):
+    s_id = row['site_clean_sheet'] if pd.isna(row.get('matched_site_sup')) or not row['matched_site_sup'] else row['matched_site_sup']
+    s_name = row.get('site_name') if pd.notna(row.get('site_name')) else "Belum Terdata di DB"
+    return f"[{s_id}] ➔ {s_name}"
     
-    outstanding_all = []    # Untuk ditampilkan di history
-    outstanding_lock = []   # Untuk mengunci form (>= Cutoff)
-    history = []
-    
-    for tkt, tgl in req_tickets.items():
-        if tkt not in pjb_tickets:
-            outstanding_all.append(tkt)
-            if parse_date(tgl) >= CUTOFF_DATE:
-                outstanding_lock.append(tkt)
-            history.append({"Tiket": tkt, "Tanggal": tgl, "Status": "🔴 Menunggu PJB"})
+df_merged['dropdown_label'] = df_merged.apply(susun_nama_dropdown, axis=1)
+
+if 'Timestamp' in df_merged.columns:
+    df_merged['parsed_timestamp'] = pd.to_datetime(df_merged['Timestamp'], errors='coerce', dayfirst=True)
+    df_merged['date_obj'] = df_merged['parsed_timestamp'].dt.date
+else:
+    df_merged['date_obj'] = date.today()
+    df_merged['parsed_timestamp'] = pd.to_datetime("today")
+
+hari_kemarin = date.today() - timedelta(days=1)
+
+
+st.title("🚀 TASK FORCE 348 | NOP PALANGKARAYA")
+st.caption("GERAKAN G348T - Monitoring & Update Terintegrasi")
+
+# ==========================================
+# 📊 1. METRIK UTAMA (348 SITE)
+# ==========================================
+TOTAL_TARGET = 348
+
+sites_done = len(df_sheet[~df_sheet[kolom_site_sheet].isna()])
+sites_remaining = max(TOTAL_TARGET - sites_done, 0)
+progress_percent = min(sites_done / TOTAL_TARGET, 1.0)
+
+list_data_implementasi = []
+
+if not df_sheet_main.empty and df_sheet_main.shape[1] > 107:
+    for _, row in df_sheet_main.iterrows():
+        val = str(row.iloc[107]).strip()
+        if val.lower() not in ['', '-', 'nan', 'none', 'null']:
+            site_id = format_site_id(str(row.get(kolom_site_sheet, row.iloc[0])).strip())
+            list_data_implementasi.append({"Site ID": site_id, "Tindakan Implementasi": val, "Sumber": "Sheet Utama"})
+
+if not df_backup.empty and df_backup.shape[1] > 114:
+    kolom_site_backup = df_backup.columns[0]
+    for _, row in df_backup.iterrows():
+        val = str(row.iloc[114]).strip()
+        if val.lower() not in ['', '-', 'nan', 'none', 'null']:
+            site_id = format_site_id(str(row.get(kolom_site_backup, row.iloc[0])).strip())
+            list_data_implementasi.append({"Site ID": site_id, "Tindakan Implementasi": val, "Sumber": "Sheet Backup"})
+
+df_implementasi = pd.DataFrame(list_data_implementasi)
+implementasi_count = len(df_implementasi)
+implementasi_percent = min(implementasi_count / TOTAL_TARGET, 1.0) if TOTAL_TARGET > 0 else 0
+
+st.markdown("### 📊 Progress 348 Site")
+col_k1, col_k2, col_k3, col_k4 = st.columns(4)
+with col_k1:
+    with st.container(border=True): st.metric("🎯 Total Target Site", f"{TOTAL_TARGET} Site")
+with col_k2:
+    with st.container(border=True): st.metric("✅ Selesai Dikerjakan", f"{sites_done} Site", f"{(progress_percent*100):.1f}% Eksekusi")
+with col_k3:
+    with st.container(border=True): st.metric("🚀 Implementasi", f"{implementasi_count} Site", f"{(implementasi_percent*100):.1f}% Progress")
+with col_k4:
+    with st.container(border=True): st.metric("⏳ Sisa Target", f"{sites_remaining} Site")
+
+# Progress bar resmi (Native Streamlit)
+st.progress(progress_percent, text=f"Status Eksekusi: {sites_done} dari {TOTAL_TARGET} Site (Gabungan List + Backup)")
+
+with st.expander("📋 Klik untuk melihat Rincian Data Site Implementasi"):
+    if not df_implementasi.empty: st.dataframe(df_implementasi, hide_index=True, use_container_width=True)
+    else: st.info("ℹ️ Belum ada tindakan implementasi yang tercatat.")
+
+st.divider()
+
+# ==========================================
+# ⚡ 2. METRIK BCP - QUICK WIN
+# ==========================================
+TOTAL_QW = 53
+qw_done = 0
+qw_ongoing = 0
+qw_notyet = 0
+list_qw_detail = []
+
+if not df_bcp.empty:
+    # Memeriksa baris demi baris secara aman
+    for idx, row in df_bcp.iterrows():
+        # Kolom I=8, J=9, K=10 (Dibungkus Exception Guard)
+        try:
+            val_i = str(row.iloc[8]).strip() if len(row) > 8 else ""
+            val_j = str(row.iloc[9]).strip() if len(row) > 9 else ""
+            val_k = str(row.iloc[10]).strip() if len(row) > 10 else ""
+        except IndexError:
+            continue
+        
+        val_j_lower = val_j.lower()
+        
+        # Abaikan jika kolom J murni kosong atau 'nan'
+        if val_j_lower in ['nan', 'none', 'null', '']:
+            continue
+            
+        # Hitungan murni berdasarkan teks di dalam Kolom J
+        if 'done' in val_j_lower: qw_done += 1
+        elif 'on going' in val_j_lower or 'ongoing' in val_j_lower: qw_ongoing += 1
+        elif 'not yet' in val_j_lower: qw_notyet += 1
+            
+        list_qw_detail.append({
+            "Kategori Progress (J)": val_j,
+            "Program Quick Win (I)": val_i if val_i.lower() not in ['nan', 'none'] else "-",
+            "Additional Remark (K)": val_k if val_k.lower() not in ['nan', 'none'] else "-"
+        })
+
+df_qw_detail = pd.DataFrame(list_qw_detail)
+qw_percent = min(qw_done / TOTAL_QW, 1.0) if TOTAL_QW > 0 else 0
+
+st.markdown("### ⚡ BCP - Quick Win Progress")
+col_qw1, col_qw2, col_qw3, col_qw4 = st.columns(4)
+
+with col_qw1:
+    with st.container(border=True): st.metric("🎯 Total Quick Win", f"{TOTAL_QW} Program")
+with col_qw2:
+    with st.container(border=True): st.metric("✅ Status: Done", f"{qw_done} Program", f"{(qw_percent*100):.1f}% Pencapaian")
+with col_qw3:
+    with st.container(border=True): st.metric("🔄 Status: On Going", f"{qw_ongoing} Program", "Sedang Dikerjakan", delta_color="off")
+with col_qw4:
+    with st.container(border=True): st.metric("⚠️ Status: Not Yet", f"{qw_notyet} Program", "Belum Ter-Planning", delta_color="inverse")
+
+# Progress bar resmi (Native Streamlit)
+st.progress(qw_percent, text=f"Pencapaian Quick Win: {qw_done} Selesai dari {TOTAL_QW} Program BCP")
+
+with st.expander("📋 Klik untuk melihat Rincian Data Quick Win (Kolom I, J, K)"):
+    if not df_qw_detail.empty:
+        # Pewarnaan Tabel agar mudah dibaca
+        def color_progress(val):
+            val_lower = str(val).lower()
+            if 'done' in val_lower: return 'background-color: #d4edda; color: #155724; font-weight: bold;'
+            elif 'on going' in val_lower or 'ongoing' in val_lower: return 'background-color: #cce5ff; color: #004085; font-weight: bold;'
+            elif 'not yet' in val_lower: return 'background-color: #f8d7da; color: #721c24; font-weight: bold;'
+            return ''
+            
+        st.dataframe(df_qw_detail.style.map(color_progress, subset=['Kategori Progress (J)']), hide_index=True, use_container_width=True)
+    else:
+        st.info("ℹ️ Saat ini belum ada data Quick Win yang tercatat. Pastikan Kolom J pada Sheet BCP sudah terisi.")
+
+st.divider()
+
+# ==========================================
+# 🎯 3. FILTER & SELEKSI TARGET MONITORING
+# ==========================================
+st.markdown("### 🔎 Detail Monitoring Site")
+with st.container(border=True):
+    col_f1, col_f2 = st.columns([1, 2])
+    with col_f1:
+        pilihan_tanggal = st.date_input("📅 Rentang Waktu:", value=(hari_kemarin - timedelta(days=3), hari_kemarin), format="DD/MM/YYYY")
+        if isinstance(pilihan_tanggal, tuple):
+            if len(pilihan_tanggal) == 2: start_date, end_date = pilihan_tanggal
+            else: start_date = end_date = pilihan_tanggal[0]
         else:
-            history.append({"Tiket": tkt, "Tanggal": tgl, "Status": "🟢 Selesai"})
-            
-    return outstanding_all, outstanding_lock, sorted(history, key=lambda x: x["Status"], reverse=True)
+            start_date = end_date = pilihan_tanggal
 
-def upload_foto(file):
-    if file is None: return ""
-    try:
-        encoded = base64.b64encode(file.getvalue()).decode('utf-8')
-        return cloudinary.uploader.upload(f"data:{file.type};base64,{encoded}", resource_type="auto").get("secure_url") 
-    except Exception: return ""
+    df_filtered_view = df_merged[(df_merged['date_obj'] >= start_date) & (df_merged['date_obj'] <= end_date)]
 
-def append_data(sheet_name, data, spreadsheet_id):
-    gspread.authorize(get_credentials()).open_by_key(spreadsheet_id).worksheet(sheet_name).append_row(data)
-    fetch_spreadsheet_data.clear()
-
-# ==========================================
-# 4. SIDEBAR BRANDING & NAVIGASI
-# ==========================================
-if 'page' not in st.session_state: st.session_state.page = "📝 Form Request Dana"
-
-try:
-    st.sidebar.image("koperasi-jasa-konstruksi-tower-event-organizer-network-monitoring-telekomunikasi-kisel-group-logo-kut.webp", use_container_width=True)
-except:
-    st.sidebar.markdown("<h3 style='text-align:center;'>PT Kinarya Utama Teknik</h3>", unsafe_allow_html=True)
-    
-st.sidebar.markdown("<hr>", unsafe_allow_html=True)
-
-st.sidebar.markdown("### 📋 MENU OPERASIONAL")
-if st.sidebar.button("📝 Form Request Dana", use_container_width=True): st.session_state.page = "📝 Form Request Dana"
-if st.sidebar.button("✅ Form PJB Operasional", use_container_width=True): st.session_state.page = "✅ Form PJB Operasional"
-
-st.sidebar.markdown("### 📊 MENU ANALITIK (ADMIN)")
-if st.sidebar.button("📊 Neraca / Buku Kas", use_container_width=True): st.session_state.page = "📊 Neraca / Buku Kas"
-if st.sidebar.button("📈 Live Monitoring", use_container_width=True): st.session_state.page = "📈 Live Monitoring"
-
-st.sidebar.markdown("---")
-st.sidebar.markdown("### 🔍 CEK STATUS TIKET")
-cek_nop = st.sidebar.selectbox("📂 Area", ["-- Pilih Area --"] + list(MASTER_DATA.keys()))
-if cek_nop != "-- Pilih Area --":
-    cek_nama = st.sidebar.selectbox("👤 Petugas", ["-- Pilih Nama --"] + MASTER_DATA[cek_nop]["names"])
-    if st.sidebar.button("Cari Histori"):
-        if cek_nama != "-- Pilih Nama --":
-            req_r, pjb_r, _, _ = fetch_spreadsheet_data(MASTER_DATA[cek_nop]["spreadsheet_id"])
-            out_all, out_lock, hist_tkt = get_user_tickets_status(cek_nama, req_r, pjb_r)
-            if hist_tkt:
-                st.sidebar.dataframe(pd.DataFrame(hist_tkt), hide_index=True)
-                if out_all: 
-                    st.sidebar.error(f"⚠️ {len(out_all)} Tiket tertunggak (Keseluruhan)!")
-                    if out_lock: st.sidebar.error(f"🔒 {len(out_lock)} Tiket menyebabkan akun TERBLOKIR (Mulai Agt 2026).")
-                else: st.sidebar.success("✅ Seluruh tiket aman!")
-            else: st.sidebar.info("Tidak ada data.")
-
-st.sidebar.markdown("<div class='footer-brand'>⚙️ Deploy by Okta Pradika</div>", unsafe_allow_html=True)
-
-# ==========================================
-# PAGE 1: FORM REQUEST DANA
-# ==========================================
-if st.session_state.page == "📝 Form Request Dana":
-    st.markdown("<div class='header-card'><h2>📝 PORTAL PENGAJUAN DANA</h2><p>PT Kinarya Utama Teknik - Operational System</p></div>", unsafe_allow_html=True)
-    
-    col_l1, col_l2 = st.columns([4,1])
-    with col_l2:
-        if st.button("👉 Tuju ke Form PJB", type="secondary"): 
-            st.session_state.page = "✅ Form PJB Operasional"; st.rerun()
-
-    nop = st.selectbox("📌 1. Pilih Database Regional (NOP)", ["-- Pilih NOP --"] + list(MASTER_DATA.keys()))
-    
-    if nop != "-- Pilih NOP --":
-        st.markdown("<div class='section-title'>📋 2. Informasi Petugas & Tiket</div>", unsafe_allow_html=True)
-        target_ss = MASTER_DATA[nop]["spreadsheet_id"]
-        req_r, pjb_r, _, _ = fetch_spreadsheet_data(target_ss)
-        all_requested_tickets = [r[3].strip().upper() for r in req_r[1:] if len(r) > 3]
-
-        site_dict, site_list, tim_dict = load_excel_data()
-        auto_lat_tujuan, auto_long_tujuan = "0", "0"
-        auto_lat_brgkt, auto_long_brgkt = "0", "0"
-
-        col1, col2 = st.columns(2)
-        with col1:
-            tanggal = st.date_input("Tanggal Pengajuan")
-            cluster = st.selectbox("Cluster Regional", ["-- Pilih Cluster --"] + MASTER_DATA[nop]["clusters"])
-            nama = st.selectbox("Nama Petugas / Pemohon", ["-- Pilih Nama --"] + MASTER_DATA[nop]["names"])
-            
-            if nama != "-- Pilih Nama --" and nama in tim_dict:
-                auto_lat_brgkt = str(tim_dict[nama].get("Latitude", "0"))
-                auto_long_brgkt = str(tim_dict[nama].get("Longtitude", "0"))
-                
-            out_all, out_lock, _ = get_user_tickets_status(nama, req_r, pjb_r)
-            is_locked_user = len(out_lock) > 0
-            
-            tiket = st.text_input("Nomor Tiket SWFM (WAJIB)")
-            is_duplicate = (tiket.strip().upper() in all_requested_tickets) and tiket.strip() != ""
-            role = st.selectbox("Role Jabatan", ["-- Pilih Role --", "PM", "TE", "MBP", "CME"])
-            
-            if nop == "Palangkaraya" and len(site_list) > 0:
-                site_id = st.selectbox("ID Site / Lokasi", ["-- Pilih Site ID --"] + site_list)
-                if site_id != "-- Pilih Site ID --" and site_id in site_dict:
-                    auto_lat_tujuan = str(site_dict[site_id].get("Latitude Tujuan", "0"))
-                    auto_long_tujuan = str(site_dict[site_id].get("Longtitude Tujuan", "0"))
-            else: site_id = st.text_input("ID Site / Lokasi")
-            
-        with col2:
-            keperluan = st.selectbox("Klasifikasi Keperluan Dana", LIST_KEPERLUAN)
-            kebutuhan = st.number_input("Estimasi Kebutuhan Dana (Rp)", min_value=0, step=1000)
-            jns_bbm = st.selectbox("Jenis Kendaraan / BBM", ["-- Pilih Kendaraan --", "Mobil", "motor", "genset"])
-            km_awal = st.text_input("Indikator KM Awal (Tulis 0 jika tidak relevan)", value="0")
-            plat = st.text_input("Plat Nomor Kendaraan")
-            deskripsi = st.text_area("Deskripsi Pekerjaan / Justifikasi")
-
-        is_vehicle = jns_bbm.lower() in ['mobil', 'motor']
-        st.markdown("<div class='section-title'>📍 3. Rute Peta (Satelit) & Keuangan</div>", unsafe_allow_html=True)
-        if not is_vehicle: st.info("ℹ️ Pengisian Koordinat dikunci (0) karena jenis BBM bukan Mobil/Motor.")
-        
-        col3, col4 = st.columns(2)
-        with col3:
-            lat_berangkat = st.text_input("Latitude Berangkat (Auto)", value=auto_lat_brgkt if is_vehicle else "0", disabled=not is_vehicle)
-            long_berangkat = st.text_input("Longitude Berangkat (Auto)", value=auto_long_brgkt if is_vehicle else "0", disabled=not is_vehicle)
-            rek_penerima = st.selectbox("Bank Penerima / E-Wallet", ["BNI", "BCA", "MANDIRI", "BRI"])
-        with col4:
-            lat_tujuan = st.text_input("Latitude Tujuan (Auto)", value=auto_lat_tujuan if is_vehicle else "0", disabled=not is_vehicle)
-            long_tujuan = st.text_input("Longitude Tujuan (Auto)", value=auto_long_tujuan if is_vehicle else "0", disabled=not is_vehicle)
-            no_rek = st.text_input("Nomor Rekening Tujuan")
-            nominal_tf = st.number_input("Total Nominal Transfer (Rp)", min_value=0, step=1000)
-
-        jarak_final_text = ""
-        invalid_coords = False
-        if is_vehicle:
-            c_lat1, c_lon1 = clean_coord(lat_berangkat), clean_coord(long_berangkat)
-            c_lat2, c_lon2 = clean_coord(lat_tujuan), clean_coord(long_tujuan)
-            
-            if c_lat1 != 0 and c_lon1 != 0 and c_lat2 != 0 and c_lon2 != 0:
-                with st.spinner("Satelit sedang menarik data jalan raya..."):
-                    jarak_km_oneway, poly_coords = get_route_and_distance(c_lon1, c_lat1, c_lon2, c_lat2)
-                
-                jarak_km_pp = jarak_km_oneway * 2
-                bbm_req = (jarak_km_pp / 7) if jns_bbm.lower() == 'mobil' else (jarak_km_pp / 15)
-                jarak_final_text = f"{jarak_km_pp:.1f} Km (PP)"
-                
-                st.markdown("#### 🗺️ Navigasi Jalan & Analisa BBM (PP)")
-                m1, m2, m3 = st.columns(3)
-                m1.markdown(f"<div class='metric-3d'><div class='metric-title'>Jarak Tempuh (Pulang Pergi)</div><div class='metric-value'>{jarak_final_text}</div></div>", unsafe_allow_html=True)
-                m2.markdown(f"<div class='metric-3d'><div class='metric-title'>BBM Estimasi (PP)</div><div class='metric-value'>{bbm_req:.1f} Liter</div></div>", unsafe_allow_html=True)
-                m3.markdown(f"<div class='metric-3d'><div class='metric-title'>Tipe Kendaraan</div><div class='metric-value'>{jns_bbm.upper()}</div></div>", unsafe_allow_html=True)
-                
-                map_data_points = [{"pos": [c_lon1, c_lat1], "color": [255, 30, 30], "name": "Titik Awal"}, {"pos": [c_lon2, c_lat2], "color": [30, 255, 30], "name": f"Tujuan: {site_id}"}]
-                layer_points = pdk.Layer("ScatterplotLayer", data=map_data_points, get_position="pos", get_color="color", get_radius=600)
-                layer_text = pdk.Layer("TextLayer", data=map_data_points, get_position="pos", get_text="name", get_size=20, get_color=[0, 0, 0], get_alignment_baseline="'bottom'", get_offset=[0, -20])
-                layer_route = pdk.Layer("PathLayer", data=[{"path": poly_coords, "color": [52, 152, 219]}], get_path="path", get_width=5, get_color="color")
-                view = pdk.ViewState(latitude=(c_lat1+c_lat2)/2, longitude=(c_lon1+c_lon2)/2, zoom=9, pitch=45)
-                st.pydeck_chart(pdk.Deck(layers=[layer_route, layer_points, layer_text], initial_view_state=view), use_container_width=True, height=380)
-            else:
-                invalid_coords = True
-                st.warning("⚠️ Untuk kendaraan Mobil/Motor, Harap lengkapi Koordinat Keberangkatan & Tujuan.")
-
-        st.markdown("<div class='section-title'>📸 4. Bukti Lampiran Fisik</div>", unsafe_allow_html=True)
-        c_up1, c_up2 = st.columns(2)
-        with c_up1: foto_km = st.file_uploader("Upload Foto KM Awal", type=["jpg", "png", "jpeg"])
-        with c_up2: foto_evidance = st.file_uploader("Upload Foto Kendaraan/Pekerjaan", type=["jpg", "png", "jpeg"])
-        
-        st.markdown("<br>", unsafe_allow_html=True)
-        form_invalid = (nama == "-- Pilih Nama --" or cluster == "-- Pilih Cluster --" or role == "-- Pilih Role --" or keperluan == "-- Pilih Keperluan --")
-
-        izin_lanjut = True
-        if is_duplicate:
-            st.warning("⚠️ DATA DUPLIKAT: Sistem mendeteksi Tiket ini sudah pernah diinput. Apakah Anda yakin ini belum diinput / merupakan revisi?")
-            konfirmasi_duplikat = st.checkbox("✅ Ya, saya yakin data ini aman untuk diinput (Revisi/Baru).")
-            if not konfirmasi_duplikat: izin_lanjut = False
-
-        if is_locked_user or (is_duplicate and not izin_lanjut):
-            if is_locked_user: st.error(f"⛔ AKSES DITOLAK: Sdr. {nama} memiliki {len(out_lock)} tiket yang belum PJB (Sejak Agt 2026)!")
-            
-            input_pass = st.text_input("🔑 Password Koordinator Khusus (Bypass):", type="password")
-            if input_pass == PASSWORD_KOORDINATOR:
-                if st.button("🚀 Paksakan Kirim Request Dana", type="primary"):
-                    if form_invalid or not tiket.strip() or (nop == "Palangkaraya" and site_id == "-- Pilih Site ID --") or invalid_coords: st.error("Lengkapi form dengan benar!")
-                    else:
-                        with st.spinner("✅ Data sedang diproses! Mohon tunggu dan JANGAN tekan submit lagi..."):
-                            waktu = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-                            data_req = [waktu, tanggal.strftime("%d/%m/%Y"), nop, tiket, cluster, nama, role, site_id, keperluan, kebutuhan, jns_bbm, deskripsi, km_awal, jarak_final_text, lat_berangkat, long_berangkat, plat, rek_penerima, no_rek, nominal_tf, upload_foto(foto_km), upload_foto(foto_evidance), lat_tujuan, long_tujuan]
-                            append_data(SHEET_REQUEST, data_req, target_ss)
-                            st.success("🎉 Data sudah masuk! Sistem memuat ulang..."); time.sleep(2.5); st.rerun()
+    with col_f2:
+        if not df_filtered_view.empty:
+            list_dropdown_pilihan = sorted(df_filtered_view['dropdown_label'].unique())
+            label_pilihan = st.multiselect("🎯 Pilih Site:", list_dropdown_pilihan, default=list_dropdown_pilihan[:1] if list_dropdown_pilihan else None)
         else:
-            if st.button("🚀 Kirim Form Request Dana", type="primary"):
-                if form_invalid or not tiket.strip() or (nop == "Palangkaraya" and site_id == "-- Pilih Site ID --") or invalid_coords: st.error("Lengkapi form dengan benar!")
-                else:
-                    with st.spinner("✅ Data sedang diproses! Mohon tunggu dan JANGAN tekan submit lagi..."):
-                        waktu = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-                        data_req = [waktu, tanggal.strftime("%d/%m/%Y"), nop, tiket, cluster, nama, role, site_id, keperluan, kebutuhan, jns_bbm, deskripsi, km_awal, jarak_final_text, lat_berangkat, long_berangkat, plat, rek_penerima, no_rek, nominal_tf, upload_foto(foto_km), upload_foto(foto_evidance), lat_tujuan, long_tujuan]
-                        append_data(SHEET_REQUEST, data_req, target_ss)
-                        st.success("🎉 Data sudah masuk! Sistem memuat ulang..."); time.sleep(2.5); st.rerun()
+            st.warning("⚠️ Tidak ada data di rentang waktu ini.")
+            label_pilihan = []
+
+if not label_pilihan:
+    st.info("💡 Silakan pilih minimal 1 site pada menu di atas untuk menampilkan detail teknis & foto.")
+    st.stop()
 
 # ==========================================
-# PAGE 2: FORM PJB OPERASIONAL
+# 📑 4. KONTEN DASHBOARD PER-SITE
 # ==========================================
-elif st.session_state.page == "✅ Form PJB Operasional":
-    st.markdown("<div class='header-card' style='background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); border-bottom: 4px solid #11998e;'><h2>✅ PORTAL PJB (PENYELESAIAN)</h2><p>Lengkapi nota realisasi untuk menghapus status tunggakan.</p></div>", unsafe_allow_html=True)
-    
-    nop_cari = st.selectbox("📂 1. Pilih Database (NOP):", ["-- Pilih NOP --"] + list(MASTER_DATA.keys()))
-    if nop_cari != "-- Pilih NOP --":
-        target_ss = MASTER_DATA[nop_cari]["spreadsheet_id"]
-        req_r, pjb_r, _, _ = fetch_spreadsheet_data(target_ss)
-        
-        pjb_tickets_all = {r[21].strip().upper() for r in pjb_r[1:] if len(r) > 21}
-        
-        # Tampilkan semua tiket tertunggak (Termasuk lama) agar Tim tahu harus lapor apa
-        pending_list = []
-        for r in req_r[1:]:
-            if len(r)>5 and r[3].strip() != "" and r[3].strip().upper() not in pjb_tickets_all:
-                pending_list.append({"Tanggal": r[1], "Nama": r[5], "No Tiket": r[3], "Keperluan": r[8] if len(r)>8 else ""})
-        
-        st.markdown("<div class='section-title'>📋 Tiket Belum Selesai (Keseluruhan)</div>", unsafe_allow_html=True)
-        if pending_list: st.dataframe(pd.DataFrame(pending_list), hide_index=True, use_container_width=True)
-        else: st.success("Seluruh tiket di area ini sudah clear!")
-        
-        st.markdown("<div class='section-title'>🔍 2. Tarik Data Tiket</div>", unsafe_allow_html=True)
-        col_s2, col_s3 = st.columns([3, 1])
-        with col_s2: cari_tiket = st.text_input("Masukkan Nomor Tiket SWFM:")
-        with col_s3: 
-            st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
-            if st.button("Cari Data", type="primary"):
-                ditemukan = None
-                for r in req_r[1:]:
-                    if len(r) > 3 and r[3].strip().upper() == cari_tiket.strip().upper():
-                        ditemukan = {"NOP": r[2], "Cluster": r[4], "Nama": r[5], "Role": r[6], "Site": r[7], "Keperluan": r[8], "BBM": r[10], "Desc": r[11], "Jarak": r[13] if len(r)>13 else "", "Plat": r[16] if len(r)>16 else ""}
-                
-                if ditemukan: 
-                    st.session_state.pjb_data = ditemukan
-                    count_pjb = sum(1 for p in pjb_r[1:] if len(p)>21 and p[21].strip().upper() == cari_tiket.strip().upper())
-                    if count_pjb > 0:
-                        st.warning(f"⚠️ Peringatan: Tiket ini sudah pernah di-PJB-kan sebanyak {count_pjb} kali. Anda tetap diizinkan menambah PJB asalkan NOMINAL BEDA.")
-                    else:
-                        st.success("🎉 Histori ditarik otomatis!")
-                else: 
-                    st.session_state.pjb_data = None
-                    st.error("❌ Tiket tidak ditemukan.")
+df_latest_view = df_filtered_view.sort_values('parsed_timestamp', ascending=False).drop_duplicates('dropdown_label')
+tabs = st.tabs(label_pilihan)
 
-        if st.session_state.get("pjb_data"):
-            d = st.session_state.pjb_data
-            st.markdown("<div class='section-title'>🔒 Rincian Sistem (Read-Only)</div>", unsafe_allow_html=True)
-            col_a, col_b = st.columns(2)
-            with col_a:
-                tgl_pjb = st.date_input("Tanggal PJB")
-                st.text_input("Nama Petugas", d["Nama"], disabled=True)
-                st.text_input("Cluster & Role", f'{d["Cluster"]} - {d["Role"]}', disabled=True)
-                st.text_input("Estimasi Jarak Tempuh (Sistem)", value=d["Jarak"], disabled=True)
-            with col_b:
-                st.text_input("Site ID Tujuan", d["Site"], disabled=True)
-                st.text_input("Keperluan", d["Keperluan"], disabled=True)
-                st.text_input("Kendaraan & Plat", f'{d["BBM"]} - {d["Plat"]}', disabled=True)
-            
-            st.markdown("<div class='section-title'>📝 Input Realisasi PJB</div>", unsafe_allow_html=True)
-            col_c, col_d = st.columns(2)
-            with col_c:
-                km_akhir = st.text_input("KM Akhir Kendaraan", value="0")
-                nominal_pjb = st.number_input("Nominal PJB Terpakai (Rp)", min_value=0, step=1000)
-                tot_liter = st.text_input("Total Liter BBM/Material", value="0")
-            with col_d:
-                tot_nilai_nota = st.number_input("Total Sesuai Nota Fisik (Rp)", min_value=0, step=1000)
-                harga_satuan = st.number_input("Harga Satuan (BBM/Material)", min_value=0, step=500)
-            
-            st.markdown("<div class='section-title'>📸 Lampiran Bukti (Foto)</div>", unsafe_allow_html=True)
-            p1, p2, p3 = st.columns(3)
-            with p1: f_isi = st.file_uploader("Evidance Pengisian", type=["jpg","png"]); f_nota_bbm = st.file_uploader("Nota BBM", type=["jpg","png"]); f_km = st.file_uploader("Foto KM / Disanding", type=["jpg","png"])
-            with p2: f_mat = st.file_uploader("Foto Material", type=["jpg","png"]); f_notamat = st.file_uploader("Nota Material", type=["jpg","png"])
-            with p3: f_inap = st.file_uploader("Nota Penginapan", type=["jpg","png"]); f_kerja = st.file_uploader("Evidance Pekerjaan", type=["jpg","png"])
-            
-            st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("🚀 Sahkan Pelaporan PJB", type="primary", use_container_width=True):
-                # VALIDASI NOMINAL DOUBLE INPUT
-                is_double_pjb = any(len(r)>21 and r[21].strip().upper() == cari_tiket.strip().upper() and clean_nominal(r[11]) == nominal_pjb for r in pjb_r[1:])
-                
-                if is_double_pjb:
-                    st.error("⛔ GAGAL: Tiket dan NOMINAL ini sama persis dengan data PJB sebelumnya! Ini terindikasi Double Input.")
-                else:
-                    with st.spinner("✅ Data sedang diproses! Mohon tunggu dan JANGAN tekan submit lagi..."):
-                        waktu = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-                        data_pjb = [waktu, tgl_pjb.strftime("%d/%m/%Y"), d["NOP"], d["Cluster"], d["Nama"], d["Role"], d["Site"], d["Keperluan"], d["BBM"], d["Desc"], km_akhir, nominal_pjb, d["Plat"], upload_foto(f_isi), upload_foto(f_nota_bbm), upload_foto(f_km), upload_foto(f_mat), upload_foto(f_notamat), upload_foto(f_inap), upload_foto(f_kerja), tot_nilai_nota, cari_tiket, tot_liter, harga_satuan]
-                        append_data(SHEET_PJB, [(r+[""]*24)[:24] for r in [data_pjb]][0], target_ss)
-                        st.success("🎉 Laporan PJB berhasil ditutup! Sistem memuat ulang..."); st.session_state.pjb_data = None
-                        time.sleep(2.5); st.rerun()
+for index_tab, site_label in enumerate(label_pilihan):
+    with tabs[index_tab]:
+        data_site = df_latest_view[df_latest_view['dropdown_label'] == site_label].iloc[0]
+        
+        raw_timestamp = data_site.get('Timestamp', '-')
+        formatted_ts = data_site['parsed_timestamp'].strftime('%d/%m/%Y %H:%M:%S') if pd.notna(data_site.get('parsed_timestamp')) else raw_timestamp
+        st.write(f"**🕒 Update Terakhir:** `{formatted_ts}`")
+        
+        t_id_asli = str(data_site.get(kolom_site_sheet, '')).strip()
+        t_id_clean = str(data_site.get('site_clean_sheet', '')).strip()
 
-# ==========================================
-# PAGE 3: NERACA / BUKU KAS (FINANCIAL REPORT ERP)
-# ==========================================
-elif st.session_state.page == "📊 Neraca / Buku Kas":
-    st.markdown("<div class='header-card' style='background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); border-bottom: 4px solid #b45309;'><h2>📊 BUKU BESAR & LAPORAN KEUANGAN</h2><p>General Ledger & Rekonsiliasi Saldo Area</p></div>", unsafe_allow_html=True)
-    col_adm1, col_adm2 = st.columns([1, 2])
-    with col_adm1: nop_admin = st.selectbox("📂 Wilayah (NOP):", ["-- Pilih NOP --"] + list(MASTER_DATA.keys()))
-    with col_adm2:
-        if nop_admin != "-- Pilih NOP --": pass_admin = st.text_input("🔑 Password Akuntan / Admin:", type="password")
-        
-    if nop_admin != "-- Pilih NOP --" and pass_admin == ADMIN_PASSWORDS[nop_admin]:
-        target_ss = MASTER_DATA[nop_admin]["spreadsheet_id"]
-        
-        st.markdown("<div class='section-title'>📥 1. Input Kas Masuk (Uang Muka)</div>", unsafe_allow_html=True)
-        with st.form("form_tambah_um"):
-            col_u1, col_u2, col_u3 = st.columns([1, 2, 1])
-            with col_u1: tgl_um = st.date_input("Tanggal UM Masuk")
-            with col_u2: um_nobis = st.text_input("Nomor Referensi / Dasar Dokumen UM")
-            with col_u3: um_nominal = st.number_input("Nominal UM (Rp)", min_value=0, step=1000)
-            if st.form_submit_button("💾 Rekam Arus Kas Masuk"):
-                if um_nominal > 0 and um_nobis:
-                    append_data(SHEET_UM, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), tgl_um.strftime("%d/%m/%Y"), um_nobis, um_nominal], target_ss)
-                    st.success("✅ UM Terekam!"); time.sleep(1); st.rerun()
-                else: st.error("Isi form dengan benar!")
+        c1, c2, c3, c4 = st.columns(4)
+
+        # KARTU 1: MASTER SPECS
+        with c1:
+            with st.container(border=True):
+                st.subheader("📋 Master Specs")
+                st.divider()
+                st.dataframe(pd.DataFrame({
+                    "Parameter": ["Site ID", "Site Name", "Class", "Grid", "Hub", "Phase", "Grounding KWH"],
+                    "Value": [
+                        data_site.get(kolom_site_sheet, '-'), data_site.get('site_name', '-'),
+                        data_site.get('site_class', '-'), data_site.get('grid_category_new', '-'),
+                        data_site.get('hub_site', '-'), data_site.get('Phase PLN', '-'),
+                        data_site.get('Grounding KWH', '-')
+                    ]
+                }), hide_index=True, use_container_width=True) 
+
+        # KARTU 2: TECHNICAL SPECS
+        with c2:
+            with st.container(border=True):
+                st.subheader("⚙️ Technical Specs")
+                st.divider()
+                tech_mapping = [
+                    ("Main Power", "Main Power", "Power Type"), ("Daya PLN", "Daya PLN", "Capacity"), 
+                    ("Kapasitas MCB", "Kapasitas MCB", "Kapasitas MCB"), ("Tegangan R - N", "Tegangan PLN (R-N)", "Tegangan PLN (R-N)"), 
+                    ("Tegangan S - N", "Tegangan PLN (S-N)", "Tegangan PLN (S-N)"), ("Tegangan T - N", "Tegangan PLN (T-N)", "Tegangan PLN (T-N)"),
+                    ("Arus R", "Beban PLN (R)", "Beban PLN (R)"), ("Arus S", "Beban PLN (S)", "Beban PLN (S)"), 
+                    ("Arus T", "Beban PLN (T)", "Beban PLN (T)"), ("Type recti 1", "Type Rectifier", "Type Rectifier"), 
+                    ("Jumlah Module 1", "Jumlah Module", "Jumlah Module"), ("Type batt 1", "Type Batteri", "Type Battery"),        
+                    ("Jumlah batt 1", "Jumlah Battery", "Jumlah Battery"), ("DC Voltage 1", "DC Voltage", "DC Voltage"), 
+                    ("Load Current 1", "Rectifier Current", "Rectifier Current"), ("Type recti 2", "Type Rectifier 2", "Type Rectifier 2"), 
+                    ("Jumlah Module 2", "Jumlah Module 2", "Jumlah Module 2"), ("Type batt 2", "Type Batteri.1", "Type Battery 2"),    
+                    ("Jumlah batt 2", "Jumlah Battery 2", "Jumlah Battery 2"), ("Load current recti 2", "Load current recti 2", "Load current recti 2")
+                ]
+                tech_rows = [{"Parameter": l, "Value": dapatkan_nilai_teknis(data_site, cs, csb)} for l, cs, csb in tech_mapping]
                 
-        _, req_r, pjb_r, um_r, rekap_r = None, *fetch_spreadsheet_data(target_ss)
-        
-        unique_periode = list(set([r[16].strip() for r in rekap_r[1:] if len(r) > 16 and r[16].strip() != ""]))
-        
-        st.markdown("<div class='section-title'>📅 2. Filter Pelaporan Keuangan</div>", unsafe_allow_html=True)
-        col_d1, col_d2, col_d3 = st.columns(3)
-        with col_d1: start_date = st.date_input("Dari Tanggal (Kas Masuk)")
-        with col_d2: end_date = st.date_input("Sampai Tanggal (Kas Masuk)")
-        with col_d3: filter_q_neraca = st.selectbox("📌 Filter Penyerapan PJB (Dari Kolom Q)", ["-- Semua Periode --"] + sorted(unique_periode))
-        
-        if st.button("🔄 Buat Laporan Keuangan", type="primary", use_container_width=True):
-            with st.spinner("Mengkompilasi Buku Besar dan Arus Kas..."):
+                edited_df = st.data_editor(pd.DataFrame(tech_rows), hide_index=True, use_container_width=True, disabled=["Parameter"], key=f"tech_editor_{t_id_clean}_{index_tab}")
                 
-                # OLAH DATA KAS MASUK (UM)
-                tot_um = 0
-                df_um_filt = pd.DataFrame()
-                if len(um_r) > 1:
-                    df_um = pd.DataFrame(um_r[1:], columns=["Waktu", "Tanggal", "Deskripsi", "Nominal"])
-                    df_um['Tanggal_Real'] = pd.to_datetime(df_um['Tanggal'], format='%d/%m/%Y', errors='coerce')
-                    df_um_filt = df_um[(df_um['Tanggal_Real'].dt.date >= start_date) & (df_um['Tanggal_Real'].dt.date <= end_date)].copy()
-                    df_um_filt['Nominal_Int'] = df_um_filt['Nominal'].apply(clean_nominal)
-                    tot_um = df_um_filt['Nominal_Int'].sum()
-                
-                # OLAH DATA KAS KELUAR (MUTLAK DARI REKAP PJB KOLOM P Index 15)
-                tot_pjb = 0
-                if len(rekap_r) > 1:
-                    if filter_q_neraca != "-- Semua Periode --":
-                        tot_pjb = sum([clean_nominal(r[15]) for r in rekap_r[1:] if len(r) > 16 and r[16].strip() == filter_q_neraca])
-                    else:
-                        tot_pjb = sum([clean_nominal(r[15]) for r in rekap_r[1:] if len(r) > 15])
-                
-                sisa_kas = tot_um - tot_pjb
-                
-                # TABS UI ERP
-                tab1, tab2, tab3 = st.tabs(["📊 Ringkasan Eksekutif", "📓 Buku Besar (Ledger PJB)", "⚠️ Analisa Risiko & Aging"])
-                
-                with tab1:
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    m1, m2, m3 = st.columns(3)
-                    m1.markdown(f"<div class='metric-3d'><div class='metric-title'>Saldo Awal (UM Masuk)</div><div class='metric-value' style='color:#3B82F6;'>Rp {tot_um:,.0f}</div></div>", unsafe_allow_html=True)
-                    m2.markdown(f"<div class='metric-3d'><div class='metric-title'>Total Penyerapan (Rekap Kolom P)</div><div class='metric-value' style='color:#EF4444;'>Rp {tot_pjb:,.0f}</div></div>", unsafe_allow_html=True)
-                    m3.markdown(f"<div class='metric-3d'><div class='metric-title'>Saldo Akhir (Sisa Kas)</div><div class='metric-value' style='color:#10B981;'>Rp {sisa_kas:,.0f}</div></div>", unsafe_allow_html=True)
+                if st.button("💾 Push Spek Teknis", use_container_width=True, key=f"btn_tech_{t_id_clean}_{index_tab}"):
+                    payload_specs = {}
+                    for _, row in edited_df.iterrows():
+                        real_col = next((m[1] for m in tech_mapping if m[0] == row["Parameter"]), None)
+                        if real_col: payload_specs[real_col.replace(".1", "")] = row["Value"]
                     
-                    st.markdown("### 📈 Visualisasi Arus Kas")
-                    chart_data = pd.DataFrame({"Kategori": ["Kas Masuk (UM)", "Penyerapan (PJB)", "Sisa Kas"], "Nominal (Rp)": [tot_um, tot_pjb, sisa_kas]}).set_index("Kategori")
-                    st.bar_chart(chart_data)
+                    with st.spinner("Pushing to GSheet..."):
+                        s_ok, msg = update_tech_specs_gsheet(t_id_asli, payload_specs)
+                        if s_ok:
+                            st.success("Berhasil Update!"); st.cache_data.clear(); st.rerun()
+                        else: st.error(f"Gagal API: {msg}")
 
-                with tab2:
-                    st.markdown("<br>### 📓 Catatan Arus Kas Keluar (Detail Tiket)", unsafe_allow_html=True)
-                    if len(pjb_r) > 1:
-                        df_pjb_ledger = pd.DataFrame([(r + [""] * 24)[:24] for r in pjb_r[1:]], columns=["Waktu Input", "Tanggal", "NOP", "Cluster", "Nama", "Role", "Site ID", "Keperluan", "Jenis BBM", "Deskripsi", "KM Akhir", "Nominal", "Plat", "U1","U2","U3","U4","U5","U6","U7", "Nilai Nota", "No. Ref", "Liter", "Harga Satuan"])
-                        df_pjb_ledger['Nominal_Int'] = df_pjb_ledger['Nominal'].apply(clean_nominal)
-                        
-                        df_tampil = df_pjb_ledger[['Tanggal', 'No. Ref', 'Nama', 'Keperluan', 'Nominal_Int']].copy()
-                        df_tampil.rename(columns={'Nominal_Int': 'Kredit / Keluar (Rp)', 'No. Ref': 'Nomor Tiket'}, inplace=True)
-                        df_tampil['Kredit / Keluar (Rp)'] = df_tampil['Kredit / Keluar (Rp)'].apply(lambda x: f"Rp {x:,.0f}")
-                        
-                        st.dataframe(df_tampil, use_container_width=True, hide_index=True)
-                        st.info("ℹ️ Catatan: Detail tiket di atas adalah historis murni dari form submit tim lapangan. Angka metrik utama (Ringkasan Eksekutif) tetap mengacu pada Sheet Rekap PJB (Disetujui Admin).")
-                    else: st.warning("Belum ada data PJB.")
-
-                with tab3:
-                    st.markdown("<br>### ⚠️ Analisa Potensi Aging PJB (> 7 Hari)", unsafe_allow_html=True)
-                    pjb_tickets_all = {r[21].strip().upper() for r in pjb_r[1:] if len(r) > 21}
-                    today = datetime.now().date()
-                    
-                    aging_7_list = []
-                    for r in req_r[1:]:
-                        if len(r)>5 and r[3].strip() != "" and r[3].strip().upper() not in pjb_tickets_all:
-                            req_date = parse_date(r[1])
-                            aging_days = (today - req_date).days
-                            if aging_days >= 7:
-                                aging_7_list.append({"Nama Petugas": r[5], "Nomor Tiket": r[3], "Tgl Pengajuan": r[1], "Aging": f"{aging_days} Hari"})
-                    
-                    if aging_7_list:
-                        st.error(f"🚨 ALERT: Ditemukan {len(aging_7_list)} Tiket dengan usia menggantung lebih dari 7 Hari (Dari seluruh histori)!")
-                        st.dataframe(pd.DataFrame(aging_7_list), hide_index=True, use_container_width=True)
-                    else:
-                        st.success("✅ Luar biasa! Kepatuhan pelaporan sangat baik, tidak ada tiket dengan aging di atas 7 hari.")
-
-# ==========================================
-# PAGE 4: LIVE MONITORING (WALL STREET DASHBOARD)
-# ==========================================
-elif st.session_state.page == "📈 Live Monitoring":
-    st.markdown("<div class='header-card' style='background: linear-gradient(135deg, #020617 0%, #0F172A 100%); color:#10B981; border-bottom: 4px solid #10B981;'><h2>📈 LIVE FINANCIAL MONITORING</h2><p style='color:#94A3B8;'>Wall-Street Style Burn Rate Dashboard</p></div>", unsafe_allow_html=True)
-    
-    col_l1, col_l2 = st.columns([1, 2])
-    with col_l1: nop_live = st.selectbox("🌐 Market (NOP):", ["-- Pilih NOP --"] + list(MASTER_DATA.keys()))
-    with col_l2:
-        if nop_live != "-- Pilih NOP --": pass_live = st.text_input("🔑 Live-Action Password:", type="password")
-            
-    if nop_live != "-- Pilih NOP --" and pass_live == PASSWORD_LIVE:
-        _, req_r, pjb_r, um_r, rekap_r = None, *fetch_spreadsheet_data(MASTER_DATA[nop_live]["spreadsheet_id"])
-        
-        unique_periode = list(set([r[16].strip() for r in rekap_r[1:] if len(r) > 16 and r[16].strip() != ""]))
-        
-        st.markdown("<div class='section-title'>📅 Parameter Radar Trading</div>", unsafe_allow_html=True)
-        cd1, cd2, cd3 = st.columns(3)
-        with cd1: start_live = st.date_input("Tarik Data Modal (Mulai)")
-        with cd2: end_live = st.date_input("Hingga Tanggal (Modal & Chart)")
-        with cd3: filter_q_live = st.selectbox("📌 Filter Sinkronisasi Penyerapan (Kolom Q)", ["-- Semua Periode --"] + sorted(unique_periode))
-        
-        if st.button("📊 AKTIFKAN RADAR", type="primary", use_container_width=True):
-            with st.spinner("Processing Market Algorithms..."):
+        # KARTU 3: FIELD FINDINGS & TREND
+        with c3:
+            with st.container(border=True):
+                st.subheader("🔍 Field Findings")
+                st.divider()
+                st.markdown(f"""
+                - **Arus Recty:** `{data_site.get('Rectifier Current', '-')} A`
+                - **Modul / Faulty:** `{data_site.get('Jumlah Module', '-')} / {data_site.get('Total Module faulty', '-')}`
+                - **BBT >4 Jam:** `{data_site.get('BBT >4 Jam', '-')}`
+                - **Enva Validasi:** `{data_site.get('Enva Validasi', '-')}`
+                - **Kondisi LPU:** `{data_site.get('Kondisi Modul Enva LPU', '-')}`
+                - **Arrester:** `{data_site.get('Arrester Rectifier', '-')}`
+                """)
+                st.divider()
                 
-                total_um = 0
-                if len(um_r) > 1:
-                    d_um = pd.DataFrame(um_r[1:], columns=["Waktu", "Tanggal", "Deskripsi", "Nominal"])
-                    d_um['Tanggal'] = pd.to_datetime(d_um['Tanggal'], format='%d/%m/%Y', errors='coerce')
-                    total_um = d_um[(d_um['Tanggal'].dt.date >= start_live) & (d_um['Tanggal'].dt.date <= end_live)]['Nominal'].apply(clean_nominal).sum()
-                
-                batas_harian = total_um / 7 if total_um > 0 else 0
-                
-                tot_serap_periode = 0
-                if len(rekap_r) > 1:
-                    if filter_q_live != "-- Semua Periode --":
-                        tot_serap_periode = sum([clean_nominal(r[15]) for r in rekap_r[1:] if len(r) > 16 and r[16].strip() == filter_q_live])
-                    else:
-                        tot_serap_periode = sum([clean_nominal(r[15]) for r in rekap_r[1:] if len(r) > 15])
-                                
-                today_str = datetime.now().strftime("%d/%m/%Y")
-                pengeluaran_today = sum([clean_nominal(r[11]) for r in pjb_r[1:] if len(r)>11 and r[1].strip() == today_str])
-                
-                sisa_kas_real = total_um - tot_serap_periode
-                
-                df_trend = pd.DataFrame()
-                if len(pjb_r) > 1:
-                    df_p = pd.DataFrame([(r + [""] * 24)[:24] for r in pjb_r[1:]], columns=["W","Tanggal","N","C","Nm","R","S","K","B","D","K2","Nominal","P","u","u","u","u","u","u","u","N2","T","L","H"])
-                    df_p['Tanggal'] = pd.to_datetime(df_p['Tanggal'], format='%d/%m/%Y', errors='coerce')
-                    df_p = df_p[(df_p['Tanggal'].dt.date >= start_live) & (df_p['Tanggal'].dt.date <= end_live)].copy()
-                    df_p['Nominal'] = df_p['Nominal'].apply(clean_nominal)
-                    df_trend = df_p.groupby(df_p['Tanggal'].dt.date)['Nominal'].sum().reset_index()
-                    df_trend.set_index('Tanggal', inplace=True)
-
-                avg_expense = df_trend['Nominal'].mean() if not df_trend.empty else 0
-                sisa_hari = (sisa_kas_real / avg_expense) if avg_expense > 0 else 999
-                
-                st.markdown("---")
-                m1, m2, m3, m4 = st.columns(4)
-                m1.markdown(f"<div class='metric-3d' style='border-top:5px solid #10B981;'><div class='metric-title'>Total Capital (UM)</div><div class='metric-value'>Rp {total_um:,.0f}</div></div>", unsafe_allow_html=True)
-                m2.markdown(f"<div class='metric-3d' style='border-top:5px solid #EF4444;'><div class='metric-title'>Penyerapan (Kolom P)</div><div class='metric-value'>Rp {tot_serap_periode:,.0f}</div></div>", unsafe_allow_html=True)
-                m3.markdown(f"<div class='metric-3d' style='border-top:5px solid #F59E0B;'><div class='metric-title'>Maksimal 1 Hari</div><div class='metric-value'>Rp {batas_harian:,.0f}</div></div>", unsafe_allow_html=True)
-                m4.markdown(f"<div class='metric-3d' style='border-top:5px solid #8B5CF6;'><div class='metric-title'>Pengeluaran Hari Ini</div><div class='metric-value'>Rp {pengeluaran_today:,.0f}</div></div>", unsafe_allow_html=True)
-                
-                st.markdown(f"<div style='background-color:#0F172A; padding:40px; border-radius:16px; border:1px solid #334155; text-align:center; box-shadow: inset 0 2px 15px rgba(0,0,0,0.5);'><h3 style='color:#94A3B8; margin:0; letter-spacing:2px;'>EQUITY / SISA KAS</h3><h1 style='color:#10B981; font-size:60px; margin:10px 0;'>Rp {sisa_kas_real:,.0f}</h1><p style='color:white; font-size:20px;'>Prediksi Ketahanan Dana: <b style='color:#EF4444;'>{sisa_hari:.1f} Hari Operasional</b></p></div>", unsafe_allow_html=True)
-                
+                st.markdown("**📈 Daily Availability Trend**")
+                df_trend = fetch_inap_for_site(t_id_clean, t_id_asli)
                 if not df_trend.empty:
-                    st.markdown("<br><h4 style='color:#334155;'>📈 Grafik Burn Rate Harian Aktual</h4>", unsafe_allow_html=True)
-                    st.line_chart(df_trend, use_container_width=True)
+                    col_date = next((c for c in df_trend.columns if any(k in str(c).lower() for k in ['period', 'periode', 'date', 'waktu', 'tgl', 'tanggal', 'time'])), None)
+                    col_avail = next((c for c in df_trend.columns if 'avail' in str(c).lower() and 'power' not in str(c).lower()), None)
+                    if col_date and col_avail:
+                        chart_data = df_trend[[col_date, col_avail]].copy()
+                        chart_data[col_date] = pd.to_datetime(chart_data[col_date], errors='coerce')
+                        chart_data[col_avail] = pd.to_numeric(chart_data[col_avail].astype(str).str.replace('%', '').str.replace(',', '.'), errors='coerce')
+                        chart_data = chart_data.dropna().sort_values(by=col_date)
+                        
+                        site_class = str(data_site.get('site_class', '')).upper().strip()
+                        target_val = 99.6 if 'DIAMOND' in site_class else 99.2 if 'PLATINUM' in site_class else 99.0 if 'GOLD' in site_class else 97.0 if 'SILVER' in site_class else 95.0
+                        chart_data['Target'] = target_val
+                        
+                        base = alt.Chart(chart_data.reset_index(drop=True)).encode(x=alt.X(f'{col_date}:T', axis=alt.Axis(format='%d/%m', title=None)))
+                        line_avail = base.mark_area(line={'color': '#0072ff', 'strokeWidth': 3}, color=alt.Gradient(gradient='linear', stops=[alt.GradientStop(color='#00c6ff', offset=0), alt.GradientStop(color='rgba(0,0,0,0)', offset=1)], x1=1, x2=1, y1=1, y2=0), interpolate='monotone').encode(y=alt.Y(f'{col_avail}:Q', scale=alt.Scale(zero=False), title='Avail (%)'), tooltip=[f'{col_date}:T', f'{col_avail}:Q'])
+                        line_target = base.mark_line(color='#ff5252', strokeDash=[5, 5]).encode(y=alt.Y('Target:Q'))
+                        st.altair_chart(alt.layer(line_avail, line_target).properties(height=200), use_container_width=True)
+                else: st.caption("Belum ada data history Inap.")
 
-                st.markdown("<br><h4 style='color:#EF4444; border-bottom: 2px solid #EF4444; padding-bottom:5px;'>🚨 DAFTAR MERAH: Tim dengan Aging PJB > 5 Hari</h4>", unsafe_allow_html=True)
+        # KARTU 4: ACTION PLAN (Read-Only)
+        with c4:
+            with st.container(border=True):
+                st.subheader("📝 Action Plan")
+                st.divider()
                 
-                pjb_tickets_all = {r[21].strip().upper() for r in pjb_r[1:] if len(r) > 21}
-                today_date = datetime.now().date()
+                kolom_finding = next((c for c in df_sheet.columns if "hasil" in str(c).lower() and "analis" in str(c).lower()), None)
+                finding_raw = str(data_site.get(kolom_finding, '')) if kolom_finding and pd.notna(data_site.get(kolom_finding)) else ""
+                finding_val = finding_raw if finding_raw.strip() not in ['', 'nan', 'None'] else "Belum ada hasil analisa."
+                st.markdown("**🔍 Hasil Analisa:**")
+                st.info(finding_val)
                 
-                aging_5_list = []
-                for r in req_r[1:]:
-                    if len(r)>5 and r[3].strip() != "" and r[3].strip().upper() not in pjb_tickets_all:
-                        req_date = parse_date(r[1])
-                        aging_days = (today_date - req_date).days
-                        if aging_days >= 5:
-                            aging_5_list.append({"Nama Petugas": r[5], "Nomor Tiket": r[3], "Aging Tunggakan": f"{aging_days} Hari", "Tgl Request": r[1]})
+                kolom_reko = next((c for c in df_sheet.columns if "rekomendasi" in str(c).lower()), 'Rekomendasi Perbaikan')
+                reko_raw = str(data_site.get(kolom_reko, '')) if pd.notna(data_site.get(kolom_reko)) else ""
+                reko_val = reko_raw if reko_raw.strip() not in ['', 'nan', 'None'] else "Belum ada rekomendasi tindakan."
+                st.markdown("**💡 Rekomendasi Tindakan:**")
+                st.success(reko_val)
+                st.caption("*(Catatan: Input/Edit Action Plan dilakukan secara manual langsung melalui Google Sheets)*")
+
+        # EVIDENCE & DOKUMENTASI
+        all_photos, all_csvs, seen_urls = [], [], set()
+        for col_name in df_sheet.columns:
+            val = data_site.get(col_name)
+            if pd.isna(val) or not val: continue
+            urls = re.findall(r'(https?://[^\s,"\'\}]+)', str(val))
+            for idx, url in enumerate(urls):
+                if url in seen_urls: continue
+                seen_urls.add(url)
                 
-                if aging_5_list:
-                    st.dataframe(pd.DataFrame(aging_5_list), hide_index=True, use_container_width=True)
-                else:
-                    st.success("✅ Terkendali! Tidak ada tim yang memegang tiket menggantung lebih dari 5 hari.")
+                is_csv = any(k in url.lower() or k in col_name.lower() for k in ["csv", ".xlsx", "data"])
+                thumb_url, zoom_url, dl_url, embed_url = konversi_link_gdrive(url)
+                label = f"{clean_label_name(col_name)} #{idx+1}" if len(urls) > 1 else clean_label_name(col_name)
+                
+                if thumb_url and not is_csv: all_photos.append({'label': label, 'thumb': zoom_url, 'dl_url': dl_url})
+                elif is_csv: all_csvs.append({'label': label, 'url': dl_url if dl_url else url})
+
+        if all_photos or all_csvs:
+            with st.container(border=True):
+                st.subheader("📁 Evidence & Dokumentasi Lapangan")
+                st.divider()
+                
+                if all_csvs:
+                    st.write("**File Data:**")
+                    csv_cols = st.columns(len(all_csvs))
+                    for i, f in enumerate(all_csvs):
+                        with csv_cols[i]: st.link_button(f"📥 Unduh {f['label']}", f['url'], use_container_width=True)
+                    st.write("---")
+
+                if all_photos:
+                    st.write("**Foto Dokumentasi:**")
+                    cols_per_row = 5
+                    chunks = [all_photos[i:i + cols_per_row] for i in range(0, len(all_photos), cols_per_row)]
+                    for chunk in chunks:
+                        img_cols = st.columns(len(chunk))
+                        for i, p in enumerate(chunk):
+                            with img_cols[i]:
+                                try:
+                                    st.image(str(p["thumb"]), caption=str(p["label"]), use_container_width=True)
+                                except Exception:
+                                    st.warning(f"⚠️ Gambar tidak valid: {p['label']}")
+                                st.link_button("Unduh 📥", str(p["dl_url"]), use_container_width=True)
+        else:
+            st.info("ℹ️ Belum ada lampiran foto dokumentasi atau file yang tersedia untuk site ini.")
+
+st.markdown("<br><hr><center><b>✨ © 2026 | TASK FORCE 348 ✨</b></center>", unsafe_allow_html=True)
