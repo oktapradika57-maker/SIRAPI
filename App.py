@@ -14,14 +14,12 @@ import time
 # ==========================================
 # 0. KONFIGURASI HALAMAN & UI ELEGAN (ERP GRADE)
 # ==========================================
-st.set_page_config(page_title="SiRAPI", page_icon="📊", layout="wide")
+st.set_page_config(page_title="SiRAPI KUT", page_icon="🏢", layout="wide")
 
 st.markdown("""
     <style>
-        /* Modern Background & Font */
         .main { background-color: #F8FAFC; font-family: 'Inter', 'Segoe UI', sans-serif; }
         
-        /* 3D Glassmorphism Header */
         .header-card {
             background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%);
             padding: 30px; border-radius: 16px; color: white; text-align: center;
@@ -29,7 +27,6 @@ st.markdown("""
             border-bottom: 4px solid #3B82F6; animation: fadeInDown 0.6s ease-out;
         }
         
-        /* Financial Metrics Cards */
         .metric-3d {
             background: #ffffff; padding: 25px; border-radius: 16px; text-align: center;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
@@ -40,11 +37,9 @@ st.markdown("""
         .metric-title { font-size: 0.875rem; color: #64748B; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;}
         .metric-value { font-size: 1.8rem; color: #0F172A; font-weight: 900; }
         
-        /* Elegant Sidebar Buttons */
         .sidebar-btn { width: 100%; border-radius: 10px; font-weight: 700; height: 48px; margin-bottom:12px; background-color: #F1F5F9; border: 1px solid #CBD5E1; color: #334155; transition: 0.2s;}
         .sidebar-btn:hover { background-color: #3B82F6; color: white; border-color: #2563EB; box-shadow: 0 4px 6px rgba(59, 130, 246, 0.3); }
         
-        /* Styled Tabs */
         .stTabs [data-baseweb="tab-list"] { gap: 8px; }
         .stTabs [data-baseweb="tab"] { height: 50px; white-space: pre-wrap; background-color: #F1F5F9; border-radius: 8px 8px 0px 0px; padding: 10px 20px; font-weight: 600; color: #475569; }
         .stTabs [aria-selected="true"] { background-color: #3B82F6 !important; color: white !important; }
@@ -60,7 +55,7 @@ st.markdown("""
 # ==========================================
 # 1. KONFIGURASI SERVER, CUT-OFF & ADMIN
 # ==========================================
-PASSWORD_KOORDINATOR = "20260805"
+PASSWORD_KOORDINATOR = "Kamiyakin2027"
 PASSWORD_LIVE = "liveaction"
 ADMIN_PASSWORDS = {"Palangkaraya": "okkidah", "Pangkalanbun": "yurontur", "Tarakan": "donpablo", "Pontianak": "kingaloy"}
 CUTOFF_DATE = datetime(2026, 8, 1).date()
@@ -169,23 +164,33 @@ def load_excel_data():
     return site_dict, site_list, tim_dict
 
 def get_user_tickets_status(nama, req_rows, pjb_rows):
-    if nama == "-- Pilih Nama --": return [], []
+    """
+    LOGIKA CERDAS:
+    1. Membaca SEMUA history untuk ditampilkan di Sidebar (Menunggu PJB).
+    2. HANYA mengunci (lock) nama pengguna jika tiket yang menggantung >= 1 Agustus 2026.
+    """
+    if nama == "-- Pilih Nama --": return [], [], []
     req_tickets = {}
     for r in req_rows[1:]:
         if len(r) > 5 and r[5].strip().upper() == nama.strip().upper():
-            tgl_req = parse_date(r[1])
-            if tgl_req >= CUTOFF_DATE:
-                req_tickets[r[3].strip().upper()] = r[1]
+            req_tickets[r[3].strip().upper()] = r[1]
                 
     pjb_tickets = {r[21].strip().upper() for r in pjb_rows[1:] if len(r) > 21 and r[4].strip().upper() == nama.strip().upper()}
-    outstanding, history = [], []
+    
+    outstanding_all = []    # Untuk ditampilkan di history
+    outstanding_lock = []   # Untuk mengunci form (>= Cutoff)
+    history = []
+    
     for tkt, tgl in req_tickets.items():
         if tkt not in pjb_tickets:
-            outstanding.append(tkt)
+            outstanding_all.append(tkt)
+            if parse_date(tgl) >= CUTOFF_DATE:
+                outstanding_lock.append(tkt)
             history.append({"Tiket": tkt, "Tanggal": tgl, "Status": "🔴 Menunggu PJB"})
         else:
             history.append({"Tiket": tkt, "Tanggal": tgl, "Status": "🟢 Selesai"})
-    return outstanding, sorted(history, key=lambda x: x["Status"], reverse=True)
+            
+    return outstanding_all, outstanding_lock, sorted(history, key=lambda x: x["Status"], reverse=True)
 
 def upload_foto(file):
     if file is None: return ""
@@ -203,7 +208,6 @@ def append_data(sheet_name, data, spreadsheet_id):
 # ==========================================
 if 'page' not in st.session_state: st.session_state.page = "📝 Form Request Dana"
 
-# LOGO KINARYA UTAMA TEKNIK
 try:
     st.sidebar.image("koperasi-jasa-konstruksi-tower-event-organizer-network-monitoring-telekomunikasi-kisel-group-logo-kut.webp", use_container_width=True)
 except:
@@ -227,10 +231,12 @@ if cek_nop != "-- Pilih Area --":
     if st.sidebar.button("Cari Histori"):
         if cek_nama != "-- Pilih Nama --":
             req_r, pjb_r, _, _ = fetch_spreadsheet_data(MASTER_DATA[cek_nop]["spreadsheet_id"])
-            out_tkt, hist_tkt = get_user_tickets_status(cek_nama, req_r, pjb_r)
+            out_all, out_lock, hist_tkt = get_user_tickets_status(cek_nama, req_r, pjb_r)
             if hist_tkt:
                 st.sidebar.dataframe(pd.DataFrame(hist_tkt), hide_index=True)
-                if out_tkt: st.sidebar.error(f"⚠️ {len(out_tkt)} tiket tertunggak (Mulai Agt 2026)!")
+                if out_all: 
+                    st.sidebar.error(f"⚠️ {len(out_all)} Tiket tertunggak (Keseluruhan)!")
+                    if out_lock: st.sidebar.error(f"🔒 {len(out_lock)} Tiket menyebabkan akun TERBLOKIR (Mulai Agt 2026).")
                 else: st.sidebar.success("✅ Seluruh tiket aman!")
             else: st.sidebar.info("Tidak ada data.")
 
@@ -269,8 +275,8 @@ if st.session_state.page == "📝 Form Request Dana":
                 auto_lat_brgkt = str(tim_dict[nama].get("Latitude", "0"))
                 auto_long_brgkt = str(tim_dict[nama].get("Longtitude", "0"))
                 
-            outstanding_tkt, _ = get_user_tickets_status(nama, req_r, pjb_r)
-            is_locked_user = len(outstanding_tkt) > 0
+            out_all, out_lock, _ = get_user_tickets_status(nama, req_r, pjb_r)
+            is_locked_user = len(out_lock) > 0
             
             tiket = st.text_input("Nomor Tiket SWFM (WAJIB)")
             is_duplicate = (tiket.strip().upper() in all_requested_tickets) and tiket.strip() != ""
@@ -344,15 +350,14 @@ if st.session_state.page == "📝 Form Request Dana":
         st.markdown("<br>", unsafe_allow_html=True)
         form_invalid = (nama == "-- Pilih Nama --" or cluster == "-- Pilih Cluster --" or role == "-- Pilih Role --" or keperluan == "-- Pilih Keperluan --")
 
-        # VALIDASI & EKSEKUSI
         izin_lanjut = True
         if is_duplicate:
-            st.warning("⚠️ DATA DUPLIKAT: Sistem mendeteksi Tiket / Data ini sudah pernah diinput sebelumnya. Apakah Anda yakin ingin melanjutkan dan merekam data ini?")
-            konfirmasi_duplikat = st.checkbox("✅ Ya, saya yakin data sebelumnya belum diinput / Ini adalah revisi sah.")
+            st.warning("⚠️ DATA DUPLIKAT: Sistem mendeteksi Tiket ini sudah pernah diinput. Apakah Anda yakin ini belum diinput / merupakan revisi?")
+            konfirmasi_duplikat = st.checkbox("✅ Ya, saya yakin data ini aman untuk diinput (Revisi/Baru).")
             if not konfirmasi_duplikat: izin_lanjut = False
 
         if is_locked_user or (is_duplicate and not izin_lanjut):
-            if is_locked_user: st.error(f"⛔ AKSES DITOLAK: Sdr. {nama} memiliki {len(outstanding_tkt)} tiket yang belum PJB (Mulai Agt 2026)!")
+            if is_locked_user: st.error(f"⛔ AKSES DITOLAK: Sdr. {nama} memiliki {len(out_lock)} tiket yang belum PJB (Sejak Agt 2026)!")
             
             input_pass = st.text_input("🔑 Password Koordinator Khusus (Bypass):", type="password")
             if input_pass == PASSWORD_KOORDINATOR:
@@ -363,7 +368,7 @@ if st.session_state.page == "📝 Form Request Dana":
                             waktu = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
                             data_req = [waktu, tanggal.strftime("%d/%m/%Y"), nop, tiket, cluster, nama, role, site_id, keperluan, kebutuhan, jns_bbm, deskripsi, km_awal, jarak_final_text, lat_berangkat, long_berangkat, plat, rek_penerima, no_rek, nominal_tf, upload_foto(foto_km), upload_foto(foto_evidance), lat_tujuan, long_tujuan]
                             append_data(SHEET_REQUEST, data_req, target_ss)
-                            st.success("🎉 Data sudah masuk! Sistem akan dimuat ulang..."); time.sleep(2.5); st.rerun()
+                            st.success("🎉 Data sudah masuk! Sistem memuat ulang..."); time.sleep(2.5); st.rerun()
         else:
             if st.button("🚀 Kirim Form Request Dana", type="primary"):
                 if form_invalid or not tiket.strip() or (nop == "Palangkaraya" and site_id == "-- Pilih Site ID --") or invalid_coords: st.error("Lengkapi form dengan benar!")
@@ -372,7 +377,7 @@ if st.session_state.page == "📝 Form Request Dana":
                         waktu = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
                         data_req = [waktu, tanggal.strftime("%d/%m/%Y"), nop, tiket, cluster, nama, role, site_id, keperluan, kebutuhan, jns_bbm, deskripsi, km_awal, jarak_final_text, lat_berangkat, long_berangkat, plat, rek_penerima, no_rek, nominal_tf, upload_foto(foto_km), upload_foto(foto_evidance), lat_tujuan, long_tujuan]
                         append_data(SHEET_REQUEST, data_req, target_ss)
-                        st.success("🎉 Data sudah masuk! Sistem akan dimuat ulang..."); time.sleep(2.5); st.rerun()
+                        st.success("🎉 Data sudah masuk! Sistem memuat ulang..."); time.sleep(2.5); st.rerun()
 
 # ==========================================
 # PAGE 2: FORM PJB OPERASIONAL
@@ -387,13 +392,13 @@ elif st.session_state.page == "✅ Form PJB Operasional":
         
         pjb_tickets_all = {r[21].strip().upper() for r in pjb_r[1:] if len(r) > 21}
         
+        # Tampilkan semua tiket tertunggak (Termasuk lama) agar Tim tahu harus lapor apa
         pending_list = []
         for r in req_r[1:]:
             if len(r)>5 and r[3].strip() != "" and r[3].strip().upper() not in pjb_tickets_all:
-                if parse_date(r[1]) >= CUTOFF_DATE:
-                    pending_list.append({"Tanggal": r[1], "Nama": r[5], "No Tiket": r[3], "Keperluan": r[8] if len(r)>8 else ""})
+                pending_list.append({"Tanggal": r[1], "Nama": r[5], "No Tiket": r[3], "Keperluan": r[8] if len(r)>8 else ""})
         
-        st.markdown("<div class='section-title'>📋 Tiket Belum Selesai (Sejak 1 Agt 2026)</div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-title'>📋 Tiket Belum Selesai (Keseluruhan)</div>", unsafe_allow_html=True)
         if pending_list: st.dataframe(pd.DataFrame(pending_list), hide_index=True, use_container_width=True)
         else: st.success("Seluruh tiket di area ini sudah clear!")
         
@@ -407,13 +412,17 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                 for r in req_r[1:]:
                     if len(r) > 3 and r[3].strip().upper() == cari_tiket.strip().upper():
                         ditemukan = {"NOP": r[2], "Cluster": r[4], "Nama": r[5], "Role": r[6], "Site": r[7], "Keperluan": r[8], "BBM": r[10], "Desc": r[11], "Jarak": r[13] if len(r)>13 else "", "Plat": r[16] if len(r)>16 else ""}
-                st.session_state.pjb_data = ditemukan
+                
                 if ditemukan: 
-                    if cari_tiket.strip().upper() in pjb_tickets_all:
-                        st.error("⚠️ Tiket ini sudah pernah di-PJB-kan sebelumnya!")
-                        st.session_state.pjb_data = None
-                    else: st.success("🎉 Histori ditarik otomatis!")
-                else: st.error("❌ Tiket tidak ditemukan.")
+                    st.session_state.pjb_data = ditemukan
+                    count_pjb = sum(1 for p in pjb_r[1:] if len(p)>21 and p[21].strip().upper() == cari_tiket.strip().upper())
+                    if count_pjb > 0:
+                        st.warning(f"⚠️ Peringatan: Tiket ini sudah pernah di-PJB-kan sebanyak {count_pjb} kali. Anda tetap diizinkan menambah PJB asalkan NOMINAL BEDA.")
+                    else:
+                        st.success("🎉 Histori ditarik otomatis!")
+                else: 
+                    st.session_state.pjb_data = None
+                    st.error("❌ Tiket tidak ditemukan.")
 
         if st.session_state.get("pjb_data"):
             d = st.session_state.pjb_data
@@ -447,12 +456,18 @@ elif st.session_state.page == "✅ Form PJB Operasional":
             
             st.markdown("<br>", unsafe_allow_html=True)
             if st.button("🚀 Sahkan Pelaporan PJB", type="primary", use_container_width=True):
-                with st.spinner("✅ Data sedang diproses! Mohon tunggu dan JANGAN tekan submit lagi..."):
-                    waktu = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-                    data_pjb = [waktu, tgl_pjb.strftime("%d/%m/%Y"), d["NOP"], d["Cluster"], d["Nama"], d["Role"], d["Site"], d["Keperluan"], d["BBM"], d["Desc"], km_akhir, nominal_pjb, d["Plat"], upload_foto(f_isi), upload_foto(f_nota_bbm), upload_foto(f_km), upload_foto(f_mat), upload_foto(f_notamat), upload_foto(f_inap), upload_foto(f_kerja), tot_nilai_nota, cari_tiket, tot_liter, harga_satuan]
-                    append_data(SHEET_PJB, [(r+[""]*24)[:24] for r in [data_pjb]][0], target_ss)
-                    st.success("🎉 Laporan PJB berhasil ditutup! Sistem akan dimuat ulang..."); st.session_state.pjb_data = None
-                    time.sleep(2.5); st.rerun()
+                # VALIDASI NOMINAL DOUBLE INPUT
+                is_double_pjb = any(len(r)>21 and r[21].strip().upper() == cari_tiket.strip().upper() and clean_nominal(r[11]) == nominal_pjb for r in pjb_r[1:])
+                
+                if is_double_pjb:
+                    st.error("⛔ GAGAL: Tiket dan NOMINAL ini sama persis dengan data PJB sebelumnya! Ini terindikasi Double Input.")
+                else:
+                    with st.spinner("✅ Data sedang diproses! Mohon tunggu dan JANGAN tekan submit lagi..."):
+                        waktu = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+                        data_pjb = [waktu, tgl_pjb.strftime("%d/%m/%Y"), d["NOP"], d["Cluster"], d["Nama"], d["Role"], d["Site"], d["Keperluan"], d["BBM"], d["Desc"], km_akhir, nominal_pjb, d["Plat"], upload_foto(f_isi), upload_foto(f_nota_bbm), upload_foto(f_km), upload_foto(f_mat), upload_foto(f_notamat), upload_foto(f_inap), upload_foto(f_kerja), tot_nilai_nota, cari_tiket, tot_liter, harga_satuan]
+                        append_data(SHEET_PJB, [(r+[""]*24)[:24] for r in [data_pjb]][0], target_ss)
+                        st.success("🎉 Laporan PJB berhasil ditutup! Sistem memuat ulang..."); st.session_state.pjb_data = None
+                        time.sleep(2.5); st.rerun()
 
 # ==========================================
 # PAGE 3: NERACA / BUKU KAS (FINANCIAL REPORT ERP)
@@ -512,10 +527,9 @@ elif st.session_state.page == "📊 Neraca / Buku Kas":
                 
                 sisa_kas = tot_um - tot_pjb
                 
-                # PREPARE TAB MODERN
+                # TABS UI ERP
                 tab1, tab2, tab3 = st.tabs(["📊 Ringkasan Eksekutif", "📓 Buku Besar (Ledger PJB)", "⚠️ Analisa Risiko & Aging"])
                 
-                # TAB 1: EXECUTIVE DASHBOARD
                 with tab1:
                     st.markdown("<br>", unsafe_allow_html=True)
                     m1, m2, m3 = st.columns(3)
@@ -527,13 +541,11 @@ elif st.session_state.page == "📊 Neraca / Buku Kas":
                     chart_data = pd.DataFrame({"Kategori": ["Kas Masuk (UM)", "Penyerapan (PJB)", "Sisa Kas"], "Nominal (Rp)": [tot_um, tot_pjb, sisa_kas]}).set_index("Kategori")
                     st.bar_chart(chart_data)
 
-                # TAB 2: GENERAL LEDGER (BUKU BESAR DETAIL TIKET)
                 with tab2:
                     st.markdown("<br>### 📓 Catatan Arus Kas Keluar (Detail Tiket)", unsafe_allow_html=True)
                     if len(pjb_r) > 1:
                         df_pjb_ledger = pd.DataFrame([(r + [""] * 24)[:24] for r in pjb_r[1:]], columns=["Waktu Input", "Tanggal", "NOP", "Cluster", "Nama", "Role", "Site ID", "Keperluan", "Jenis BBM", "Deskripsi", "KM Akhir", "Nominal", "Plat", "U1","U2","U3","U4","U5","U6","U7", "Nilai Nota", "No. Ref", "Liter", "Harga Satuan"])
                         df_pjb_ledger['Nominal_Int'] = df_pjb_ledger['Nominal'].apply(clean_nominal)
-                        df_pjb_ledger['Tanggal_Real'] = pd.to_datetime(df_pjb_ledger['Tanggal'], format='%d/%m/%Y', errors='coerce')
                         
                         df_tampil = df_pjb_ledger[['Tanggal', 'No. Ref', 'Nama', 'Keperluan', 'Nominal_Int']].copy()
                         df_tampil.rename(columns={'Nominal_Int': 'Kredit / Keluar (Rp)', 'No. Ref': 'Nomor Tiket'}, inplace=True)
@@ -543,7 +555,6 @@ elif st.session_state.page == "📊 Neraca / Buku Kas":
                         st.info("ℹ️ Catatan: Detail tiket di atas adalah historis murni dari form submit tim lapangan. Angka metrik utama (Ringkasan Eksekutif) tetap mengacu pada Sheet Rekap PJB (Disetujui Admin).")
                     else: st.warning("Belum ada data PJB.")
 
-                # TAB 3: AGING ANALYSIS
                 with tab3:
                     st.markdown("<br>### ⚠️ Analisa Potensi Aging PJB (> 7 Hari)", unsafe_allow_html=True)
                     pjb_tickets_all = {r[21].strip().upper() for r in pjb_r[1:] if len(r) > 21}
@@ -588,7 +599,6 @@ elif st.session_state.page == "📈 Live Monitoring":
         if st.button("📊 AKTIFKAN RADAR", type="primary", use_container_width=True):
             with st.spinner("Processing Market Algorithms..."):
                 
-                # TOTAL MODAL
                 total_um = 0
                 if len(um_r) > 1:
                     d_um = pd.DataFrame(um_r[1:], columns=["Waktu", "Tanggal", "Deskripsi", "Nominal"])
@@ -597,7 +607,6 @@ elif st.session_state.page == "📈 Live Monitoring":
                 
                 batas_harian = total_um / 7 if total_um > 0 else 0
                 
-                # PENYERAPAN MUTLAK DARI KOLOM P (Index 15) BERDASARKAN FILTER KOLOM Q (Index 16)
                 tot_serap_periode = 0
                 if len(rekap_r) > 1:
                     if filter_q_live != "-- Semua Periode --":
@@ -605,14 +614,11 @@ elif st.session_state.page == "📈 Live Monitoring":
                     else:
                         tot_serap_periode = sum([clean_nominal(r[15]) for r in rekap_r[1:] if len(r) > 15])
                                 
-                # EXPENSE HARI INI
                 today_str = datetime.now().strftime("%d/%m/%Y")
                 pengeluaran_today = sum([clean_nominal(r[11]) for r in pjb_r[1:] if len(r)>11 and r[1].strip() == today_str])
                 
-                # EQUITY SISA KAS
                 sisa_kas_real = total_um - tot_serap_periode
                 
-                # TREND CHART
                 df_trend = pd.DataFrame()
                 if len(pjb_r) > 1:
                     df_p = pd.DataFrame([(r + [""] * 24)[:24] for r in pjb_r[1:]], columns=["W","Tanggal","N","C","Nm","R","S","K","B","D","K2","Nominal","P","u","u","u","u","u","u","u","N2","T","L","H"])
@@ -638,7 +644,6 @@ elif st.session_state.page == "📈 Live Monitoring":
                     st.markdown("<br><h4 style='color:#334155;'>📈 Grafik Burn Rate Harian Aktual</h4>", unsafe_allow_html=True)
                     st.line_chart(df_trend, use_container_width=True)
 
-                # DAFTAR MERAH AGING > 5 HARI
                 st.markdown("<br><h4 style='color:#EF4444; border-bottom: 2px solid #EF4444; padding-bottom:5px;'>🚨 DAFTAR MERAH: Tim dengan Aging PJB > 5 Hari</h4>", unsafe_allow_html=True)
                 
                 pjb_tickets_all = {r[21].strip().upper() for r in pjb_r[1:] if len(r) > 21}
