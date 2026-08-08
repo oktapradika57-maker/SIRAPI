@@ -14,7 +14,7 @@ import time
 # ==========================================
 # 0. KONFIGURASI HALAMAN & UI ELEGAN
 # ==========================================
-st.set_page_config(page_title="ERP Kinarya Utama Teknik", page_icon="🏢", layout="wide")
+st.set_page_config(page_title="SiRAPI", page_icon="💸", layout="wide")
 
 st.markdown("""
     <style>
@@ -22,7 +22,7 @@ st.markdown("""
         .header-card {
             background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%);
             padding: 30px; border-radius: 16px; color: white; text-align: center;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1); margin-bottom: 30px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1); margin-bottom: 20px;
             border-bottom: 4px solid #3B82F6;
         }
         .hub-header { padding-top: 20px; padding-bottom: 30px; text-align: left; }
@@ -30,32 +30,44 @@ st.markdown("""
         .hub-title-main span { color: #6366F1; }
         .hub-subtitle { font-size: 1rem; color: #64748B; margin-bottom: 20px; }
         
-        .hub-card {
-            background: #ffffff; border-radius: 20px; padding: 25px 20px; text-align: center;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); border: 1px solid #F1F5F9; 
-            transition: all 0.3s ease; display: flex; flex-direction: column; align-items: center; margin-bottom: 15px;
-        }
-        .hub-card:hover { transform: translateY(-5px); box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); border-color: #E2E8F0; }
-        .hub-icon {
-            width: 70px; height: 70px; border-radius: 18px; display: flex;
-            align-items: center; justify-content: center; font-size: 35px; margin-bottom: 18px;
-        }
-        .icon-green { background-color: #D1FAE5; color: #10B981; }
-        .icon-blue { background-color: #E0F2FE; color: #0EA5E9; }
-        .icon-orange { background-color: #FFEDD5; color: #F97316; }
-        .icon-purple { background-color: #F3E8FF; color: #A855F7; }
-        .hub-card-title { font-size: 1.15rem; font-weight: 800; color: #1E293B; margin-bottom: 8px; }
-        .hub-card-desc { font-size: 0.85rem; color: #94A3B8; margin-bottom: 20px; font-weight: 500;}
+        /* Utility Metrics */
         .metric-3d {
             background: #ffffff; padding: 25px; border-radius: 16px; text-align: center;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); border: 1px solid #E2E8F0; border-top: 5px solid #3B82F6; margin-bottom: 15px;
         }
         .metric-title { font-size: 0.875rem; color: #64748B; font-weight: 700; text-transform: uppercase; }
         .metric-value { font-size: 1.8rem; color: #0F172A; font-weight: 900; }
-        .section-title { color: #1E293B; font-size: 1.25rem; font-weight: 800; border-bottom: 2px solid #E2E8F0; padding-bottom: 8px; margin-top: 30px; margin-bottom: 20px; text-transform: uppercase;}
+        .section-title { color: #1E293B; font-size: 1.25rem; font-weight: 800; border-bottom: 2px solid #E2E8F0; padding-bottom: 8px; margin-top: 20px; margin-bottom: 20px; text-transform: uppercase;}
         .footer-brand { width: 100%; text-align: center; font-size: 13px; color: #94A3B8; margin-top: 50px; font-weight: bold;}
     </style>
 """, unsafe_allow_html=True)
+
+# CSS KHUSUS UNTUK HALAMAN HOME (MENYULAP TOMBOL MENJADI KARTU/CARD BESAR)
+if st.session_state.get('page', '🏠 Hub Menu Utama') == "🏠 Hub Menu Utama":
+    st.markdown("""
+        <style>
+        div[data-testid="column"] div[data-testid="stButton"] button {
+            height: 150px;
+            background: #ffffff;
+            border: 2px solid #F1F5F9;
+            border-radius: 20px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            margin-bottom: 15px;
+        }
+        div[data-testid="column"] div[data-testid="stButton"] button p {
+            font-size: 1.3rem;
+            font-weight: 800;
+            color: #1E293B;
+        }
+        div[data-testid="column"] div[data-testid="stButton"] button:hover {
+            border-color: #3B82F6;
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
+            transform: translateY(-5px);
+            color: #3B82F6;
+        }
+        </style>
+    """, unsafe_allow_html=True)
 
 # ==========================================
 # 1. KONFIGURASI SERVER & MASTER DATA
@@ -208,7 +220,7 @@ def append_data(sheet_name, data, spreadsheet_id):
     fetch_spreadsheet_data.clear()
 
 # ==========================================
-# 4. SIDEBAR & NAVIGASI (RESPONSIVE)
+# 4. SIDEBAR & NAVIGASI PINTAR
 # ==========================================
 if 'page' not in st.session_state: st.session_state.page = "🏠 Hub Menu Utama"
 
@@ -216,21 +228,39 @@ try: st.sidebar.image("koperasi-jasa-konstruksi-tower-event-organizer-network-mo
 except: st.sidebar.markdown("<h3 style='text-align:center;'>PT KUT</h3>", unsafe_allow_html=True)
 st.sidebar.markdown("<hr>", unsafe_allow_html=True)
 
-if st.sidebar.button("🏠 Home Dashboard", use_container_width=True): st.session_state.page = "🏠 Hub Menu Utama"
-if st.sidebar.button("📝 Form Request Dana", use_container_width=True): st.session_state.page = "📝 Form Request Dana"
-if st.sidebar.button("✅ Form PJB Operasional", use_container_width=True): st.session_state.page = "✅ Form PJB Operasional"
+if st.sidebar.button("🏠 Home Dashboard", use_container_width=True): st.session_state.page = "🏠 Hub Menu Utama"; st.rerun()
+if st.sidebar.button("📝 Form Request Dana", use_container_width=True): st.session_state.page = "📝 Form Request Dana"; st.rerun()
+if st.sidebar.button("✅ Form PJB Operasional", use_container_width=True): st.session_state.page = "✅ Form PJB Operasional"; st.rerun()
 
 st.sidebar.markdown("### 📊 MENU ANALITIK (ADMIN)")
 st.sidebar.text_input("🔑 Password Akses Analitik:", type="password", key="admin_password")
 if st.session_state.get("admin_password") in AUTHORIZED_PASSWORDS:
     st.sidebar.success("✅ Akses Terbuka")
-    if st.sidebar.button("📊 Neraca / Buku Kas", use_container_width=True): st.session_state.page = "📊 Neraca / Buku Kas"
-    if st.sidebar.button("📈 Live Monitoring", use_container_width=True): st.session_state.page = "📈 Live Monitoring"
+    if st.sidebar.button("📊 Neraca / Buku Kas", use_container_width=True): st.session_state.page = "📊 Neraca / Buku Kas"; st.rerun()
+    if st.sidebar.button("📈 Live Monitoring", use_container_width=True): st.session_state.page = "📈 Live Monitoring"; st.rerun()
+
+# --- MODULE CEK STATUS TIKET DIKEMBALIKAN ---
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 🔍 CEK STATUS TIKET")
+cek_nop = st.sidebar.selectbox("📂 Area", ["-- Pilih Area --"] + list(MASTER_DATA.keys()))
+if cek_nop != "-- Pilih Area --":
+    cek_nama = st.sidebar.selectbox("👤 Petugas", ["-- Pilih Nama --"] + MASTER_DATA[cek_nop]["names"])
+    if st.sidebar.button("Cari Histori"):
+        if cek_nama != "-- Pilih Nama --":
+            req_r, pjb_r, _, _ = fetch_spreadsheet_data(MASTER_DATA[cek_nop]["spreadsheet_id"])
+            out_all, out_lock, hist_tkt = get_user_tickets_status(cek_nama, req_r, pjb_r)
+            if hist_tkt:
+                st.sidebar.dataframe(pd.DataFrame(hist_tkt), hide_index=True)
+                if out_all: 
+                    st.sidebar.error(f"⚠️ {len(out_all)} Tiket tertunggak (Keseluruhan)!")
+                    if out_lock: st.sidebar.error(f"🔒 {len(out_lock)} Tiket memblokir akun (Agt 2026).")
+                else: st.sidebar.success("✅ Seluruh tiket aman!")
+            else: st.sidebar.info("Tidak ada data.")
 
 st.sidebar.markdown("<div class='footer-brand'>⚙️ Deploy by Okta Pradika</div>", unsafe_allow_html=True)
 
 # ==========================================
-# PAGE 0: HUB MENU UTAMA
+# PAGE 0: HUB MENU UTAMA (ENTERPRISE UI)
 # ==========================================
 if st.session_state.page == "🏠 Hub Menu Utama":
     st.markdown("""
@@ -240,59 +270,33 @@ if st.session_state.page == "🏠 Hub Menu Utama":
     </div>
     """, unsafe_allow_html=True)
 
+    # Menggunakan tombol yang disulap dengan CSS menjadi kartu besar
     c1, c2 = st.columns(2)
     with c1:
-        st.markdown("""
-        <div class="hub-card">
-            <div class="hub-icon icon-green">💸</div>
-            <div class="hub-card-title">Request Dana</div>
-            <div class="hub-card-desc">Pengajuan dana & navigasi jarak</div>
-        </div>
-        """, unsafe_allow_html=True)
-        if st.button("Masuk Modul Request", use_container_width=True, type="primary"): 
-            st.session_state.page = "📝 Form Request Dana"; st.rerun()
-            
+        if st.button("💸 REQUEST DANA", use_container_width=True): st.session_state.page = "📝 Form Request Dana"; st.rerun()
     with c2:
-        st.markdown("""
-        <div class="hub-card">
-            <div class="hub-icon icon-blue">✅</div>
-            <div class="hub-card-title">PJB Operasional</div>
-            <div class="hub-card-desc">Realisasi nota & kalkulasi Total KM/RH</div>
-        </div>
-        """, unsafe_allow_html=True)
-        if st.button("Masuk Modul PJB", use_container_width=True, type="primary"): 
-            st.session_state.page = "✅ Form PJB Operasional"; st.rerun()
+        if st.button("✅ PJB OPERASIONAL", use_container_width=True): st.session_state.page = "✅ Form PJB Operasional"; st.rerun()
             
-    st.markdown("<br>", unsafe_allow_html=True)
-    
     c3, c4 = st.columns(2)
     with c3:
-        st.markdown("""
-        <div class="hub-card">
-            <div class="hub-icon icon-orange">📊</div>
-            <div class="hub-card-title">Buku Besar / Neraca</div>
-            <div class="hub-card-desc">Evaluasi keuangan & histori PJB (Admin)</div>
-        </div>
-        """, unsafe_allow_html=True)
-        if st.button("Masuk Modul Neraca", use_container_width=True): 
-            st.session_state.page = "📊 Neraca / Buku Kas"; st.rerun()
-            
+        if st.button("📊 NERACA / KAS", use_container_width=True): st.session_state.page = "📊 Neraca / Buku Kas"; st.rerun()
     with c4:
-        st.markdown("""
-        <div class="hub-card">
-            <div class="hub-icon icon-purple">📈</div>
-            <div class="hub-card-title">Live Monitoring</div>
-            <div class="hub-card-desc">Laporan target & analisa SVA (Admin)</div>
-        </div>
-        """, unsafe_allow_html=True)
-        if st.button("Masuk Modul Live", use_container_width=True): 
-            st.session_state.page = "📈 Live Monitoring"; st.rerun()
+        if st.button("📈 LIVE MONITORING", use_container_width=True): st.session_state.page = "📈 Live Monitoring"; st.rerun()
 
 # ==========================================
 # PAGE 1: FORM REQUEST DANA
 # ==========================================
 elif st.session_state.page == "📝 Form Request Dana":
     st.markdown("<div class='header-card'><h2>📝 PORTAL PENGAJUAN DANA</h2><p>PT Kinarya Utama Teknik - Operational System</p></div>", unsafe_allow_html=True)
+    
+    # --- TOMBOL NAVIGASI PINTAR (HOME & PJB) ---
+    col_nav1, col_nav2 = st.columns([1, 1])
+    with col_nav1:
+        if st.button("🏠 Kembali ke Home Menu", use_container_width=True): st.session_state.page = "🏠 Hub Menu Utama"; st.rerun()
+    with col_nav2:
+        if st.button("👉 Lanjut ke Form PJB", type="primary", use_container_width=True): st.session_state.page = "✅ Form PJB Operasional"; st.rerun()
+    
+    st.markdown("<br>", unsafe_allow_html=True)
     nop = st.selectbox("📌 1. Pilih Database Regional (NOP)", ["-- Pilih NOP --"] + list(MASTER_DATA.keys()))
     
     if nop != "-- Pilih NOP --":
@@ -438,6 +442,10 @@ elif st.session_state.page == "📝 Form Request Dana":
 # ==========================================
 elif st.session_state.page == "✅ Form PJB Operasional":
     st.markdown("<div class='header-card' style='background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); border-bottom: 4px solid #11998e;'><h2>✅ PORTAL PJB (PENYELESAIAN)</h2><p>Lengkapi nota realisasi untuk menghapus status tunggakan.</p></div>", unsafe_allow_html=True)
+    
+    if st.button("🏠 Kembali ke Home Menu", use_container_width=True): st.session_state.page = "🏠 Hub Menu Utama"; st.rerun()
+    st.markdown("<br>", unsafe_allow_html=True)
+    
     nop_cari = st.selectbox("📂 1. Pilih Database (NOP):", ["-- Pilih NOP --"] + list(MASTER_DATA.keys()))
     
     if nop_cari != "-- Pilih NOP --":
@@ -530,6 +538,8 @@ elif st.session_state.page == "✅ Form PJB Operasional":
 # ==========================================
 elif st.session_state.page == "📊 Neraca / Buku Kas":
     st.markdown("<div class='header-card' style='background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); border-bottom: 4px solid #b45309;'><h2>📊 BUKU BESAR & LAPORAN KEUANGAN</h2></div>", unsafe_allow_html=True)
+    if st.button("🏠 Kembali ke Home Menu", use_container_width=True): st.session_state.page = "🏠 Hub Menu Utama"; st.rerun()
+    
     if st.session_state.get("admin_password") not in AUTHORIZED_PASSWORDS: st.error("⛔ AKSES TERKUNCI: Halaman khusus Admin.")
     else:
         nop_admin = st.selectbox("📂 Wilayah (NOP):", ["-- Pilih NOP --"] + list(MASTER_DATA.keys()))
@@ -581,6 +591,8 @@ elif st.session_state.page == "📊 Neraca / Buku Kas":
 # ==========================================
 elif st.session_state.page == "📈 Live Monitoring":
     st.markdown("<div class='header-card' style='background: linear-gradient(135deg, #020617 0%, #0F172A 100%); color:#10B981; border-bottom: 4px solid #10B981;'><h2>📈 LIVE FINANCIAL MONITORING</h2></div>", unsafe_allow_html=True)
+    if st.button("🏠 Kembali ke Home Menu", use_container_width=True): st.session_state.page = "🏠 Hub Menu Utama"; st.rerun()
+    
     if st.session_state.get("admin_password") not in AUTHORIZED_PASSWORDS: st.error("⛔ AKSES TERKUNCI")
     else:
         nop_live = st.selectbox("🌐 Market (NOP):", ["-- Pilih NOP --"] + list(MASTER_DATA.keys()))
