@@ -27,28 +27,23 @@ st.markdown("""
         }
         /* Kustomisasi Card Menu Hub */
         .hub-card {
-            background-color: #ffffff; border-radius: 20px; padding: 25px 20px;
+            background-color: #ffffff; border-radius: 16px; padding: 25px 20px;
             text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.02);
-            border: 1px solid #F1F5F9; display: flex; flex-direction: column;
-            align-items: center; transition: all 0.3s ease; margin-bottom: 15px; height: 210px;
+            border: 1px solid #F1F5F9; height: 100%; display: flex; flex-direction: column;
+            align-items: center; transition: all 0.3s ease; margin-bottom: 15px;
         }
-        /* Animasi Card saat disorot */
-        div[data-testid="column"]:hover .hub-card {
-            transform: translateY(-5px);
-            box-shadow: 0 15px 25px -5px rgba(0,0,0,0.08);
-            border-color: #3B82F6;
-        }
+        .hub-card:hover { transform: translateY(-5px); box-shadow: 0 15px 25px -5px rgba(0,0,0,0.08); border-color: #E2E8F0; }
         .icon-box {
-            width: 70px; height: 70px; border-radius: 18px; display: flex;
-            align-items: center; justify-content: center; font-size: 35px; margin-bottom: 15px;
+            width: 65px; height: 65px; border-radius: 18px; display: flex;
+            align-items: center; justify-content: center; font-size: 30px; margin-bottom: 15px;
         }
         .bg-green { background-color: #D1FAE5; color: #10B981; }
         .bg-blue { background-color: #E0F2FE; color: #0EA5E9; }
         .bg-orange { background-color: #FFEDD5; color: #F97316; }
         .bg-purple { background-color: #F3E8FF; color: #A855F7; }
         .bg-red { background-color: #FEE2E2; color: #EF4444; }
-        .card-title { font-size: 1.15rem; font-weight: 800; color: #1E293B; margin-bottom: 8px; }
-        .card-subtitle { font-size: 0.85rem; color: #94A3B8; font-weight: 500; margin-bottom: 15px; }
+        .card-title { font-size: 1.1rem; font-weight: 800; color: #1E293B; margin-bottom: 5px; }
+        .card-subtitle { font-size: 0.8rem; color: #94A3B8; font-weight: 500; margin-bottom: 15px; }
         
         /* Metric dan Section */
         .metric-3d {
@@ -61,23 +56,6 @@ st.markdown("""
         .footer-brand { width: 100%; text-align: center; font-size: 13px; color: #94A3B8; margin-top: 50px; font-weight: bold;}
     </style>
 """, unsafe_allow_html=True)
-
-# ==========================================
-# CSS KHUSUS HUB MENU (TRANSPARENT BUTTON OVERLAY)
-# ==========================================
-if st.session_state.get('page', '🏠 Hub Menu Utama') == "🏠 Hub Menu Utama":
-    st.markdown("""
-        <style>
-            /* Hack: Membuat tombol transparan menutupi seluruh Card HTML */
-            div[data-testid="column"] { position: relative; }
-            div[data-testid="column"] div.stButton {
-                position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 999;
-            }
-            div[data-testid="column"] div.stButton > button {
-                width: 100%; height: 100%; opacity: 0; cursor: pointer;
-            }
-        </style>
-    """, unsafe_allow_html=True)
 
 # ==========================================
 # 1. MASTER DATA & KONFIGURASI
@@ -225,7 +203,7 @@ def append_data(sheet_name, data, spreadsheet_id):
 
 def update_approval_status(spreadsheet_id, row_index, new_status):
     client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
-    # Kolom ke-6 adalah kolom Status Approval
+    # Kolom ke-6 adalah kolom Status
     client.worksheet(SHEET_APP).update_cell(row_index + 1, 6, new_status)
     fetch_spreadsheet_data.clear()
 
@@ -268,11 +246,11 @@ if cek_nop != "-- Pilih Area --":
 st.sidebar.markdown("<div class='footer-brand'>⚙️ Deploy by Okta Pradika</div>", unsafe_allow_html=True)
 
 # ==========================================
-# PAGE 0: HUB MENU UTAMA (OVERLAY CARD UI)
+# PAGE 0: HUB MENU UTAMA (CARD UI PREMIUM)
 # ==========================================
 if st.session_state.page == "🏠 Hub Menu Utama":
     st.markdown("""
-        <div style="padding: 20px 0 30px 0;">
+        <div style="padding: 20px 0 40px 0;">
             <h1 style="font-size: 2.2rem; font-weight: 900; color: #1E293B; margin-bottom: 5px;">Enterprise Analytics <span style="color: #6366F1;">Hub</span></h1>
             <p style="color: #64748B; font-size: 1rem;">Pilih modul di bawah ini untuk mengeksekusi operasional departemen.</p>
         </div>
@@ -282,13 +260,13 @@ if st.session_state.page == "🏠 Hub Menu Utama":
     c1, c2, c3 = st.columns(3)
     with c1:
         st.markdown("""<div class="hub-card"><div class="icon-box bg-green">💸</div><div class="card-title">Request Dana</div><div class="card-subtitle">Pengajuan & estimasi dana</div></div>""", unsafe_allow_html=True)
-        if st.button("btn1", key="b1", help="Masuk Request Dana"): st.session_state.page = "📝 Form Request Dana"; st.rerun()
+        if st.button("Masuk Modul Request", use_container_width=True, type="secondary"): st.session_state.page = "📝 Form Request Dana"; st.rerun()
     with c2:
         st.markdown("""<div class="hub-card"><div class="icon-box bg-blue">✅</div><div class="card-title">PJB Operasional</div><div class="card-subtitle">Realisasi nota & kalkulasi KM</div></div>""", unsafe_allow_html=True)
-        if st.button("btn2", key="b2", help="Masuk PJB Operasional"): st.session_state.page = "✅ Form PJB Operasional"; st.rerun()
+        if st.button("Masuk Modul PJB", use_container_width=True, type="secondary"): st.session_state.page = "✅ Form PJB Operasional"; st.rerun()
     with c3:
         st.markdown("""<div class="hub-card"><div class="icon-box bg-red">🛡️</div><div class="card-title">Approval Center</div><div class="card-subtitle">Verifikasi BBM Anomali (Admin)</div></div>""", unsafe_allow_html=True)
-        if st.button("btn3", key="b3", help="Masuk Approval Center"): 
+        if st.button("Masuk Modul Approval", use_container_width=True, type="secondary"): 
             if st.session_state.get("admin_password") in AUTHORIZED_PASSWORDS: st.session_state.page = "🛡️ Approval Center"; st.rerun()
             else: st.error("Silakan login Admin di Sidebar terlebih dahulu.")
             
@@ -298,12 +276,12 @@ if st.session_state.page == "🏠 Hub Menu Utama":
     c4, c5, c6 = st.columns(3)
     with c4:
         st.markdown("""<div class="hub-card"><div class="icon-box bg-orange">📊</div><div class="card-title">Buku Besar / Neraca</div><div class="card-subtitle">Histori PJB & Kas (Admin)</div></div>""", unsafe_allow_html=True)
-        if st.button("btn4", key="b4", help="Masuk Neraca"): 
+        if st.button("Masuk Modul Neraca", use_container_width=True): 
             if st.session_state.get("admin_password") in AUTHORIZED_PASSWORDS: st.session_state.page = "📊 Neraca / Buku Kas"; st.rerun()
             else: st.error("Silakan login Admin di Sidebar.")
     with c5:
         st.markdown("""<div class="hub-card"><div class="icon-box bg-purple">📈</div><div class="card-title">Live Monitoring</div><div class="card-subtitle">Analisa SVA & Burn Rate (Admin)</div></div>""", unsafe_allow_html=True)
-        if st.button("btn5", key="b5", help="Masuk Live Monitoring"): 
+        if st.button("Masuk Modul Live", use_container_width=True): 
             if st.session_state.get("admin_password") in AUTHORIZED_PASSWORDS: st.session_state.page = "📈 Live Monitoring"; st.rerun()
             else: st.error("Silakan login Admin di Sidebar.")
 
@@ -452,7 +430,7 @@ elif st.session_state.page == "📝 Form Request Dana":
                         st.balloons(); st.success("🎉 Data Anda Berhasil Dikirim!"); time.sleep(2.5); st.rerun()
 
 # ==========================================
-# PAGE 2: FORM PJB OPERASIONAL (PROTEKSI BBM GENSET ONLY)
+# PAGE 2: FORM PJB OPERASIONAL (DENGAN PROTEKSI BBM)
 # ==========================================
 elif st.session_state.page == "✅ Form PJB Operasional":
     st.markdown("<div class='header-card' style='background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); border-bottom: 4px solid #11998e;'><h2>✅ PORTAL PJB (PENYELESAIAN)</h2><p>Lengkapi nota realisasi untuk menghapus status tunggakan.</p></div>", unsafe_allow_html=True)
@@ -516,7 +494,6 @@ elif st.session_state.page == "✅ Form PJB Operasional":
             st.markdown("<div class='section-title'>📝 Realisasi Lapangan & KM/RH</div>", unsafe_allow_html=True)
             c_c, c_d = st.columns(2)
             
-            # --- PENENTUAN LABEL & LOGIKA GENSET ---
             is_genset = "genset" in str(d["BBM"]).lower()
             label_akhir = "RH Genset Akhir" if is_genset else "KM Akhir Kendaraan"
             info_text = "Total Jam Backup (RH)" if is_genset else "Total Perjalanan (KM)"
@@ -538,14 +515,15 @@ elif st.session_state.page == "✅ Form PJB Operasional":
             with p2: f_mat = st.file_uploader("Foto Material", type=["jpg","png"]); f_notamat = st.file_uploader("Nota Material", type=["jpg","png"])
             with p3: f_inap = st.file_uploader("Nota Penginapan", type=["jpg","png"]); f_kerja = st.file_uploader("Evidance Pekerjaan", type=["jpg","png"]); f_km = st.file_uploader("Foto KM/RH Akhir (Disanding)", type=["jpg","png"])
             
-            # =======================================================
-            # LOGIKA PROTEKSI BBM ANOMALI (HANYA BERLAKU UNTUK GENSET)
-            # =======================================================
-            is_bbm_anomali = is_genset and ("dexlite" in str(d["BBM"]).lower() or "bio solar" in str(d["BBM"]).lower()) and (harga_satuan > 28000)
+            # =====================================
+            # LOGIKA PROTEKSI BBM ANOMALI (>28.000)
+            # =====================================
+            is_bbm_anomali = ("dexlite" in str(d["BBM"]).lower() or "bio solar" in str(d["BBM"]).lower()) and (harga_satuan > 28000)
+            is_approved = False
             
             if is_bbm_anomali:
                 st.markdown("<hr>", unsafe_allow_html=True)
-                st.error("⚠️ DETEKSI ANOMALI GENSET: Harga Dexlite / Bio Solar melebihi batas wajar (Rp 28.000). Anda tidak bisa memproses PJB sebelum mendapat persetujuan Atasan.")
+                st.error("⚠️ DETEKSI ANOMALI: Harga Dexlite / Bio Solar melebihi batas wajar (Rp 28.000). Anda tidak bisa memproses PJB sebelum mendapat persetujuan Atasan.")
                 
                 # Cek histori approval tiket ini
                 status_approval = "NONE"
@@ -565,20 +543,21 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                     st.stop()
                 elif status_approval == "APPROVED":
                     st.success("✅ Harga Anomali telah di-APPROVE oleh Admin. Anda dapat melanjutkan PJB.")
+                    is_approved = True
                 else:
                     st.info("Kirim notifikasi ke email Oktapradika@57gmail.com agar Admin dapat mengecek faktual harga di lapangan.")
                     col_b1, col_b2 = st.columns(2)
                     with col_b1:
-                        if st.button("🚨 Ajukan Approval Anomali ke Admin", type="primary"):
+                        if st.button("🚨 Ajukan Approval BBM Anomali ke Admin", type="primary"):
                             append_data(SHEET_APP, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), d["Nama"], cari_tiket.strip().upper(), d["BBM"], harga_satuan, "PENDING", "-"], target_ss)
                             st.success("Sistem berhasil mencatat! Silakan klik tombol di samping untuk kirim Email.")
                             time.sleep(2); st.rerun()
                     with col_b2:
                         # Auto-Generate Mailto Link
-                        mail_body = f"Halo Admin,%0A%0AMohon approval untuk harga BBM Genset Anomali berikut:%0ANama: {d['Nama']}%0ATiket: {cari_tiket.strip().upper()}%0AJenis BBM: {d['BBM']}%0AHarga Diajukan: Rp {harga_satuan}%0A%0ATerima kasih."
-                        st.markdown(f"""<a href="mailto:Oktapradika@57gmail.com?subject=Approval BBM Genset Anomali - {cari_tiket.strip().upper()}&body={mail_body}" target="_blank">
+                        mail_body = f"Halo Admin,%0A%0AMohon approval untuk harga BBM Anomali berikut:%0ANama: {d['Nama']}%0ATiket: {cari_tiket.strip().upper()}%0AJenis BBM: {d['BBM']}%0AHarga Diajukan: Rp {harga_satuan}%0A%0ATerima kasih."
+                        st.markdown(f"""<a href="mailto:Oktapradika@57gmail.com?subject=Approval BBM Anomali - {cari_tiket.strip().upper()}&body={mail_body}" target="_blank">
                                     <button style="width:100%; height:42px; background-color:#EA4335; color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer;">📧 Buka Gmail (Kirim Pesan)</button></a>""", unsafe_allow_html=True)
-                    st.stop() # Hentikan proses PJB hingga Apprv/Rjct
+                    st.stop()
 
             st.markdown("<br>", unsafe_allow_html=True)
             if st.button("🚀 Sahkan Pelaporan PJB", type="primary", use_container_width=True):
@@ -595,7 +574,7 @@ elif st.session_state.page == "✅ Form PJB Operasional":
 # PAGE 3: APPROVAL CENTER (KHUSUS ADMIN)
 # ==========================================
 elif st.session_state.page == "🛡️ Approval Center":
-    st.markdown("<div class='header-card' style='background: linear-gradient(135deg, #e11d48 0%, #be123c 100%); border-bottom: 4px solid #9f1239;'><h2>🛡️ APPROVAL CENTER</h2><p>Pusat verifikasi harga BBM Anomali (Genset: Dexlite/Bio Solar > 28.000)</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='header-card' style='background: linear-gradient(135deg, #e11d48 0%, #be123c 100%); border-bottom: 4px solid #9f1239;'><h2>🛡️ APPROVAL CENTER</h2><p>Pusat verifikasi harga BBM Anomali (Dexlite/Bio Solar > 28.000)</p></div>", unsafe_allow_html=True)
     if st.button("🏠 Kembali ke Home Menu", use_container_width=True): st.session_state.page = "🏠 Hub Menu Utama"; st.rerun()
     
     if st.session_state.get("admin_password") not in AUTHORIZED_PASSWORDS:
@@ -608,10 +587,11 @@ elif st.session_state.page == "🛡️ Approval Center":
             app_r = data_all[SHEET_APP]
             
             if len(app_r) > 0:
+                # Filter hanya yang PENDING
                 pending_list = []
                 for idx, r in enumerate(app_r):
                     if len(r) > 5 and r[5] == "PENDING":
-                        # Menyimpan index row untuk update Gspread (baris aslinya ditambah 1)
+                        # Simpan indeks row asli (di gspread row mulai dari 1)
                         pending_list.append({"Row Index": idx, "Waktu": r[0], "Nama": r[1], "No Tiket": r[2], "BBM": r[3], "Harga Diajukan": f"Rp {int(r[4]):,.0f}", "Status": r[5]})
                 
                 st.markdown("### 📋 Daftar Tunggu Verifikasi (PENDING)")
@@ -634,7 +614,7 @@ elif st.session_state.page == "🛡️ Approval Center":
                 else:
                     st.success("✅ Tidak ada permintaan Approval yang menggantung. Semua aman!")
             else:
-                st.info("Belum ada histori permintaan Approval di area ini.")
+                st.info("Belum ada histori permintaan Approval di NOP ini.")
 
 # ==========================================
 # PAGE 4 & 5: NERACA & LIVE MONITORING
