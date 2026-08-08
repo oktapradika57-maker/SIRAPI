@@ -265,8 +265,8 @@ st.sidebar.markdown("<div class='footer-brand'>⚙️ Deploy by Okta Pradika</di
 if st.session_state.page == "🏠 Hub Menu Utama":
     st.markdown("""
     <div class="hub-header">
-        <div class="hub-title-main">Enterprise Analytics <span>Hub</span></div>
-        <div class="hub-subtitle">Pilih modul di bawah ini untuk melihat detail dan mengeksekusi operasional departemen.</div>
+        <div class="hub-title-main">SiRAPI <span>Hub</span></div>
+        <div class="hub-subtitle">Sistem Rekapitulasi Anggaran dan Pertanggungjawaban Informasi.</div>
     </div>
     """, unsafe_allow_html=True)
 
