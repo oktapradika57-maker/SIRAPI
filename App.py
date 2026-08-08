@@ -14,7 +14,7 @@ import time
 # ==========================================
 # 0. KONFIGURASI HALAMAN & UI ENTERPRISE
 # ==========================================
-st.set_page_config(page_title="ERP Kinarya Utama Teknik", page_icon="🏢", layout="wide")
+st.set_page_config(page_title="SiRAPI", page_icon="🏢", layout="wide")
 
 st.markdown("""
     <style>
@@ -251,8 +251,8 @@ st.sidebar.markdown("<div class='footer-brand'>⚙️ Deploy by Okta Pradika</di
 if st.session_state.page == "🏠 Hub Menu Utama":
     st.markdown("""
         <div style="padding: 20px 0 40px 0;">
-            <h1 style="font-size: 2.2rem; font-weight: 900; color: #1E293B; margin-bottom: 5px;">Enterprise Analytics <span style="color: #6366F1;">Hub</span></h1>
-            <p style="color: #64748B; font-size: 1rem;">Pilih modul di bawah ini untuk mengeksekusi operasional departemen.</p>
+            <h1 style="font-size: 2.2rem; font-weight: 900; color: #1E293B; margin-bottom: 5px;">SiRAPI <span style="color: #6366F1;">Hub</span></h1>
+            <p style="color: #64748B; font-size: 1rem;">Sistem Rekapitulasi Anggaran Pertanggungjawaban Informasi.</p>
         </div>
     """, unsafe_allow_html=True)
 
