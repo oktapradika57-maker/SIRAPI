@@ -14,7 +14,7 @@ import time
 # ==========================================
 # 0. KONFIGURASI HALAMAN & UI ENTERPRISE
 # ==========================================
-st.set_page_config(page_title="ERP Kinarya Utama Teknik", page_icon="🏢", layout="wide")
+st.set_page_config(page_title="SiRAPI", page_icon="💸", layout="wide")
 
 st.markdown("""
     <style>
@@ -30,7 +30,7 @@ st.markdown("""
             background-color: #ffffff; border-radius: 20px; padding: 25px 20px;
             text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.02);
             border: 1px solid #F1F5F9; display: flex; flex-direction: column;
-            align-items: center; transition: all 0.3s ease; margin-bottom: 15px; height: 210px;
+            align-items: center; transition: all 0.3s ease; height: 210px;
         }
         /* Animasi Card saat disorot */
         div[data-testid="column"]:hover .hub-card {
@@ -63,18 +63,35 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# CSS KHUSUS HUB MENU (TRANSPARENT BUTTON OVERLAY)
+# CSS KHUSUS HUB MENU (HILANGKAN TEXT & FULL KLIK)
 # ==========================================
 if st.session_state.get('page', '🏠 Hub Menu Utama') == "🏠 Hub Menu Utama":
     st.markdown("""
         <style>
-            /* Hack: Membuat tombol transparan menutupi seluruh Card HTML */
-            div[data-testid="column"] { position: relative; }
-            div[data-testid="column"] div.stButton {
-                position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 999;
+            /* Hack: Tarik tombol ke atas dan jadikan sepenuhnya transparan */
+            div.stButton {
+                margin-top: -225px !important; 
+                z-index: 10;
+                position: relative;
             }
-            div[data-testid="column"] div.stButton > button {
-                width: 100%; height: 100%; opacity: 0; cursor: pointer;
+            div.stButton > button {
+                height: 210px !important;
+                width: 100% !important;
+                background-color: transparent !important;
+                border: 2px solid transparent !important;
+                color: transparent !important;
+                box-shadow: none !important;
+                border-radius: 20px !important;
+            }
+            div.stButton > button:hover {
+                border: 2px solid #3B82F6 !important;
+                background-color: rgba(59, 130, 246, 0.05) !important;
+            }
+            div.stButton > button:active {
+                background-color: rgba(59, 130, 246, 0.1) !important;
+            }
+            div.stButton > button p {
+                display: none; /* Sembunyikan text bawaan Streamlit secara paksa */
             }
         </style>
     """, unsafe_allow_html=True)
@@ -225,7 +242,6 @@ def append_data(sheet_name, data, spreadsheet_id):
 
 def update_approval_status(spreadsheet_id, row_index, new_status):
     client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
-    # Kolom ke-6 adalah kolom Status Approval
     client.worksheet(SHEET_APP).update_cell(row_index + 1, 6, new_status)
     fetch_spreadsheet_data.clear()
 
@@ -273,37 +289,36 @@ st.sidebar.markdown("<div class='footer-brand'>⚙️ Deploy by Okta Pradika</di
 if st.session_state.page == "🏠 Hub Menu Utama":
     st.markdown("""
         <div style="padding: 20px 0 30px 0;">
-            <h1 style="font-size: 2.2rem; font-weight: 900; color: #1E293B; margin-bottom: 5px;">Enterprise Analytics <span style="color: #6366F1;">Hub</span></h1>
-            <p style="color: #64748B; font-size: 1rem;">Pilih modul di bawah ini untuk mengeksekusi operasional departemen.</p>
+            <h1 style="font-size: 2.2rem; font-weight: 900; color: #1E293B; margin-bottom: 5px;">SiRAPI <span style="color: #6366F1;">Hub</span></h1>
+            <p style="color: #64748B; font-size: 1rem;">Sistem Rekapitulasi Anggaran Pertanggungjawaban Informasi.</p>
         </div>
     """, unsafe_allow_html=True)
 
-    # Baris 1
+    # Note: Label tombol diisi dengan " " (spasi) agar text tidak muncul, murni fungsi klik saja.
     c1, c2, c3 = st.columns(3)
     with c1:
         st.markdown("""<div class="hub-card"><div class="icon-box bg-green">💸</div><div class="card-title">Request Dana</div><div class="card-subtitle">Pengajuan & estimasi dana</div></div>""", unsafe_allow_html=True)
-        if st.button("btn1", key="b1", help="Masuk Request Dana"): st.session_state.page = "📝 Form Request Dana"; st.rerun()
+        if st.button(" ", key="b1"): st.session_state.page = "📝 Form Request Dana"; st.rerun()
     with c2:
         st.markdown("""<div class="hub-card"><div class="icon-box bg-blue">✅</div><div class="card-title">PJB Operasional</div><div class="card-subtitle">Realisasi nota & kalkulasi KM</div></div>""", unsafe_allow_html=True)
-        if st.button("btn2", key="b2", help="Masuk PJB Operasional"): st.session_state.page = "✅ Form PJB Operasional"; st.rerun()
+        if st.button("  ", key="b2"): st.session_state.page = "✅ Form PJB Operasional"; st.rerun()
     with c3:
         st.markdown("""<div class="hub-card"><div class="icon-box bg-red">🛡️</div><div class="card-title">Approval Center</div><div class="card-subtitle">Verifikasi BBM Anomali (Admin)</div></div>""", unsafe_allow_html=True)
-        if st.button("btn3", key="b3", help="Masuk Approval Center"): 
+        if st.button("   ", key="b3"): 
             if st.session_state.get("admin_password") in AUTHORIZED_PASSWORDS: st.session_state.page = "🛡️ Approval Center"; st.rerun()
             else: st.error("Silakan login Admin di Sidebar terlebih dahulu.")
             
     st.markdown("<br>", unsafe_allow_html=True)
     
-    # Baris 2
     c4, c5, c6 = st.columns(3)
     with c4:
         st.markdown("""<div class="hub-card"><div class="icon-box bg-orange">📊</div><div class="card-title">Buku Besar / Neraca</div><div class="card-subtitle">Histori PJB & Kas (Admin)</div></div>""", unsafe_allow_html=True)
-        if st.button("btn4", key="b4", help="Masuk Neraca"): 
+        if st.button("    ", key="b4"): 
             if st.session_state.get("admin_password") in AUTHORIZED_PASSWORDS: st.session_state.page = "📊 Neraca / Buku Kas"; st.rerun()
             else: st.error("Silakan login Admin di Sidebar.")
     with c5:
         st.markdown("""<div class="hub-card"><div class="icon-box bg-purple">📈</div><div class="card-title">Live Monitoring</div><div class="card-subtitle">Analisa SVA & Burn Rate (Admin)</div></div>""", unsafe_allow_html=True)
-        if st.button("btn5", key="b5", help="Masuk Live Monitoring"): 
+        if st.button("     ", key="b5"): 
             if st.session_state.get("admin_password") in AUTHORIZED_PASSWORDS: st.session_state.page = "📈 Live Monitoring"; st.rerun()
             else: st.error("Silakan login Admin di Sidebar.")
 
@@ -547,7 +562,6 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                 st.markdown("<hr>", unsafe_allow_html=True)
                 st.error("⚠️ DETEKSI ANOMALI GENSET: Harga Dexlite / Bio Solar melebihi batas wajar (Rp 28.000). Anda tidak bisa memproses PJB sebelum mendapat persetujuan Atasan.")
                 
-                # Cek histori approval tiket ini
                 status_approval = "NONE"
                 for r in reversed(app_r):
                     if len(r) > 5 and r[2] == cari_tiket.strip().upper():
@@ -574,7 +588,6 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                             st.success("Sistem berhasil mencatat! Silakan klik tombol di samping untuk kirim Email.")
                             time.sleep(2); st.rerun()
                     with col_b2:
-                        # Auto-Generate Mailto Link
                         mail_body = f"Halo Admin,%0A%0AMohon approval untuk harga BBM Genset Anomali berikut:%0ANama: {d['Nama']}%0ATiket: {cari_tiket.strip().upper()}%0AJenis BBM: {d['BBM']}%0AHarga Diajukan: Rp {harga_satuan}%0A%0ATerima kasih."
                         st.markdown(f"""<a href="mailto:Oktapradika@57gmail.com?subject=Approval BBM Genset Anomali - {cari_tiket.strip().upper()}&body={mail_body}" target="_blank">
                                     <button style="width:100%; height:42px; background-color:#EA4335; color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer;">📧 Buka Gmail (Kirim Pesan)</button></a>""", unsafe_allow_html=True)
@@ -611,7 +624,6 @@ elif st.session_state.page == "🛡️ Approval Center":
                 pending_list = []
                 for idx, r in enumerate(app_r):
                     if len(r) > 5 and r[5] == "PENDING":
-                        # Menyimpan index row untuk update Gspread (baris aslinya ditambah 1)
                         pending_list.append({"Row Index": idx, "Waktu": r[0], "Nama": r[1], "No Tiket": r[2], "BBM": r[3], "Harga Diajukan": f"Rp {int(r[4]):,.0f}", "Status": r[5]})
                 
                 st.markdown("### 📋 Daftar Tunggu Verifikasi (PENDING)")
@@ -637,7 +649,7 @@ elif st.session_state.page == "🛡️ Approval Center":
                 st.info("Belum ada histori permintaan Approval di area ini.")
 
 # ==========================================
-# PAGE 4 & 5: NERACA & LIVE MONITORING
+# PAGE 4: NERACA & BUKU KAS (UPGRADE PRO)
 # ==========================================
 elif st.session_state.page == "📊 Neraca / Buku Kas":
     st.markdown("<div class='header-card' style='background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); border-bottom: 4px solid #b45309;'><h2>📊 BUKU BESAR & LAPORAN KEUANGAN</h2></div>", unsafe_allow_html=True)
@@ -661,14 +673,14 @@ elif st.session_state.page == "📊 Neraca / Buku Kas":
                         append_data(SHEET_UM, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), tgl_um.strftime("%d/%m/%Y"), um_nobis, um_nominal], target_ss); st.success("✅ Terekam!"); time.sleep(1); st.rerun()
                     
             unique_periode = list(set([r[16].strip() for r in rekap_r[1:] if len(r) > 16 and r[16].strip() != ""]))
-            st.markdown("<div class='section-title'>📅 2. Filter Laporan Keuangan</div>", unsafe_allow_html=True)
+            st.markdown("<div class='section-title'>📅 2. Laporan & Ekstraksi Data</div>", unsafe_allow_html=True)
             c_d1, c_d2, c_d3 = st.columns(3)
             with c_d1: start_date = st.date_input("Dari Tanggal")
             with c_d2: end_date = st.date_input("Sampai")
             with c_d3: filter_q_neraca = st.selectbox("📌 Filter Sinkronisasi Kolom Q", ["-- Semua Periode --"] + sorted(unique_periode))
             
-            if st.button("🔄 Buat Laporan", type="primary", use_container_width=True):
-                with st.spinner("Mengkompilasi Data..."):
+            if st.button("🔄 Generate Report", type="primary", use_container_width=True):
+                with st.spinner("Mengkompilasi Data & Visualisasi..."):
                     tot_um = 0
                     if len(um_r) > 1:
                         df_um = pd.DataFrame(um_r[1:], columns=["Waktu", "Tanggal", "Deskripsi", "Nominal"])
@@ -677,31 +689,85 @@ elif st.session_state.page == "📊 Neraca / Buku Kas":
                     
                     tot_pjb = sum([clean_nominal(r[15]) for r in rekap_r[1:] if len(r) > 16 and (r[16].strip() == filter_q_neraca or filter_q_neraca == "-- Semua Periode --")]) if len(rekap_r)>1 else 0
                     
-                    t1, t2 = st.tabs(["📊 Executive Summary", "📓 Buku Besar (PJB History)"])
+                    t1, t2, t3 = st.tabs(["📊 Executive Summary", "📓 Buku Besar (Ledger)", "📈 Visualisasi Pengeluaran"])
                     with t1:
                         m1, m2, m3 = st.columns(3)
-                        m1.markdown(f"<div class='metric-3d'><div class='metric-title'>Kas Masuk</div><div class='metric-value'>Rp {tot_um:,.0f}</div></div>", unsafe_allow_html=True)
-                        m2.markdown(f"<div class='metric-3d'><div class='metric-title'>Penyerapan</div><div class='metric-value'>Rp {tot_pjb:,.0f}</div></div>", unsafe_allow_html=True)
-                        m3.markdown(f"<div class='metric-3d'><div class='metric-title'>Sisa Kas</div><div class='metric-value'>Rp {tot_um - tot_pjb:,.0f}</div></div>", unsafe_allow_html=True)
+                        m1.markdown(f"<div class='metric-3d'><div class='metric-title'>Total Kas Masuk</div><div class='metric-value'>Rp {tot_um:,.0f}</div></div>", unsafe_allow_html=True)
+                        m2.markdown(f"<div class='metric-3d'><div class='metric-title'>Total Penyerapan</div><div class='metric-value'>Rp {tot_pjb:,.0f}</div></div>", unsafe_allow_html=True)
+                        m3.markdown(f"<div class='metric-3d'><div class='metric-title'>Sisa Kas (Equity)</div><div class='metric-value'>Rp {tot_um - tot_pjb:,.0f}</div></div>", unsafe_allow_html=True)
+                    
                     with t2:
                         if len(pjb_r) > 1:
                             df_p = pd.DataFrame([(r + [""] * 25)[:25] for r in pjb_r[1:]], columns=["Waktu","Tanggal","N","C","Nama","R","S","Keperluan","B","D","K","Nominal","Pl","u1","u2","u3","u4","u5","u6","u7","NN","NoTiket","Lt","Hs","TKM_RH"])
                             df_p['Nominal'] = df_p['Nominal'].apply(clean_nominal)
+                            
+                            st.markdown("### Detail Histori PJB")
                             st.dataframe(df_p[['Tanggal', 'NoTiket', 'Nama', 'Keperluan', 'TKM_RH', 'Nominal']], use_container_width=True)
+                            
+                            # Fitur Download ke Excel/CSV (Sangat membantu Admin/Akunting)
+                            csv = df_p.to_csv(index=False).encode('utf-8')
+                            st.download_button(label="📥 Export Ledger ke CSV/Excel", data=csv, file_name=f"BukuBesar_{nop_admin}.csv", mime='text/csv', use_container_width=True)
 
+                    with t3:
+                        if len(pjb_r) > 1:
+                            st.markdown("### Analisa Pengeluaran Berdasarkan Keperluan")
+                            df_grafik = df_p.groupby("Keperluan")["Nominal"].sum().reset_index()
+                            st.bar_chart(df_grafik.set_index("Keperluan"))
+
+# ==========================================
+# PAGE 5: LIVE MONITORING (UPGRADE PRO)
+# ==========================================
 elif st.session_state.page == "📈 Live Monitoring":
-    st.markdown("<div class='header-card' style='background: linear-gradient(135deg, #020617 0%, #0F172A 100%); color:#10B981; border-bottom: 4px solid #10B981;'><h2>📈 LIVE FINANCIAL MONITORING</h2></div>", unsafe_allow_html=True)
+    st.markdown("<div class='header-card' style='background: linear-gradient(135deg, #020617 0%, #0F172A 100%); color:#10B981; border-bottom: 4px solid #10B981;'><h2>📈 LIVE FINANCIAL MONITORING</h2><p style='color:#94A3B8;'>Sistem Analisa Prediktif & Kecepatan Serapan (Burn Rate)</p></div>", unsafe_allow_html=True)
     if st.button("🏠 Kembali ke Home Menu", use_container_width=True): st.session_state.page = "🏠 Hub Menu Utama"; st.rerun()
     if st.session_state.get("admin_password") not in AUTHORIZED_PASSWORDS: st.error("⛔ AKSES TERKUNCI")
     else:
         nop_live = st.selectbox("🌐 Market (NOP):", ["-- Pilih NOP --"] + list(MASTER_DATA.keys()))
         if nop_live != "-- Pilih NOP --":
             data_all = fetch_spreadsheet_data(MASTER_DATA[nop_live]["spreadsheet_id"])
-            um_r, rekap_r = data_all[SHEET_UM], data_all["Rekap PJB"]
+            um_r, rekap_r, pjb_r = data_all[SHEET_UM], data_all["Rekap PJB"], data_all[SHEET_PJB]
+            
             c1, c2 = st.columns(2)
-            with c1: start_live = st.date_input("Mulai")
+            with c1: start_live = st.date_input("Mulai Tarik Data")
             with c2: end_live = st.date_input("Hingga")
+            
             if st.button("📊 AKTIFKAN RADAR", type="primary", use_container_width=True):
-                total_um = sum([clean_nominal(r[3]) for r in um_r[1:] if len(r)>3]) if len(um_r)>1 else 0
-                tot_serap = sum([clean_nominal(r[15]) for r in rekap_r[1:] if len(r)>15]) if len(rekap_r)>1 else 0
-                st.markdown(f"<div style='background-color:#0F172A; padding:40px; border-radius:16px; border:1px solid #334155; text-align:center;'><h3 style='color:#94A3B8;'>EQUITY / SISA KAS</h3><h1 style='color:#10B981; font-size:60px;'>Rp {total_um - tot_serap:,.0f}</h1></div>", unsafe_allow_html=True)
+                with st.spinner("Memproses Algoritma Analisa..."):
+                    total_um = sum([clean_nominal(r[3]) for r in um_r[1:] if len(r)>3]) if len(um_r)>1 else 0
+                    tot_serap = sum([clean_nominal(r[15]) for r in rekap_r[1:] if len(r)>15]) if len(rekap_r)>1 else 0
+                    sisa_kas = total_um - tot_serap
+                    
+                    st.markdown(f"<div style='background-color:#0F172A; padding:40px; border-radius:16px; border:1px solid #334155; text-align:center;'><h3 style='color:#94A3B8;'>EQUITY / SISA KAS ACTUAL</h3><h1 style='color:#10B981; font-size:60px;'>Rp {sisa_kas:,.0f}</h1></div>", unsafe_allow_html=True)
+                    
+                    # LOGIKA BURN RATE (Kecepatan Bakar Uang)
+                    if len(pjb_r) > 1:
+                        df_live = pd.DataFrame([(r + [""] * 25)[:25] for r in pjb_r[1:]], columns=["Waktu","Tanggal","N","C","Nama","R","S","Keperluan","B","D","K","Nominal","Pl","u1","u2","u3","u4","u5","u6","u7","NN","NoTiket","Lt","Hs","TKM_RH"])
+                        df_live['Tanggal'] = pd.to_datetime(df_live['Tanggal'], format='%d/%m/%Y', errors='coerce')
+                        
+                        # Filter berdasarkan tanggal input Live Monitoring
+                        df_live_filtered = df_live[(df_live['Tanggal'].dt.date >= start_live) & (df_live['Tanggal'].dt.date <= end_live)].copy()
+                        
+                        if not df_live_filtered.empty:
+                            df_live_filtered['Nominal'] = df_live_filtered['Nominal'].apply(clean_nominal)
+                            
+                            # Hitung Rata-rata Harian
+                            total_hari = (end_live - start_live).days + 1
+                            total_pengeluaran_range = df_live_filtered['Nominal'].sum()
+                            daily_burn_rate = total_pengeluaran_range / total_hari if total_hari > 0 else 0
+                            
+                            # Estimasi Sisa Umur Dana
+                            runway_days = (sisa_kas / daily_burn_rate) if daily_burn_rate > 0 else 999
+                            
+                            st.markdown("<br><div class='section-title'>🔥 Prediksi & Burn Rate (Berdasarkan Rentang Tanggal)</div>", unsafe_allow_html=True)
+                            rm1, rm2 = st.columns(2)
+                            rm1.markdown(f"<div class='metric-3d' style='border-top: 5px solid #EF4444;'><div class='metric-title'>Rata-rata Pengeluaran Harian (Burn Rate)</div><div class='metric-value'>Rp {daily_burn_rate:,.0f} / Hari</div></div>", unsafe_allow_html=True)
+                            
+                            warna_runway = "#10B981" if runway_days > 7 else "#EF4444"
+                            rm2.markdown(f"<div class='metric-3d' style='border-top: 5px solid {warna_runway};'><div class='metric-title'>Estimasi Ketahanan Sisa Kas (Runway)</div><div class='metric-value'>{runway_days:.1f} Hari Lagi</div></div>", unsafe_allow_html=True)
+
+                            # Grafik Trend Pengeluaran S-Curve
+                            st.markdown("### 📈 Grafik Trend Pengeluaran Harian (S-Curve Harian)")
+                            trend_harian = df_live_filtered.groupby(df_live_filtered['Tanggal'].dt.date)['Nominal'].sum()
+                            st.line_chart(trend_harian)
+                        else:
+                            st.warning("⚠️ Tidak ada histori PJB di rentang tanggal yang dipilih untuk dianalisa.")
