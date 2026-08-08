@@ -6,7 +6,6 @@ import cloudinary
 import cloudinary.uploader
 import requests
 import math
-import pydeck as pdk
 from google.oauth2.service_account import Credentials
 from datetime import datetime
 import time
@@ -14,51 +13,28 @@ import time
 # ==========================================
 # 0. KONFIGURASI HALAMAN & UI ENTERPRISE
 # ==========================================
-st.set_page_config(page_title="SiRAPI", page_icon="💸", layout="wide")
+st.set_page_config(page_title="ERP Kinarya Utama Teknik", page_icon="🏢", layout="wide")
 
 st.markdown("""
     <style>
-        .main { background-color: #F8FAFC; font-family: 'Inter', 'Segoe UI', sans-serif; }
+        .main { background-color: #F8FAFC; font-family: 'Inter', sans-serif; }
         .header-card {
             background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%);
             padding: 30px; border-radius: 16px; color: white; text-align: center;
             box-shadow: 0 10px 25px rgba(0,0,0,0.1); margin-bottom: 30px;
             border-bottom: 4px solid #3B82F6;
         }
-        /* Kustomisasi Card Menu Hub */
-        .hub-card {
-            background-color: #ffffff; border-radius: 20px; padding: 25px 20px;
-            text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.02);
-            border: 1px solid #F1F5F9; display: flex; flex-direction: column;
-            align-items: center; transition: all 0.3s ease; height: 210px;
+        /* Custom Button Card Style */
+        div.stButton > button {
+            width: 100%; height: 210px; border-radius: 20px;
+            border: 1px solid #E2E8F0; background-color: white;
+            transition: all 0.3s ease; display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
         }
-        /* Animasi Card saat disorot */
-        div[data-testid="column"]:hover .hub-card {
-            transform: translateY(-5px);
-            box-shadow: 0 15px 25px -5px rgba(0,0,0,0.08);
+        div.stButton > button:hover {
+            transform: translateY(-5px); box-shadow: 0 15px 25px -5px rgba(0,0,0,0.1);
             border-color: #3B82F6;
         }
-        .icon-box {
-            width: 70px; height: 70px; border-radius: 18px; display: flex;
-            align-items: center; justify-content: center; font-size: 35px; margin-bottom: 15px;
-        }
-        .bg-green { background-color: #D1FAE5; color: #10B981; }
-        .bg-blue { background-color: #E0F2FE; color: #0EA5E9; }
-        .bg-orange { background-color: #FFEDD5; color: #F97316; }
-        .bg-purple { background-color: #F3E8FF; color: #A855F7; }
-        .bg-red { background-color: #FEE2E2; color: #EF4444; }
-        .card-title { font-size: 1.15rem; font-weight: 800; color: #1E293B; margin-bottom: 8px; }
-        .card-subtitle { font-size: 0.85rem; color: #94A3B8; font-weight: 500; margin-bottom: 15px; }
-        
-        /* Metric dan Section */
-        .metric-3d {
-            background: #ffffff; padding: 20px; border-radius: 16px; text-align: center;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); border: 1px solid #E2E8F0; border-top: 5px solid #3B82F6; margin-bottom: 15px;
-        }
-        .metric-title { font-size: 0.8rem; color: #64748B; font-weight: 700; text-transform: uppercase; }
-        .metric-value { font-size: 1.5rem; color: #0F172A; font-weight: 900; }
-        .section-title { color: #1E293B; font-size: 1.25rem; font-weight: 800; border-bottom: 2px solid #E2E8F0; padding-bottom: 8px; margin-top: 30px; margin-bottom: 20px; text-transform: uppercase;}
-        .footer-brand { width: 100%; text-align: center; font-size: 13px; color: #94A3B8; margin-top: 50px; font-weight: bold;}
     </style>
 """, unsafe_allow_html=True)
 
