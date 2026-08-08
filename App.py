@@ -14,7 +14,7 @@ import time
 # ==========================================
 # 0. KONFIGURASI HALAMAN & UI ELEGAN (ERP GRADE)
 # ==========================================
-st.set_page_config(page_title="ERP Kinarya Utama Teknik", page_icon="🏢", layout="wide")
+st.set_page_config(page_title="ERP SiRAPI", page_icon="🏢", layout="wide")
 
 st.markdown("""
     <style>
@@ -392,13 +392,18 @@ elif st.session_state.page == "✅ Form PJB Operasional":
         
         pjb_tickets_all = {r[21].strip().upper() for r in pjb_r[1:] if len(r) > 21}
         
-        st.markdown("<div class='section-title'>📋 Tiket Belum Selesai (Keseluruhan)</div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-title'>🔍 2. Identifikasi Tim & Tarik Data</div>", unsafe_allow_html=True)
         
-        # --- FITUR GHOST COLUMN NOMINAL ---
-        pass_nominal = st.text_input("🔑 Masukkan Password Khusus untuk melihat Estimasi Nominal (Opsional):", type="password", key="pass_nominal")
-        show_nominal = (pass_nominal == "B0924649")
-        
+        col_id1, col_id2 = st.columns([2, 2])
+        with col_id1:
+            nama_pjb = st.selectbox("👤 Pilih Nama Anda (Otomatis Memfilter Tiket):", ["-- Pilih Nama --"] + MASTER_DATA[nop_cari]["names"])
+        with col_id2:
+            pass_nominal = st.text_input("🔑 Akses Nominal Request (Admin):", type="password", key="pass_nominal")
+            show_nominal = (pass_nominal == "B0924649")
+            
         pending_list = []
+        pending_options = []
+        
         for r in req_r[1:]:
             if len(r)>5 and r[3].strip() != "" and r[3].strip().upper() not in pjb_tickets_all:
                 item = {
@@ -408,36 +413,61 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                     "Keperluan": r[8] if len(r)>8 else ""
                 }
                 
-                # Hanya tambahkan key ini ke dictionary jika password benar
                 if show_nominal:
                     item["Nominal Request"] = f"Rp {clean_nominal(r[9]):,.0f}" if len(r)>9 else "Rp 0"
-                    
-                pending_list.append(item)
+                
+                # FILTER DAFTAR BERDASARKAN NAMA (JIKA ADA YANG DIPILIH)
+                if nama_pjb != "-- Pilih Nama --":
+                    if item["Nama"].strip().upper() == nama_pjb.strip().upper():
+                        pending_list.append(item)
+                        pending_options.append(r[3].strip().upper())
+                else:
+                    pending_list.append(item)
         
-        if pending_list: st.dataframe(pd.DataFrame(pending_list), hide_index=True, use_container_width=True)
-        else: st.success("Seluruh tiket di area ini sudah clear!")
+        st.markdown("<div class='section-title'>📋 Daftar Tiket Belum Selesai (Pending)</div>", unsafe_allow_html=True)
+        if pending_list: 
+            st.dataframe(pd.DataFrame(pending_list), hide_index=True, use_container_width=True)
+        else: 
+            if nama_pjb != "-- Pilih Nama --": st.success(f"✅ Hebat! Tidak ada tiket yang menggantung untuk {nama_pjb}.")
+            else: st.success("✅ Seluruh tiket di area ini sudah clear!")
         
-        st.markdown("<div class='section-title'>🔍 2. Tarik Data Tiket</div>", unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
         col_s2, col_s3 = st.columns([3, 1])
-        with col_s2: cari_tiket = st.text_input("Masukkan Nomor Tiket SWFM:")
+        with col_s2: 
+            # AUTO DROPDOWN TIKET
+            if pending_options:
+                pilihan_tiket = st.selectbox("🎫 Pilih Nomor Tiket Pending Anda (Otomatis):", ["-- Pilih Tiket --"] + pending_options + ["-- Ketik Manual --"])
+            else:
+                pilihan_tiket = "-- Ketik Manual --"
+                
+            if pilihan_tiket == "-- Ketik Manual --":
+                cari_tiket = st.text_input("Masukkan Nomor Tiket SWFM Manual:")
+            elif pilihan_tiket == "-- Pilih Tiket --":
+                cari_tiket = ""
+            else:
+                cari_tiket = pilihan_tiket
+                
         with col_s3: 
             st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
-            if st.button("Cari Data", type="primary"):
-                ditemukan = None
-                for r in req_r[1:]:
-                    if len(r) > 3 and r[3].strip().upper() == cari_tiket.strip().upper():
-                        ditemukan = {"NOP": r[2], "Cluster": r[4], "Nama": r[5], "Role": r[6], "Site": r[7], "Keperluan": r[8], "BBM": r[10], "Desc": r[11], "Jarak": r[13] if len(r)>13 else "", "Plat": r[16] if len(r)>16 else ""}
-                
-                if ditemukan: 
-                    st.session_state.pjb_data = ditemukan
-                    count_pjb = sum(1 for p in pjb_r[1:] if len(p)>21 and p[21].strip().upper() == cari_tiket.strip().upper())
-                    if count_pjb > 0:
-                        st.warning(f"⚠️ Peringatan: Tiket ini sudah pernah di-PJB-kan sebanyak {count_pjb} kali. Anda tetap diizinkan menambah PJB asalkan NOMINAL BEDA.")
-                    else:
-                        st.success("🎉 Histori ditarik otomatis!")
-                else: 
-                    st.session_state.pjb_data = None
-                    st.error("❌ Tiket tidak ditemukan.")
+            if st.button("Tarik Data", type="primary", use_container_width=True):
+                if cari_tiket == "":
+                    st.warning("⚠️ Silakan pilih atau ketik nomor tiket terlebih dahulu!")
+                else:
+                    ditemukan = None
+                    for r in req_r[1:]:
+                        if len(r) > 3 and r[3].strip().upper() == cari_tiket.strip().upper():
+                            ditemukan = {"NOP": r[2], "Cluster": r[4], "Nama": r[5], "Role": r[6], "Site": r[7], "Keperluan": r[8], "BBM": r[10], "Desc": r[11], "Jarak": r[13] if len(r)>13 else "", "Plat": r[16] if len(r)>16 else ""}
+                    
+                    if ditemukan: 
+                        st.session_state.pjb_data = ditemukan
+                        count_pjb = sum(1 for p in pjb_r[1:] if len(p)>21 and p[21].strip().upper() == cari_tiket.strip().upper())
+                        if count_pjb > 0:
+                            st.warning(f"⚠️ Peringatan: Tiket ini sudah di-PJB-kan {count_pjb} kali. Anda bisa lanjut asalkan NOMINAL BEDA.")
+                        else:
+                            st.success("🎉 Data Tiket ditarik otomatis!")
+                    else: 
+                        st.session_state.pjb_data = None
+                        st.error("❌ Tiket tidak ditemukan di database pengajuan.")
 
         if st.session_state.get("pjb_data"):
             d = st.session_state.pjb_data
