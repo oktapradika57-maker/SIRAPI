@@ -17,8 +17,21 @@ import re
 st.set_page_config(page_title="ERP Kinarya Utama Teknik", page_icon="🏢", layout="wide")
 
 # MENGUBAH TOMBOL BAWAAN STREAMLIT MENJADI CARD UI (100% CLICKABLE)
+# + LOCK SECURITY (HILANGKAN MENU GITHUB, DEPLOY, & FOOTER STREAMLIT)
 st.markdown("""
     <style>
+        /* ========================================== */
+        /* 🔒 SECURITY LOCK: HIDE STREAMLIT DEFAULTS  */
+        /* ========================================== */
+        #MainMenu {visibility: hidden;}
+        header {visibility: hidden;}
+        footer {visibility: hidden;}
+        .stDeployButton {display:none;}
+        .st-emotion-cache-1vt4ygl {display: none;} /* Menyembunyikan icon github khusus */
+        
+        /* ========================================== */
+        /* DESIGN UI ENTERPRISE                       */
+        /* ========================================== */
         .main { background-color: #F8FAFC; font-family: 'Inter', sans-serif; }
         .header-card {
             background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%);
