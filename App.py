@@ -16,18 +16,32 @@ import re
 # ==========================================
 st.set_page_config(page_title="ERP Kinarya Utama Teknik", page_icon="🏢", layout="wide")
 
-# CSS GLOBAL: Hanya menyembunyikan tombol Deploy/GitHub. Sidebar dan form tetap kecil/normal!
+# MENGUBAH TOMBOL BAWAAN STREAMLIT MENJADI CARD UI (100% CLICKABLE)
 st.markdown("""
     <style>
-        .stDeployButton {display: none !important;}
-        [data-testid="stToolbar"] {display: none !important;}
-        
         .main { background-color: #F8FAFC; font-family: 'Inter', sans-serif; }
         .header-card {
             background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%);
             padding: 30px; border-radius: 16px; color: white; text-align: center;
             box-shadow: 0 10px 25px rgba(0,0,0,0.1); margin-bottom: 30px;
             border-bottom: 4px solid #3B82F6;
+        }
+        /* Mengubah total bentuk st.button menjadi Card */
+        div[data-testid="stButton"] > button {
+            width: 100%; height: 180px; border-radius: 16px;
+            background-color: #ffffff; border: 1px solid #E2E8F0;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+            color: #1E293B; font-size: 18px; font-weight: 800;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            transition: all 0.3s ease;
+        }
+        div[data-testid="stButton"] > button:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 25px -5px rgba(59, 130, 246, 0.15);
+            border-color: #3B82F6; color: #3B82F6;
+        }
+        div[data-testid="stButton"] > button p {
+            margin: 0; font-size: 1.1rem;
         }
         .section-title { color: #1E293B; font-size: 1.25rem; font-weight: 800; border-bottom: 2px solid #E2E8F0; padding-bottom: 8px; margin-top: 30px; margin-bottom: 20px;}
         .metric-3d {
