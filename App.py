@@ -16,7 +16,7 @@ import re
 # ==========================================
 st.set_page_config(page_title="ERP Kinarya Utama Teknik", page_icon="🏢", layout="wide")
 
-# CSS GLOBAL: Hanya menghilangkan tombol GitHub & Deploy agar aman (TANPA MERUBAH UKURAN TOMBOL)
+# CSS GLOBAL: Hanya menyembunyikan tombol Deploy/GitHub. Sidebar dan form tetap kecil/normal!
 st.markdown("""
     <style>
         .stDeployButton {display: none !important;}
@@ -68,7 +68,7 @@ MASTER_DATA = {
 LIST_KEPERLUAN = ["-- Pilih Keperluan --", "Tshoot", "Backup", "Support", "PM", "Program BCP", "Program Quikwin", "Program G348T", "Pengiriman Material SPMS", "Pembelian Material"]
 
 # ==========================================
-# 2. FUNGSI INTI & CACHING (Anti Lemot)
+# 2. FUNGSI INTI & CACHING 
 # ==========================================
 def parse_date(date_str):
     try: return datetime.strptime(date_str.strip(), "%d/%m/%Y").date()
@@ -169,7 +169,6 @@ def get_user_tickets_status(nama, req_rows, pjb_rows):
             req_date = parse_date(tgl)
             if req_date >= CUTOFF_DATE: outstanding_lock.append(tkt)
             
-            # CEK AGING KHUSUS AGUSTUS (>3 Hari)
             aging_days = (today - req_date).days
             if req_date.month == 8 and aging_days > 3:
                 aging_august.append(tkt)
@@ -236,13 +235,12 @@ if cek_nop != "-- Pilih Area --":
             else: st.sidebar.info("Tidak ada data.")
 
 # ==========================================
-# PAGE 0: HUB MENU UTAMA 
+# PAGE 0: HUB MENU UTAMA (CARD UI MURNI)
 # ==========================================
 if st.session_state.page == "🏠 Hub Menu Utama":
-    # MENGUNCI CSS "CARD" AGAR HANYA BERLAKU DI KOLOM HALAMAN INI SAJA (Sidebar aman!)
+    # CSS KHUSUS HALAMAN HUB (Hanya membesarkan tombol di dalam kolom menu ini)
     st.markdown("""
         <style>
-            /* Hanya target tombol di dalam container kolom pada area utama */
             section.main div[data-testid="column"] div[data-testid="stButton"] > button {
                 height: 160px !important;
                 border-radius: 16px !important;
@@ -258,11 +256,8 @@ if st.session_state.page == "🏠 Hub Menu Utama":
                 box-shadow: 0 15px 25px -5px rgba(59, 130, 246, 0.15) !important;
             }
             section.main div[data-testid="column"] div[data-testid="stButton"] > button p {
-                font-size: 1.15rem !important; 
-                font-weight: 800 !important;
-                white-space: pre-wrap !important; 
-                text-align: center !important; 
-                line-height: 1.5 !important;
+                font-size: 1.15rem !important; font-weight: 800 !important;
+                white-space: pre-wrap !important; text-align: center !important; line-height: 1.5 !important;
             }
         </style>
     """, unsafe_allow_html=True)
@@ -729,7 +724,7 @@ elif st.session_state.page == "📈 Live Monitoring":
             # --- TAB 3: EVALUASI KINERJA (KM TIM VS SATELIT) ---
             with t3:
                 st.markdown("### 🕵️ Tracker KM / RH Tim vs Satelit (LongLat)")
-                st.markdown("Mendeteksi indikasi **mark-up** jarak tempuh kendaraan berdasarkan selisih murni (KM Akhir - KM Awal).")
+                st.markdown("Mendeteksi indikasi **mark-up** jarak tempuh kendaraan berdasarkan selisih riil (KM Akhir - KM Awal).")
                 
                 eval_list = []
                 for pjb in pjb_r[1:]:
@@ -747,7 +742,7 @@ elif st.session_state.page == "📈 Live Monitoring":
                                 if match: angka_satelit = float(match.group(1))
                             except: pass
 
-                            # LOGIKA KM PASTI AKURAT: KM AKHIR - KM AWAL
+                            # LOGIKA KM PASTI AKURAT: KM AKHIR - KM AWAL (Sesuai Permintaan)
                             km_awal = int(clean_nominal(req_match[12]))
                             km_akhir = int(clean_nominal(pjb[10]))
                             total_input_tim = km_akhir - km_awal
