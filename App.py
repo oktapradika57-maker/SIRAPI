@@ -14,7 +14,7 @@ import re
 # ==========================================
 # 0. KONFIGURASI HALAMAN & UI ENTERPRISE
 # ==========================================
-st.set_page_config(page_title="SiRAPI", page_icon="🏢", layout="wide")
+st.set_page_config(page_title="SiRAPI", page_icon="💵", layout="wide")
 
 # MENGUBAH TOMBOL BAWAAN STREAMLIT MENJADI CARD UI (100% CLICKABLE)
 st.markdown("""
@@ -79,7 +79,7 @@ MASTER_DATA = {
     "Tarakan": {"spreadsheet_id": "1lRj1YdZGQwY5vHg8P4wudK9V1O_lJuEYjdyHkXoB-Wg", "clusters": ["Tarakan Inner", "Tarakan Outer"], "names": ["HENDRA WIRTASI SIMANULLANG", "ARIZONA ROSADI", "KUKUH BHASKARA", "NATAL SIMBOLON", "HERMAWAN", "IRVAN DINATA VANDITYAWAN", "ENDRAS SAPTA", "AHMADI", "EDI PANJI ERMAYANA", "HANS RISKY RONI TUAH GIRSANG", "IRMANSYAH B. SANGAJI", "REMO REMOLDUS MANALU", "MOHAMMAD RAFAI", "FIRMAN SYAHRUL", "AZMIR", "PETRUS RESI KELORE", "ANIR REZKY", "AHDAN", "PARJON SIMANULLANG", "RUSDI", "HASRIADI", "PURO SUGONDO", "ALIMUDIN M. SAER", "KORNELIUS USI KELORE", "RUSDIANSYAH", "JONTES YUSDA SIMANULLANG", "NANI SETIANINGSIH", "UNGGUL NUGRAHA", "YOGABITA INDOTENO", "JHON KENNEDI SIMANULLANG", "RAFI MUHAMAD SYARIF", "AGRIVA", "SEPTIAN ALVITO", "M. DEDI RIZALDI", "SAHARUDDIN.", "MUHAMMAD RASYID", "SUPRIADI", "JULIMAT SIHITE", "EFNI NURYADIN", "ERWIN SAPUTRA ARIANSYAH", "ALVEUS", "SUPRIADI BANDANGAN"]},
     "Pontianak": {"spreadsheet_id": "1VmoWPImNFMjnaIQpBXEVYdMiTEzsz3P4tpmzfA0EMDE", "clusters": ["Sintang", "Singkawang", "Pontianak"], "names": ["ALOYSIUS", "RUDI", "RONIYANTO", "SUKADI", "HAIRIL", "AZMI ASHADIQI", "SUYADI", "ARIEF DARUL IKHWAN", "MUHAMMAD AL FATAH", "YUDIANSYAH", "RAHMAD INDRA IRAWAN", "MATIUS MARTIN", "RYVAEEL DEWANGGA", "AMIRDA ANGGA SAPUTRA", "IZHARUDDIN", "VINSENSIUS YOGI", "GUSTI ARIZAL", "MUHAMMAD MIFTAHUDIN, A.MD", "BAYU ANGGARA PUTRA", "YONI IRAWAN", "SUGANDI", "IRVAN ANDRIYANA", "ALDIANSYAH", "ABANG HAMDANI", "ABANG KUSDIANSYAH", "SUMAN", "SANGGARA ISMARAWARI", "IBIN", "VALENTINUS PETRO", "DWI KURNIAWAN ISMANTO", "ARISAFRIADI", "DONATUS DONI", "NUR AHMAD KARDIYANTO", "AGRI PERDANA", "AKHSANUL FIKI", "ALI ALAMSYAH", "MUHAMMAD FIRZHA GIANNI HARSYA", "RICKY ARDILAY", "FAISAL", "WIJI SANTOSO", "HISYAM MUTHOYIB", "ARIF RAHMAN NUGROHO", "TOTOK SUGIARTO", "PURWANDI SETIAWAN", "JULIANTO BHAKTI PUTRO, SH", "ILHAMMUDIN", "AGUNG", "ROSIDI", "ABRAR ELZAH FATHALIF", "HENDRI YULIANSYAH", "JAMIL", "GORO SUKARTONO", "OKTAPIANUS JUMIN", "ONNIE SYAEFUDDIN", "BUDI", "ULUL AMRY", "RUHIAT, A.MD", "SUPIANDI", "WAHYUDI", "SUHENDRIK", "M. ARKAM", "SYAFRI APRIJAL", "ARIANTO SUMANTRI", "TUTU AGE ANDIKA", "VIRANDA SAPTA, A.MD", "TOTO HERMANSYAH", "KURNIAWAN", "ROBI ISKANDAR MASDIANSYAH", "MUTIIN CHANDRA", "MISJANI", "KHAIRUL FARISD", "ANDRA", "DODI RATMAYANTO", "WAWAN DARYANA", "MISWARDI", "JUPRILIAUS PICO", "DEDY PURNOMO", "EDI KURNIAWAN", "DEDE GUNAWAN", "WANDALA JAGOARDI PANDALO", "KARIYADI", "REZQI AL BARQAH", "FIRMANSYAH, SP"]}
 }
-LIST_KEPERLUAN = ["", "Tshoot", "Backup", "Support", "PM", "Program BCP", "Program Quikwin", "Program G348T", "Pengiriman Material SPMS", "Pembelian Material"]
+LIST_KEPERLUAN = ["", "Tshoot", "Backup", "Support", "PM", "Program BCP", "Program Quikwin", "Program G348T", "Pengiriman Material SPMS", "Pembelian Material","Transportasi Air"]
 
 # ==========================================
 # 2. FUNGSI INTI & CACHING 
@@ -317,7 +317,7 @@ elif st.session_state.page == "📝 Form Request Dana":
         if st.button("👉 Lanjut ke Form PJB", type="primary", use_container_width=True): st.session_state.page = "✅ Form PJB Operasional"; st.rerun()
     
     st.markdown("<br>", unsafe_allow_html=True)
-    nop = st.selectbox("📌 1. Pilih Database Regional (NOP)", ["-- Pilih NOP --"] + list(MASTER_DATA.keys()))
+    nop = st.selectbox("📌 1. Pilih Database Regional (NOP)", [""] + list(MASTER_DATA.keys()))
     
     if nop != "-- Pilih NOP --":
         st.markdown("<div class='section-title'>📋 2. Informasi Petugas & Tiket</div>", unsafe_allow_html=True)
@@ -332,8 +332,8 @@ elif st.session_state.page == "📝 Form Request Dana":
         col1, col2 = st.columns(2)
         with col1:
             tanggal = st.date_input("Tanggal Pengajuan")
-            cluster = st.selectbox("Cluster Regional", ["-- Pilih Cluster --"] + MASTER_DATA[nop]["clusters"])
-            nama = st.selectbox("Nama Petugas / Pemohon", ["-- Pilih Nama --"] + MASTER_DATA[nop]["names"])
+            cluster = st.selectbox("Cluster Regional", [""] + MASTER_DATA[nop]["clusters"])
+            nama = st.selectbox("Nama Petugas / Pemohon", [""] + MASTER_DATA[nop]["names"])
             
             out_all, out_lock, aging_august, _ = get_user_tickets_status(nama, req_r, pjb_r)
             if aging_august:
@@ -353,7 +353,7 @@ elif st.session_state.page == "📝 Form Request Dana":
             role = st.selectbox("Role Jabatan", ["-- Pilih Role --", "PM", "TE", "MBP", "CME"])
             
             if nop == "Palangkaraya" and len(site_list) > 0:
-                site_id = st.selectbox("ID Site / Lokasi", ["-- Pilih Site ID --"] + site_list)
+                site_id = st.selectbox("ID Site / Lokasi", [""] + site_list)
                 if site_id != "-- Pilih Site ID --" and site_id in site_dict:
                     auto_lat_tujuan, auto_long_tujuan = str(site_dict[site_id].get("Latitude Tujuan", "0")), str(site_dict[site_id].get("Longtitude Tujuan", "0"))
             else: site_id = st.text_input("ID Site / Lokasi")
@@ -362,10 +362,10 @@ elif st.session_state.page == "📝 Form Request Dana":
             keperluan = st.selectbox("Klasifikasi Keperluan Dana", LIST_KEPERLUAN)
             kebutuhan = st.number_input("Estimasi Kebutuhan Dana (Rp)", min_value=0, step=1000)
             
-            jns_kendaraan = st.selectbox("Jenis Kendaraan / Peralatan", ["-- Pilih Kategori --", "Mobil", "Motor", "Genset", "Lainnya"])
+            jns_kendaraan = st.selectbox("Jenis Kendaraan / Peralatan", ["", "Mobil", "Motor", "Genset", "Lainnya"])
             jenis_bahan_bakar = ""
             if jns_kendaraan.lower() in ["mobil", "motor", "genset"]:
-                jenis_bahan_bakar = st.selectbox("Pilih Jenis BBM (Wajib)", ["-- Pilih BBM --", "Pertalite", "Pertamax", "Dexlite", "Bio Solar", "Pertamina Dex"])
+                jenis_bahan_bakar = st.selectbox("Pilih Jenis BBM (Wajib)", ["", "Pertalite", "Pertamax", "Dexlite", "Bio Solar", "Pertamina Dex"])
             final_bbm = f"{jns_kendaraan} - {jenis_bahan_bakar}" if jenis_bahan_bakar else jns_kendaraan
             
             last_indikator = 0
@@ -435,7 +435,7 @@ elif st.session_state.page == "📝 Form Request Dana":
         if is_locked_user or (is_duplicate and not izin_lanjut):
             if is_locked_user: st.error(f"⛔ AKSES DITOLAK: Sdr. {nama} memiliki {len(out_lock)} tiket yang belum PJB!")
             if st.text_input("🔑 Password Khusus (Bypass):", type="password") in AUTHORIZED_PASSWORDS:
-                if st.button("🚀 Paksakan Kirim Request Dana", type="primary"):
+                if st.button("💡 Paksakan Kirim Request Dana", type="primary"):
                     if form_invalid or not tiket.strip() or invalid_coords: st.error("Lengkapi form!")
                     else:
                         with st.spinner("Processing..."):
@@ -443,7 +443,7 @@ elif st.session_state.page == "📝 Form Request Dana":
                             append_data(SHEET_REQUEST, data_req, target_ss)
                             st.balloons(); st.success("🎉 Berhasil!"); time.sleep(2); st.rerun()
         else:
-            if st.button("🚀 Kirim Form Request Dana", type="primary"):
+            if st.button("📤 Kirim Form Request Dana", type="primary"):
                 if form_invalid or not tiket.strip() or invalid_coords: st.error("Lengkapi form!")
                 else:
                     with st.spinner("Memproses ke Database..."):
@@ -492,7 +492,7 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                 else: pending_list.append(item)
         
         if pending_list: st.dataframe(pd.DataFrame(pending_list), hide_index=True, use_container_width=True)
-        else: st.success("✅ Seluruh tiket clear!")
+        else: st.success("💎 Seluruh tiket clear!")
         
         col_s2, col_s3 = st.columns([3, 1])
         with col_s2: 
@@ -550,7 +550,7 @@ elif st.session_state.page == "✅ Form PJB Operasional":
             
             if is_bbm_anomali:
                 st.markdown("<hr>", unsafe_allow_html=True)
-                st.error("⚠️ DETEKSI ANOMALI GENSET: Harga Dexlite / Bio Solar melebihi batas wajar (Rp 28.000). Anda tidak bisa memproses PJB sebelum mendapat persetujuan Atasan.")
+                st.error("🚨 DETEKSI ANOMALI GENSET: Harga Dexlite / Bio Solar melebihi batas wajar (Rp 28.000). Anda tidak bisa memproses PJB sebelum mendapat persetujuan Atasan segera lakukan klarifikasi atau buat evidance lengkap terkait harga aktual.")
                 
                 status_approval = "NONE"
                 for r in reversed(app_r):
