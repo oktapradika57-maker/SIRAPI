@@ -16,10 +16,9 @@ import re
 # ==========================================
 st.set_page_config(page_title="ERP Kinarya Utama Teknik", page_icon="🏢", layout="wide")
 
-# CSS GLOBAL (Hanya menyembunyikan tools bawaan agar aman, TANPA membesarkan semua tombol)
+# CSS GLOBAL: Hanya menghilangkan tombol GitHub & Deploy agar aman (TANPA MERUBAH UKURAN TOMBOL)
 st.markdown("""
     <style>
-        /* Sembunyikan tombol Deploy dan Menu GitHub Kanan atas, Sidebar tetap aman */
         .stDeployButton {display: none !important;}
         [data-testid="stToolbar"] {display: none !important;}
         
@@ -69,7 +68,7 @@ MASTER_DATA = {
 LIST_KEPERLUAN = ["-- Pilih Keperluan --", "Tshoot", "Backup", "Support", "PM", "Program BCP", "Program Quikwin", "Program G348T", "Pengiriman Material SPMS", "Pembelian Material"]
 
 # ==========================================
-# 2. FUNGSI INTI & CACHING (300 Detik = Anti Lemot)
+# 2. FUNGSI INTI & CACHING (Anti Lemot)
 # ==========================================
 def parse_date(date_str):
     try: return datetime.strptime(date_str.strip(), "%d/%m/%Y").date()
@@ -207,7 +206,6 @@ try: st.sidebar.image("koperasi-jasa-konstruksi-tower-event-organizer-network-mo
 except: st.sidebar.markdown("<h3 style='text-align:center;'>PT KUT</h3>", unsafe_allow_html=True)
 st.sidebar.markdown("<hr>", unsafe_allow_html=True)
 
-# TOMBOL SIDEBAR KINI NORMAL (TIDAK RAKSASA LAGI)
 if st.sidebar.button("🏠 Home Dashboard", use_container_width=True): st.session_state.page = "🏠 Hub Menu Utama"; st.rerun()
 
 st.sidebar.markdown("### 📊 MENU ADMIN")
@@ -238,27 +236,33 @@ if cek_nop != "-- Pilih Area --":
             else: st.sidebar.info("Tidak ada data.")
 
 # ==========================================
-# PAGE 0: HUB MENU UTAMA (TOMBOL CARD KHUSUS)
+# PAGE 0: HUB MENU UTAMA 
 # ==========================================
 if st.session_state.page == "🏠 Hub Menu Utama":
-    # CSS KHUSUS HALAMAN HUB (Hanya membesarkan tombol di halaman ini)
+    # MENGUNCI CSS "CARD" AGAR HANYA BERLAKU DI KOLOM HALAMAN INI SAJA (Sidebar aman!)
     st.markdown("""
         <style>
-            .main div[data-testid="stButton"] > button {
+            /* Hanya target tombol di dalam container kolom pada area utama */
+            section.main div[data-testid="column"] div[data-testid="stButton"] > button {
                 height: 160px !important;
                 border-radius: 16px !important;
-                border: 1px solid #E2E8F0 !important;
+                border: 2px solid #E2E8F0 !important;
                 background-color: #ffffff !important;
                 box-shadow: 0 4px 6px rgba(0,0,0,0.02) !important;
+                transition: all 0.3s ease !important;
             }
-            .main div[data-testid="stButton"] > button:hover {
+            section.main div[data-testid="column"] div[data-testid="stButton"] > button:hover {
                 transform: translateY(-5px) !important;
-                border-color: #3B82F6 !important; color: #3B82F6 !important;
+                border-color: #3B82F6 !important; 
+                color: #3B82F6 !important;
                 box-shadow: 0 15px 25px -5px rgba(59, 130, 246, 0.15) !important;
             }
-            .main div[data-testid="stButton"] > button p {
-                font-size: 1.1rem !important; font-weight: 800 !important;
-                white-space: pre-wrap !important; text-align: center !important; line-height: 1.4 !important;
+            section.main div[data-testid="column"] div[data-testid="stButton"] > button p {
+                font-size: 1.15rem !important; 
+                font-weight: 800 !important;
+                white-space: pre-wrap !important; 
+                text-align: center !important; 
+                line-height: 1.5 !important;
             }
         </style>
     """, unsafe_allow_html=True)
@@ -444,7 +448,9 @@ elif st.session_state.page == "📝 Form Request Dana":
 elif st.session_state.page == "✅ Form PJB Operasional":
     st.markdown("<div class='header-card' style='background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); border-bottom: 4px solid #11998e;'><h2>✅ PORTAL PJB (PENYELESAIAN)</h2><p>Lengkapi nota realisasi untuk menghapus status tunggakan.</p></div>", unsafe_allow_html=True)
     
-    if st.button("🏠 Kembali ke Home Menu", use_container_width=True): st.session_state.page = "🏠 Hub Menu Utama"; st.rerun()
+    col_nav1, col_nav2 = st.columns([1, 1])
+    with col_nav1:
+        if st.button("🏠 Kembali ke Home Menu", use_container_width=True): st.session_state.page = "🏠 Hub Menu Utama"; st.rerun()
     st.markdown("<br>", unsafe_allow_html=True)
     
     nop_cari = st.selectbox("📂 1. Pilih Database (NOP):", ["-- Pilih NOP --"] + list(MASTER_DATA.keys()))
@@ -723,7 +729,7 @@ elif st.session_state.page == "📈 Live Monitoring":
             # --- TAB 3: EVALUASI KINERJA (KM TIM VS SATELIT) ---
             with t3:
                 st.markdown("### 🕵️ Tracker KM / RH Tim vs Satelit (LongLat)")
-                st.markdown("Mendeteksi indikasi **mark-up** atau kelalaian input jarak tempuh kendaraan berdasarkan selisih (KM Akhir - KM Awal).")
+                st.markdown("Mendeteksi indikasi **mark-up** jarak tempuh kendaraan berdasarkan selisih murni (KM Akhir - KM Awal).")
                 
                 eval_list = []
                 for pjb in pjb_r[1:]:
@@ -741,7 +747,7 @@ elif st.session_state.page == "📈 Live Monitoring":
                                 if match: angka_satelit = float(match.group(1))
                             except: pass
 
-                            # LOGIKA KM SESUAI PERMINTAAN: KM_AKHIR - KM_AWAL
+                            # LOGIKA KM PASTI AKURAT: KM AKHIR - KM AWAL
                             km_awal = int(clean_nominal(req_match[12]))
                             km_akhir = int(clean_nominal(pjb[10]))
                             total_input_tim = km_akhir - km_awal
