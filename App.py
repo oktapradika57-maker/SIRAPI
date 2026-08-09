@@ -278,8 +278,8 @@ if st.session_state.page == "🏠 Hub Menu Utama":
 
     st.markdown("""
         <div style="padding: 10px 0 30px 0;">
-            <h1 style="font-size: 2.2rem; font-weight: 900; color: #1E293B; margin-bottom: 5px;">Enterprise Analytics <span style="color: #6366F1;">Hub</span></h1>
-            <p style="color: #64748B; font-size: 1rem;">Klik kartu di bawah ini untuk mengakses modul operasional.</p>
+            <h1 style="font-size: 2.2rem; font-weight: 900; color: #1E293B; margin-bottom: 5px;">SiRAPI <span style="color: #6366F1;">KUT</span></h1>
+            <p style="color: #64748B; font-size: 1rem;">Sistem Rekapitulasi Anggaran Pertanggungjawaban Informasi.</p>
         </div>
     """, unsafe_allow_html=True)
 
