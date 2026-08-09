@@ -319,7 +319,7 @@ elif st.session_state.page == "📝 Form Request Dana":
     st.markdown("<br>", unsafe_allow_html=True)
     nop = st.selectbox("📌 1. Pilih Database Regional (NOP)", [""] + list(MASTER_DATA.keys()))
     
-    if nop != "-- Pilih NOP --":
+    if nop != "":
         st.markdown("<div class='section-title'>📋 2. Informasi Petugas & Tiket</div>", unsafe_allow_html=True)
         target_ss = MASTER_DATA[nop]["spreadsheet_id"]
         data_all = fetch_spreadsheet_data(target_ss)
