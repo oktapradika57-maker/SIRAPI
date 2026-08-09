@@ -16,13 +16,12 @@ import re
 # ==========================================
 st.set_page_config(page_title="ERP Kinarya Utama Teknik", page_icon="🏢", layout="wide")
 
-# MENGUBAH TOMBOL BAWAAN STREAMLIT MENJADI CARD UI (100% CLICKABLE)
-# + SECURITY LOCK (MENGHILANGKAN TOMBOL GITHUB & DEPLOY TANPA MENGHILANGKAN SIDEBAR)
+# MENGHILANGKAN TOMBOL GITHUB & DEPLOY TANPA MENGHILANGKAN SIDEBAR
 st.markdown("""
     <style>
-        /* 🔒 SECURITY LOCK (HANYA HILANGKAN TOOLBAR KANAN, SIDEBAR TETAP AMAN) */
-        [data-testid="stToolbar"] {visibility: hidden !important;}
-        footer {visibility: hidden !important;}
+        /* Sembunyikan tombol Deploy dan Menu Kanan atas, tapi biarkan Hamburger Sidebar */
+        .stDeployButton {display: none !important;}
+        [data-testid="stToolbar"] {display: none !important;}
         
         .main { background-color: #F8FAFC; font-family: 'Inter', sans-serif; }
         .header-card {
@@ -31,23 +30,32 @@ st.markdown("""
             box-shadow: 0 10px 25px rgba(0,0,0,0.1); margin-bottom: 30px;
             border-bottom: 4px solid #3B82F6;
         }
-        /* Mengubah total bentuk st.button menjadi Card */
-        div[data-testid="stButton"] > button {
-            width: 100%; height: 180px; border-radius: 16px;
-            background-color: #ffffff; border: 1px solid #E2E8F0;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.02);
-            color: #1E293B; font-size: 18px; font-weight: 800;
-            display: flex; flex-direction: column; justify-content: center; align-items: center;
-            transition: all 0.3s ease;
+        
+        /* CSS Khusus Desain Kartu Menu Hub */
+        .hub-card {
+            background-color: #ffffff; border-radius: 20px; padding: 25px 20px;
+            text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+            border: 1px solid #E2E8F0; display: flex; flex-direction: column;
+            align-items: center; transition: all 0.3s ease; height: 210px;
+            margin-bottom: 10px;
         }
-        div[data-testid="stButton"] > button:hover {
+        div[data-testid="column"]:hover .hub-card {
             transform: translateY(-5px);
             box-shadow: 0 15px 25px -5px rgba(59, 130, 246, 0.15);
-            border-color: #3B82F6; color: #3B82F6;
+            border-color: #3B82F6;
         }
-        div[data-testid="stButton"] > button p {
-            margin: 0; font-size: 1.1rem;
+        .icon-box {
+            width: 70px; height: 70px; border-radius: 18px; display: flex;
+            align-items: center; justify-content: center; font-size: 35px; margin-bottom: 15px;
         }
+        .bg-green { background-color: #D1FAE5; color: #10B981; }
+        .bg-blue { background-color: #E0F2FE; color: #0EA5E9; }
+        .bg-orange { background-color: #FFEDD5; color: #F97316; }
+        .bg-purple { background-color: #F3E8FF; color: #A855F7; }
+        .bg-red { background-color: #FEE2E2; color: #EF4444; }
+        .card-title { font-size: 1.15rem; font-weight: 800; color: #1E293B; margin-bottom: 8px; }
+        .card-subtitle { font-size: 0.85rem; color: #94A3B8; font-weight: 500; margin-bottom: 15px; line-height: 1.4; }
+        
         .section-title { color: #1E293B; font-size: 1.25rem; font-weight: 800; border-bottom: 2px solid #E2E8F0; padding-bottom: 8px; margin-top: 30px; margin-bottom: 20px;}
         .metric-3d {
             background: #ffffff; padding: 20px; border-radius: 16px; text-align: center;
@@ -57,6 +65,22 @@ st.markdown("""
         .metric-value { font-size: 1.5rem; color: #0F172A; font-weight: 900; }
     </style>
 """, unsafe_allow_html=True)
+
+# CSS KHUSUS OVERLAY TOMBOL CARD (HANYA AKTIF DI MENU HUB)
+if st.session_state.get('page', '🏠 Hub Menu Utama') == "🏠 Hub Menu Utama":
+    st.markdown("""
+        <style>
+            /* Hack membuat kolom menjadi container transparan yang bisa diklik sempurna */
+            [data-testid="column"] { position: relative; }
+            [data-testid="column"] [data-testid="stButton"] {
+                position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+                z-index: 999; opacity: 0; 
+            }
+            [data-testid="column"] [data-testid="stButton"] button {
+                width: 100%; height: 100%; cursor: pointer;
+            }
+        </style>
+    """, unsafe_allow_html=True)
 
 # ==========================================
 # 1. MASTER DATA & KONFIGURASI
@@ -87,7 +111,7 @@ MASTER_DATA = {
 LIST_KEPERLUAN = ["-- Pilih Keperluan --", "Tshoot", "Backup", "Support", "PM", "Program BCP", "Program Quikwin", "Program G348T", "Pengiriman Material SPMS", "Pembelian Material"]
 
 # ==========================================
-# 2. FUNGSI INTI & CACHING
+# 2. FUNGSI INTI & CACHING (DIPERCEPAT)
 # ==========================================
 def parse_date(date_str):
     try: return datetime.strptime(date_str.strip(), "%d/%m/%Y").date()
@@ -148,7 +172,8 @@ def get_credentials():
     with open("credentials.json", "w") as f: f.write(st.secrets["gcp_json"])
     return Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
 
-@st.cache_data(ttl=10)
+# DIPERCEPAT: Cache dinaikkan jadi 300 detik (5 menit) agar tidak ngelag
+@st.cache_data(ttl=300)
 def fetch_spreadsheet_data(spreadsheet_id):
     client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
     ws_names = [SHEET_REQUEST, SHEET_PJB, SHEET_UM, SHEET_APP, "Rekap PJB"]
@@ -171,7 +196,6 @@ def load_excel_data():
     except: tim_dict = {}
     return site_dict, site_list, tim_dict
 
-# FUNGSI YANG DIUPDATE: Cek Tiket Pending + Aging PJB > 3 Hari (Khusus Agustus)
 def get_user_tickets_status(nama, req_rows, pjb_rows):
     if nama == "-- Pilih Nama --": return [], [], [], []
     req_tickets = {}
@@ -189,7 +213,7 @@ def get_user_tickets_status(nama, req_rows, pjb_rows):
             req_date = parse_date(tgl)
             if req_date >= CUTOFF_DATE: outstanding_lock.append(tkt)
             
-            # CEK AGING KHUSUS AGUSTUS (>3 Hari)
+            # AGING PJB HANYA BULAN AGUSTUS (> 3 Hari)
             aging_days = (today - req_date).days
             if req_date.month == 8 and aging_days > 3:
                 aging_august.append(tkt)
@@ -210,7 +234,7 @@ def upload_foto(file):
 
 def append_data(sheet_name, data, spreadsheet_id):
     gspread.authorize(get_credentials()).open_by_key(spreadsheet_id).worksheet(sheet_name).append_row(data)
-    fetch_spreadsheet_data.clear()
+    fetch_spreadsheet_data.clear() # Clear cache agar data lsg up to date
 
 def update_approval_status(spreadsheet_id, row_index, new_status):
     client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
@@ -218,7 +242,7 @@ def update_approval_status(spreadsheet_id, row_index, new_status):
     fetch_spreadsheet_data.clear()
 
 # ==========================================
-# 3. SIDEBAR & NAVIGASI 
+# 3. SIDEBAR & NAVIGASI (SUDAH DIPERBAIKI)
 # ==========================================
 if 'page' not in st.session_state: st.session_state.page = "🏠 Hub Menu Utama"
 
@@ -247,7 +271,7 @@ if cek_nop != "-- Pilih Area --":
             out_all, out_lock, aging_august, hist_tkt = get_user_tickets_status(cek_nama, data_cek[SHEET_REQUEST], data_cek[SHEET_PJB])
             if hist_tkt:
                 st.sidebar.dataframe(pd.DataFrame(hist_tkt), hide_index=True)
-                # NOTIFIKASI AGING SIDEBAR
+                # NOTIFIKASI AGING SIDEBAR (Agustus)
                 if aging_august:
                     st.sidebar.warning(f"🔔 PENGINGAT AGING: Ada {len(aging_august)} tiket di bulan Agustus yang tertunda >3 Hari. Mohon segera lakukan PJB!")
                 if out_all: 
@@ -257,35 +281,40 @@ if cek_nop != "-- Pilih Area --":
             else: st.sidebar.info("Tidak ada data.")
 
 # ==========================================
-# PAGE 0: HUB MENU UTAMA (MURNI TOMBOL CARD)
+# PAGE 0: HUB MENU UTAMA (CARD UI MURNI)
 # ==========================================
 if st.session_state.page == "🏠 Hub Menu Utama":
     st.markdown("""
-        <div style="padding: 20px 0 30px 0;">
+        <div style="padding: 10px 0 30px 0;">
             <h1 style="font-size: 2.2rem; font-weight: 900; color: #1E293B; margin-bottom: 5px;">Enterprise Analytics <span style="color: #6366F1;">Hub</span></h1>
-            <p style="color: #64748B; font-size: 1rem;">Klik kartu di bawah ini untuk masuk ke modul operasional.</p>
+            <p style="color: #64748B; font-size: 1rem;">Klik kartu di bawah ini untuk mengakses modul operasional.</p>
         </div>
     """, unsafe_allow_html=True)
 
+    # HTML Card disandingkan dengan Invisible Button
     c1, c2, c3 = st.columns(3)
     with c1:
-        if st.button("💸\n\nRequest Dana\n\nPengajuan & estimasi", use_container_width=True): st.session_state.page = "📝 Form Request Dana"; st.rerun()
+        st.markdown("""<div class="hub-card"><div class="icon-box bg-green">💸</div><div class="card-title">Request Dana</div><div class="card-subtitle">Pengajuan & estimasi dana</div></div>""", unsafe_allow_html=True)
+        if st.button("R", key="b1"): st.session_state.page = "📝 Form Request Dana"; st.rerun()
     with c2:
-        if st.button("✅\n\nPJB Operasional\n\nRealisasi nota & KM", use_container_width=True): st.session_state.page = "✅ Form PJB Operasional"; st.rerun()
+        st.markdown("""<div class="hub-card"><div class="icon-box bg-blue">✅</div><div class="card-title">PJB Operasional</div><div class="card-subtitle">Realisasi nota & kalkulasi KM</div></div>""", unsafe_allow_html=True)
+        if st.button("P", key="b2"): st.session_state.page = "✅ Form PJB Operasional"; st.rerun()
     with c3:
-        if st.button("🛡️\n\nApproval Center\n\nVerifikasi Anomali BBM", use_container_width=True): 
+        st.markdown("""<div class="hub-card"><div class="icon-box bg-red">🛡️</div><div class="card-title">Approval Center</div><div class="card-subtitle">Verifikasi BBM Anomali (Admin)</div></div>""", unsafe_allow_html=True)
+        if st.button("A", key="b3"): 
             if st.session_state.get("admin_password") in AUTHORIZED_PASSWORDS: st.session_state.page = "🛡️ Approval Center"; st.rerun()
             else: st.error("Silakan login Admin di Sidebar terlebih dahulu.")
             
     st.markdown("<br>", unsafe_allow_html=True)
-    
     c4, c5, c6 = st.columns(3)
     with c4:
-        if st.button("📊\n\nBuku Besar / Neraca\n\nHistori PJB & Kas (Admin)", use_container_width=True): 
+        st.markdown("""<div class="hub-card"><div class="icon-box bg-orange">📊</div><div class="card-title">Buku Besar / Neraca</div><div class="card-subtitle">Histori PJB & Kas (Admin)</div></div>""", unsafe_allow_html=True)
+        if st.button("N", key="b4"): 
             if st.session_state.get("admin_password") in AUTHORIZED_PASSWORDS: st.session_state.page = "📊 Neraca / Buku Kas"; st.rerun()
             else: st.error("Silakan login Admin di Sidebar.")
     with c5:
-        if st.button("📈\n\nLive Monitoring\n\nBurn Rate & Evaluasi KM", use_container_width=True): 
+        st.markdown("""<div class="hub-card"><div class="icon-box bg-purple">📈</div><div class="card-title">Live Monitoring</div><div class="card-subtitle">Burn Rate & Evaluasi (Admin)</div></div>""", unsafe_allow_html=True)
+        if st.button("L", key="b5"): 
             if st.session_state.get("admin_password") in AUTHORIZED_PASSWORDS: st.session_state.page = "📈 Live Monitoring"; st.rerun()
             else: st.error("Silakan login Admin di Sidebar.")
 
@@ -320,10 +349,10 @@ elif st.session_state.page == "📝 Form Request Dana":
             cluster = st.selectbox("Cluster Regional", ["-- Pilih Cluster --"] + MASTER_DATA[nop]["clusters"])
             nama = st.selectbox("Nama Petugas / Pemohon", ["-- Pilih Nama --"] + MASTER_DATA[nop]["names"])
             
-            # CEK TIKET AGING KETIKA NAMA DIPILIH
+            # NOTIFIKASI AGING TAMPIL DI SINI SAAT PILIH NAMA
             out_all, out_lock, aging_august, _ = get_user_tickets_status(nama, req_r, pjb_r)
             if aging_august:
-                st.warning(f"🔔 PENGINGAT: Sdr/i {nama}, Anda memiliki **{len(aging_august)}** tiket bulan Agustus yang sudah lewat >3 Hari belum di-PJB. Jadikan ini prioritas!")
+                st.warning(f"🔔 PENGINGAT: Sdr/i {nama}, Anda memiliki **{len(aging_august)}** tiket bulan Agustus yang sudah lewat >3 Hari belum di-PJB. Jadikan ini prioritas utama!")
 
             default_bank, default_no_rek = "BNI", ""
             if nama != "-- Pilih Nama --" and nama in tim_dict:
@@ -462,7 +491,7 @@ elif st.session_state.page == "✅ Form PJB Operasional":
         if nama_pjb != "-- Pilih Nama --":
             out_all, out_lock, aging_august, _ = get_user_tickets_status(nama_pjb, req_r, pjb_r)
             if aging_august:
-                st.warning(f"🔔 NOTIFIKASI: Anda memiliki **{len(aging_august)}** tiket khusus bulan Agustus yang tertunda lebih dari 3 hari. Harap diselesaikan sekarang juga!")
+                st.warning(f"🔔 NOTIFIKASI: Anda memiliki **{len(aging_august)}** tiket bulan Agustus yang tertunda lebih dari 3 hari. Segera diselesaikan!")
 
         with col_id2: pass_nominal = st.text_input("🔑 Akses Nominal (Admin):", type="password")
             
@@ -529,9 +558,7 @@ elif st.session_state.page == "✅ Form PJB Operasional":
             with p2: f_mat = st.file_uploader("Foto Material", type=["jpg","png"]); f_notamat = st.file_uploader("Nota Material", type=["jpg","png"])
             with p3: f_inap = st.file_uploader("Nota Penginapan", type=["jpg","png"]); f_kerja = st.file_uploader("Evidance Pekerjaan", type=["jpg","png"]); f_km = st.file_uploader("Foto KM/RH Akhir (Disanding)", type=["jpg","png"])
             
-            # =======================================================
-            # LOGIKA PROTEKSI BBM ANOMALI (HANYA BERLAKU UNTUK GENSET)
-            # =======================================================
+            # PROTEKSI BBM ANOMALI (HANYA GENSET)
             is_bbm_anomali = is_genset and ("dexlite" in str(d["BBM"]).lower() or "bio solar" in str(d["BBM"]).lower()) and (harga_satuan > 28000)
             
             if is_bbm_anomali:
