@@ -152,7 +152,8 @@ def fetch_spreadsheet_data(spreadsheet_id):
         except: data[name] = []
     return data
 
-@st.cache_data
+# MENGGUNAKAN TTL=60 AGAR JIKA FILE CSV DIGANTI DI GITHUB, DATA AUTO REFRESH TIAP 1 MENIT
+@st.cache_data(ttl=60)
 def load_excel_data():
     # 1. Load Site Data
     try:
@@ -163,7 +164,7 @@ def load_excel_data():
     
     tim_dict = {}
     
-    # 2. Load Longitude & Latitude dari excel bawaan (Jika ada)
+    # 2. Load Longitude & Latitude
     try:
         df_tim = pd.read_excel("lonlat tim.xlsx").fillna(0)
         for _, row in df_tim.iterrows():
@@ -175,23 +176,33 @@ def load_excel_data():
     except: 
         pass
         
-    # 3. Load NOPOL spesifik dari file CSV "DATA NOPOL MOBIL DAN GENSET NOP PLK.csv"
+    # 3. Load NOPOL dengan format yang super dinamis (Tahan banting pergeseran header)
     list_nopol = []
     try:
-        # Parameter header=1 digunakan karena baris pertama CSV kosong/title, header aslinya ada di baris kedua
-        df_nopol = pd.read_csv("DATA NOPOL MOBIL DAN GENSET NOP PLK.csv", header=1).fillna("")
-        list_nopol_raw = df_nopol['NOPOL'].astype(str).unique().tolist()
-        list_nopol = sorted([n for n in list_nopol_raw if n.strip() not in ["", "0", "nan", "None"]])
+        # Baca csv menggunakan engine python agar separator bisa dideteksi otomatis
+        df_nopol = pd.read_csv("DATA NOPOL MOBIL DAN GENSET NOP PLK.csv", sep=None, engine='python')
         
-        # Merge data NOPOL ke dalam tim_dict berdasarkan nama PIC
-        for _, row in df_nopol.iterrows():
-            pic_name = str(row['PIC']).strip().upper()
-            nopol_val = str(row['NOPOL']).strip()
+        # Jika header aslinya turun ke baris data (karena baris kosong di atasnya hilang), kita set ulang
+        if 'NOPOL' not in df_nopol.columns and 'PIC' not in df_nopol.columns:
+            df_nopol.columns = df_nopol.iloc[0].astype(str).str.strip()
+            df_nopol = df_nopol[1:].reset_index(drop=True)
             
-            if pic_name:
-                if pic_name not in tim_dict:
-                    tim_dict[pic_name] = {'Latitude': 0, 'Longtitude': 0}
-                tim_dict[pic_name]['NOPOL'] = nopol_val
+        df_nopol = df_nopol.fillna("")
+        
+        if 'NOPOL' in df_nopol.columns:
+            list_nopol_raw = df_nopol['NOPOL'].astype(str).unique().tolist()
+            # Buang nilai-nilai yang kosong atau tidak valid
+            list_nopol = sorted([n for n in list_nopol_raw if n.strip() not in ["", "0", "nan", "None", "NOPOL"]])
+            
+            for _, row in df_nopol.iterrows():
+                if 'PIC' in df_nopol.columns:
+                    pic_name = str(row['PIC']).strip().upper()
+                    nopol_val = str(row['NOPOL']).strip()
+                    
+                    if pic_name:
+                        if pic_name not in tim_dict:
+                            tim_dict[pic_name] = {'Latitude': 0, 'Longtitude': 0}
+                        tim_dict[pic_name]['NOPOL'] = nopol_val
     except Exception as e:
         pass
         
