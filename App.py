@@ -248,6 +248,11 @@ if cek_nop != "-- Pilih Area --":
                 else: st.sidebar.success("✅ Seluruh tiket aman!")
             else: st.sidebar.info("Tidak ada data.")
 
+# CREDIT FOOTER
+st.sidebar.markdown("---")
+st.sidebar.markdown("<div style='text-align: center; color: #64748B; font-size: 0.9rem; font-weight: bold;'>Created by Okta Pradika</div>", unsafe_allow_html=True)
+
+
 # ==========================================
 # PAGE 0: HUB MENU UTAMA (CARD UI MURNI)
 # ==========================================
@@ -373,7 +378,6 @@ elif st.session_state.page == "📝 Form Request Dana":
             
             last_indikator = 0
             if plat_clean != "" and jns_kendaraan.lower() in ["mobil", "motor", "genset"]:
-                # Menggunakan plat (anti typo spasi) untuk menarik histori KM terakhir kendaraan
                 for r in reversed(pjb_r[1:]): 
                     if len(r) > 12:
                         history_plat = r[12].strip().replace(" ", "").upper()
@@ -604,9 +608,18 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                         st.error("⛔ Terindikasi Double Input (Tiket & Nominal Sama).")
                     else:
                         with st.spinner("Mengupload foto dan memproses ke Database..."):
-                            # Penambahan element baru (f_transfer) di index terakhir
-                            data_pjb = [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), tgl_pjb.strftime("%d/%m/%Y"), d["NOP"], d["Cluster"], d["Nama"], d["Role"], d["Site"], d["Keperluan"], d["BBM"], d["Desc"], str(km_akhir), nominal_pjb, d["Plat"], upload_foto(f_isi), upload_foto(f_nota_bbm), upload_foto(f_km), upload_foto(f_mat), upload_foto(f_notamat), upload_foto(f_inap), upload_foto(f_kerja), tot_nilai_nota, cari_tiket, tot_liter, harga_satuan, str(total_km_tempuh), upload_foto(f_transfer)]
-                            append_data(SHEET_PJB, [(r+[""]*26)[:26] for r in [data_pjb]][0], target_ss)
+                            # Penempatan f_transfer di index 27 (Kolom AB) pada array data_pjb yang berjumlah 28 item
+                            data_pjb = [
+                                datetime.now().strftime("%d/%m/%Y %H:%M:%S"), 
+                                tgl_pjb.strftime("%d/%m/%Y"), 
+                                d["NOP"], d["Cluster"], d["Nama"], d["Role"], d["Site"], d["Keperluan"], d["BBM"], d["Desc"], 
+                                str(km_akhir), nominal_pjb, d["Plat"], 
+                                upload_foto(f_isi), upload_foto(f_nota_bbm), upload_foto(f_km), upload_foto(f_mat), 
+                                upload_foto(f_notamat), upload_foto(f_inap), upload_foto(f_kerja), 
+                                tot_nilai_nota, cari_tiket, tot_liter, harga_satuan, str(total_km_tempuh), 
+                                "", "", upload_foto(f_transfer)
+                            ]
+                            append_data(SHEET_PJB, [(r+[""]*28)[:28] for r in [data_pjb]][0], target_ss)
                             st.balloons(); st.success("🎉 Laporan Berhasil Ditutup!"); st.session_state.pjb_data = None
                             time.sleep(2.5); st.rerun()
 
@@ -702,8 +715,8 @@ elif st.session_state.page == "📊 Neraca / Buku Kas":
                     
                     with t2:
                         if len(pjb_r) > 1:
-                            # Ditambahkan kolom "BuktiTF" ke-26
-                            df_p = pd.DataFrame([(r + [""] * 26)[:26] for r in pjb_r[1:]], columns=["Waktu","Tanggal","N","C","Nama","R","S","Keperluan","B","D","K","Nominal","Pl","u1","u2","u3","u4","u5","u6","u7","NN","NoTiket","Lt","Hs","TKM_RH","BuktiTF"])
+                            # Penarikan data diperlebar menjadi 28 Kolom agar Kolom BuktiTF (AB) terbaca
+                            df_p = pd.DataFrame([(r + [""] * 28)[:28] for r in pjb_r[1:]], columns=["Waktu","Tanggal","N","C","Nama","R","S","Keperluan","B","D","K","Nominal","Pl","u1","u2","u3","u4","u5","u6","u7","NN","NoTiket","Lt","Hs","TKM_RH","u8","u9","BuktiTF"])
                             df_p['Nominal'] = df_p['Nominal'].apply(clean_nominal)
                             st.markdown("### Detail Histori PJB")
                             st.dataframe(df_p[['Tanggal', 'NoTiket', 'Nama', 'Keperluan', 'TKM_RH', 'Nominal']], use_container_width=True)
@@ -732,12 +745,17 @@ elif st.session_state.page == "📈 Live Monitoring":
             
             t1, t2, t3 = st.tabs(["💰 1. Sisa Kas & Burn Rate", "🚨 2. Record Anomali Genset", "🕵️ 3. Evaluasi Kinerja (Track KM/RH)"])
             
-            # --- TAB 1: KEUANGAN ---
+            # --- TAB 1: KEUANGAN (Format Kembali ke Awal) ---
             with t1:
                 total_um = sum([clean_nominal(r[3]) for r in um_r[1:] if len(r)>3]) if len(um_r)>1 else 0
                 tot_serap = sum([clean_nominal(r[15]) for r in rekap_r[1:] if len(r)>15]) if len(rekap_r)>1 else 0
                 sisa_kas = total_um - tot_serap
-                st.markdown(f"<div style='background-color:#0F172A; padding:40px; border-radius:16px; border:1px solid #334155; text-align:center;'><h3 style='color:#94A3B8;'>EQUITY / SISA KAS ACTUAL</h3><h1 style='color:#10B981; font-size:60px;'>Rp {sisa_kas:,.0f}</h1></div>", unsafe_allow_html=True)
+                burn_rate = (tot_serap / total_um * 100) if total_um > 0 else 0
+                
+                m1, m2, m3 = st.columns(3)
+                m1.markdown(f"<div class='metric-3d'><div class='metric-title'>Total Kas Masuk</div><div class='metric-value'>Rp {total_um:,.0f}</div></div>", unsafe_allow_html=True)
+                m2.markdown(f"<div class='metric-3d'><div class='metric-title'>Total Penyerapan</div><div class='metric-value'>Rp {tot_serap:,.0f}</div></div>", unsafe_allow_html=True)
+                m3.markdown(f"<div class='metric-3d'><div class='metric-title'>Sisa Kas (Burn Rate: {burn_rate:.1f}%)</div><div class='metric-value' style='color:#10B981;'>Rp {sisa_kas:,.0f}</div></div>", unsafe_allow_html=True)
             
             # --- TAB 2: RECORD ANOMALI GENSET ---
             with t2:
@@ -754,8 +772,8 @@ elif st.session_state.page == "📈 Live Monitoring":
 
             # --- TAB 3: EVALUASI KINERJA (KM TIM VS SATELIT) ---
             with t3:
-                st.markdown("### 🕵️ Tracker KM / RH Tim vs Satelit (LongLat)")
-                st.markdown("Mendeteksi indikasi **mark-up** jarak tempuh kendaraan berdasarkan selisih riil (KM Akhir - KM Awal).")
+                st.markdown("### 🕵️ Tracker KM / RH Tim vs Satelit & Analisa BBM")
+                st.markdown("Analisa perbandingan aktual lapangan dengan perhitungan Satelit, beserta rasio penggunaan BBM.")
                 
                 eval_list = []
                 for pjb in pjb_r[1:]:
@@ -783,11 +801,24 @@ elif st.session_state.page == "📈 Live Monitoring":
                             
                             if not is_genset:
                                 if angka_satelit > 0:
-                                    selisih = total_input_tim - angka_satelit
-                                    if selisih > (angka_satelit * 0.2): # Toleransi wajar 20%
-                                        status = f"🔴 Mark-up (+{selisih:.1f} KM)"
+                                    if total_input_tim > angka_satelit:
+                                        status = "🟢 Aman & Wajar"
+                                    else:
+                                        status = "🟢 Aman"
                             else:
                                 status = "⏱️ (RH Genset)"
+
+                            # Menghitung Analisa BBM aktual
+                            liter_val = 0.0
+                            if len(pjb) > 22:
+                                try: liter_val = float(str(pjb[22]).replace(',', '.'))
+                                except: pass
+                                
+                            if liter_val > 0:
+                                val_per_liter = total_input_tim / liter_val
+                                analisa_bbm = f"{val_per_liter:.1f} {'KM/L' if not is_genset else 'RH/L'}"
+                            else:
+                                analisa_bbm = "-"
 
                             eval_list.append({
                                 "Nama Tim": req_match[5],
@@ -797,13 +828,12 @@ elif st.session_state.page == "📈 Live Monitoring":
                                 "KM Akhir": km_akhir,
                                 "Jarak Input Tim": f"{total_input_tim} {'RH' if is_genset else 'KM'}",
                                 "Jarak Satelit": jarak_satelit if not is_genset else "-",
-                                "Evaluasi / Status": status
+                                "Evaluasi / Status": status,
+                                "Analisa Konsumsi BBM": analisa_bbm
                             })
                 
                 if eval_list:
                     df_eval = pd.DataFrame(eval_list)
-                    def highlight_markup(s):
-                        return ['background-color: #FEE2E2; color: #DC2626; font-weight: bold' if 'Mark-up' in v else '' for v in s]
-                    st.dataframe(df_eval.style.apply(highlight_markup, subset=['Evaluasi / Status']), hide_index=True, use_container_width=True)
+                    st.dataframe(df_eval, hide_index=True, use_container_width=True)
                 else:
                     st.info("Belum ada data realisasi PJB yang dapat disandingkan dengan Satelit.")
