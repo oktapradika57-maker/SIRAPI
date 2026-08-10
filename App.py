@@ -26,7 +26,6 @@ st.markdown("""
             box-shadow: 0 10px 25px rgba(0,0,0,0.1); margin-bottom: 30px;
             border-bottom: 4px solid #3B82F6;
         }
-        /* Mengubah total bentuk st.button menjadi Card */
         div[data-testid="stButton"] > button {
             width: 100%; height: 180px; border-radius: 16px;
             background-color: #ffffff; border: 1px solid #E2E8F0;
@@ -155,16 +154,48 @@ def fetch_spreadsheet_data(spreadsheet_id):
 
 @st.cache_data
 def load_excel_data():
+    # 1. Load Site Data
     try:
         df_site = pd.read_excel("Hasil_910_Site.xlsx").fillna(0)
         site_dict = df_site.set_index('Site ID')[['Latitude Tujuan', 'Longtitude Tujuan']].to_dict('index')
         site_list = df_site['Site ID'].astype(str).tolist()
     except: site_dict, site_list = {}, []
+    
+    tim_dict = {}
+    
+    # 2. Load Longitude & Latitude dari excel bawaan (Jika ada)
     try:
         df_tim = pd.read_excel("lonlat tim.xlsx").fillna(0)
-        tim_dict = df_tim.set_index('Nama')[['Latitude', 'Longtitude']].to_dict('index')
-    except: tim_dict = {}
-    return site_dict, site_list, tim_dict
+        for _, row in df_tim.iterrows():
+            nama_key = str(row['Nama']).strip().upper()
+            tim_dict[nama_key] = {
+                'Latitude': row.get('Latitude', 0), 
+                'Longtitude': row.get('Longtitude', 0)
+            }
+    except: 
+        pass
+        
+    # 3. Load NOPOL spesifik dari file CSV "DATA NOPOL MOBIL DAN GENSET NOP PLK.csv"
+    list_nopol = []
+    try:
+        # Parameter header=1 digunakan karena baris pertama CSV kosong/title, header aslinya ada di baris kedua
+        df_nopol = pd.read_csv("DATA NOPOL MOBIL DAN GENSET NOP PLK.csv", header=1).fillna("")
+        list_nopol_raw = df_nopol['NOPOL'].astype(str).unique().tolist()
+        list_nopol = sorted([n for n in list_nopol_raw if n.strip() not in ["", "0", "nan", "None"]])
+        
+        # Merge data NOPOL ke dalam tim_dict berdasarkan nama PIC
+        for _, row in df_nopol.iterrows():
+            pic_name = str(row['PIC']).strip().upper()
+            nopol_val = str(row['NOPOL']).strip()
+            
+            if pic_name:
+                if pic_name not in tim_dict:
+                    tim_dict[pic_name] = {'Latitude': 0, 'Longtitude': 0}
+                tim_dict[pic_name]['NOPOL'] = nopol_val
+    except Exception as e:
+        pass
+        
+    return site_dict, site_list, tim_dict, list_nopol
 
 def get_user_tickets_status(nama, req_rows, pjb_rows):
     if nama == "-- Pilih Nama --" or nama == "": return [], [], [], []
@@ -257,7 +288,6 @@ st.sidebar.markdown("<div style='text-align: center; color: #64748B; font-size: 
 # PAGE 0: HUB MENU UTAMA (CARD UI MURNI)
 # ==========================================
 if st.session_state.page == "🏠 Hub Menu Utama":
-    # CSS KHUSUS HALAMAN HUB (Hanya membesarkan tombol di dalam kolom menu ini)
     st.markdown("""
         <style>
             section.main div[data-testid="column"] div[data-testid="stButton"] > button {
@@ -331,7 +361,7 @@ elif st.session_state.page == "📝 Form Request Dana":
         req_r, pjb_r = data_all[SHEET_REQUEST], data_all[SHEET_PJB]
         
         all_requested_tickets = [r[3].strip().upper() for r in req_r[1:] if len(r) > 3]
-        site_dict, site_list, tim_dict = load_excel_data()
+        site_dict, site_list, tim_dict, list_nopol = load_excel_data()
         auto_lat_tujuan, auto_long_tujuan, auto_lat_brgkt, auto_long_brgkt = "0", "0", "0", "0"
 
         col1, col2 = st.columns(2)
@@ -340,15 +370,18 @@ elif st.session_state.page == "📝 Form Request Dana":
             cluster = st.selectbox("Cluster Regional", [""] + MASTER_DATA[nop]["clusters"])
             nama = st.selectbox("Nama Petugas / Pemohon", [""] + MASTER_DATA[nop]["names"])
             
+            # Format UPPERCASE untuk pencocokan ke file
+            nama_lookup = nama.strip().upper()
+            
             out_all, out_lock, aging_august, _ = get_user_tickets_status(nama, req_r, pjb_r)
             if aging_august:
                 st.warning(f"🔔 PENGINGAT: Sdr/i {nama}, Anda memiliki **{len(aging_august)}** tiket bulan Agustus yang sudah lewat >3 Hari belum di-PJB. Jadikan ini prioritas!")
 
             default_bank, default_no_rek = "BNI", ""
-            if nama != "" and nama in tim_dict:
-                auto_lat_brgkt, auto_long_brgkt = str(tim_dict[nama].get("Latitude", "0")), str(tim_dict[nama].get("Longtitude", "0"))
+            if nama_lookup != "" and nama_lookup in tim_dict:
+                auto_lat_brgkt, auto_long_brgkt = str(tim_dict[nama_lookup].get("Latitude", "0")), str(tim_dict[nama_lookup].get("Longtitude", "0"))
                 for r in reversed(req_r[1:]): 
-                    if len(r) > 18 and r[5].strip().upper() == nama.strip().upper():
+                    if len(r) > 18 and r[5].strip().upper() == nama_lookup:
                         if r[17].strip() in ["BNI", "BCA", "MANDIRI", "BRI"]:
                             default_bank, default_no_rek = r[17].strip(), r[18].strip(); break
                             
@@ -373,7 +406,27 @@ elif st.session_state.page == "📝 Form Request Dana":
                 jenis_bahan_bakar = st.selectbox("Pilih Jenis BBM (Wajib)", ["", "Pertalite", "Pertamax", "Dexlite", "Bio Solar", "Pertamina Dex"])
             final_bbm = f"{jns_kendaraan} - {jenis_bahan_bakar}" if jenis_bahan_bakar else jns_kendaraan
             
-            plat = st.text_input("Plat Nomor Kendaraan / ID Genset")
+            # --- LOGIKA OTOMATISASI NOPOL BERDASARKAN ROLE & PIC DARI CSV ---
+            auto_nopol = ""
+            if nama_lookup != "" and nama_lookup in tim_dict:
+                auto_nopol = str(tim_dict[nama_lookup].get("NOPOL", "")).strip()
+                if auto_nopol in ["nan", "0", "None"]: auto_nopol = ""
+                
+            if role in ["PM", "MBP", "CME"]:
+                if auto_nopol != "":
+                    plat = st.text_input("Plat Nomor Kendaraan (Otomatis Sesuai PIC)", value=auto_nopol, disabled=True)
+                else:
+                    plat = st.text_input("Plat Nomor Kendaraan / ID Genset (Ketik Manual)")
+            elif role != "-- Pilih Role --":
+                plat_options = ["-- Pilih NOPOL --"] + list_nopol + ["Lainnya (Ketik Manual)"]
+                plat_choice = st.selectbox("Pilih Plat Nomor Kendaraan", plat_options)
+                if plat_choice == "Lainnya (Ketik Manual)":
+                    plat = st.text_input("Ketik Plat Nomor Manual")
+                else:
+                    plat = "" if plat_choice == "-- Pilih NOPOL --" else plat_choice
+            else:
+                plat = st.text_input("Plat Nomor Kendaraan / ID Genset")
+                
             plat_clean = plat.strip().replace(" ", "").upper()
             
             last_indikator = 0
@@ -564,7 +617,6 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                 with p2: f_mat = st.file_uploader("Foto Material", type=["jpg","png"]); f_notamat = st.file_uploader("Nota Material", type=["jpg","png"])
                 with p3: f_inap = st.file_uploader("Nota Penginapan", type=["jpg","png"]); f_kerja = st.file_uploader("Evidance Pekerjaan", type=["jpg","png"]); f_km = st.file_uploader("Foto KM/RH Akhir (Disanding)", type=["jpg","png"])
                 
-                # PROTEKSI BBM ANOMALI (HANYA GENSET)
                 is_bbm_anomali = is_genset and ("dexlite" in str(d["BBM"]).lower() or "bio solar" in str(d["BBM"]).lower()) and (harga_satuan > 28000)
                 
                 if is_bbm_anomali:
@@ -608,7 +660,6 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                         st.error("⛔ Terindikasi Double Input (Tiket & Nominal Sama).")
                     else:
                         with st.spinner("Mengupload foto dan memproses ke Database..."):
-                            # Penempatan f_transfer di index 27 (Kolom AB) pada array data_pjb yang berjumlah 28 item
                             data_pjb = [
                                 datetime.now().strftime("%d/%m/%Y %H:%M:%S"), 
                                 tgl_pjb.strftime("%d/%m/%Y"), 
@@ -715,7 +766,6 @@ elif st.session_state.page == "📊 Neraca / Buku Kas":
                     
                     with t2:
                         if len(pjb_r) > 1:
-                            # Penarikan data diperlebar menjadi 28 Kolom agar Kolom BuktiTF (AB) terbaca
                             df_p = pd.DataFrame([(r + [""] * 28)[:28] for r in pjb_r[1:]], columns=["Waktu","Tanggal","N","C","Nama","R","S","Keperluan","B","D","K","Nominal","Pl","u1","u2","u3","u4","u5","u6","u7","NN","NoTiket","Lt","Hs","TKM_RH","u8","u9","BuktiTF"])
                             df_p['Nominal'] = df_p['Nominal'].apply(clean_nominal)
                             st.markdown("### Detail Histori PJB")
@@ -745,7 +795,7 @@ elif st.session_state.page == "📈 Live Monitoring":
             
             t1, t2, t3 = st.tabs(["💰 1. Sisa Kas & Burn Rate", "🚨 2. Record Anomali Genset", "🕵️ 3. Evaluasi Kinerja (Track KM/RH)"])
             
-            # --- TAB 1: KEUANGAN (Format Kembali ke Awal) ---
+            # --- TAB 1: KEUANGAN ---
             with t1:
                 total_um = sum([clean_nominal(r[3]) for r in um_r[1:] if len(r)>3]) if len(um_r)>1 else 0
                 tot_serap = sum([clean_nominal(r[15]) for r in rekap_r[1:] if len(r)>15]) if len(rekap_r)>1 else 0
@@ -773,7 +823,7 @@ elif st.session_state.page == "📈 Live Monitoring":
             # --- TAB 3: EVALUASI KINERJA (KM TIM VS SATELIT) ---
             with t3:
                 st.markdown("### 🕵️ Tracker KM / RH Tim vs Satelit & Analisa BBM")
-                st.markdown("Analisa perbandingan aktual lapangan dengan perhitungan Satelit, beserta rasio penggunaan BBM.")
+                st.markdown("Analisa perbandingan aktual lapangan dengan perhitungan Satelit, beserta rasio penggunaan BBM standar.")
                 
                 eval_list = []
                 for pjb in pjb_r[1:]:
@@ -791,49 +841,72 @@ elif st.session_state.page == "📈 Live Monitoring":
                                 if match: angka_satelit = float(match.group(1))
                             except: pass
 
-                            # LOGIKA KM PASTI AKURAT: KM AKHIR - KM AWAL
                             km_awal = int(clean_nominal(req_match[12]))
                             km_akhir = int(clean_nominal(pjb[10]))
                             total_input_tim = km_akhir - km_awal
                             
-                            status = "🟢 Aman"
+                            status_jarak = "🟢 Aman"
                             is_genset = "genset" in str(kategori).lower()
+                            is_mobil = "mobil" in str(kategori).lower()
+                            is_motor = "motor" in str(kategori).lower()
                             
-                            if not is_genset:
-                                if angka_satelit > 0:
-                                    if total_input_tim > angka_satelit:
-                                        status = "🟢 Aman & Wajar"
-                                    else:
-                                        status = "🟢 Aman"
-                            else:
-                                status = "⏱️ (RH Genset)"
-
-                            # Menghitung Analisa BBM aktual
                             liter_val = 0.0
                             if len(pjb) > 22:
                                 try: liter_val = float(str(pjb[22]).replace(',', '.'))
                                 except: pass
                                 
+                            status_bbm = ""
+                            analisa_bbm = "-"
+                            
                             if liter_val > 0:
                                 val_per_liter = total_input_tim / liter_val
                                 analisa_bbm = f"{val_per_liter:.1f} {'KM/L' if not is_genset else 'RH/L'}"
+                                
+                                # Logika Penilaian Standar BBM
+                                if is_mobil:
+                                    if val_per_liter < 7:
+                                        status_bbm = "🔴 Boros (< 7 KM/L)"
+                                    else:
+                                        status_bbm = "🟢 Normal"
+                                elif is_motor:
+                                    if val_per_liter < 15:
+                                        status_bbm = "🔴 Boros (< 15 KM/L)"
+                                    else:
+                                        status_bbm = "🟢 Normal"
+                                else:
+                                    status_bbm = "⚪ N/A"
                             else:
-                                analisa_bbm = "-"
+                                status_bbm = "-"
+
+                            if not is_genset:
+                                if angka_satelit > 0:
+                                    if total_input_tim > angka_satelit:
+                                        status_jarak = "🟢 Aman & Wajar"
+                                    else:
+                                        status_jarak = "🟢 Aman"
+                                else:
+                                    status_jarak = "⚪ Data Satelit Kosong"
+                            else:
+                                status_jarak = "⏱️ (RH Genset)"
 
                             eval_list.append({
                                 "Nama Tim": req_match[5],
                                 "Tiket": no_tiket,
                                 "Kategori": kategori,
-                                "KM Awal": km_awal,
-                                "KM Akhir": km_akhir,
                                 "Jarak Input Tim": f"{total_input_tim} {'RH' if is_genset else 'KM'}",
-                                "Jarak Satelit": jarak_satelit if not is_genset else "-",
-                                "Evaluasi / Status": status,
-                                "Analisa Konsumsi BBM": analisa_bbm
+                                "Jarak Satelit": f"{angka_satelit} KM" if not is_genset and angka_satelit > 0 else "-",
+                                "Status Jarak": status_jarak,
+                                "Konsumsi Aktual": analisa_bbm,
+                                "Status Konsumsi BBM": status_bbm
                             })
                 
                 if eval_list:
                     df_eval = pd.DataFrame(eval_list)
-                    st.dataframe(df_eval, hide_index=True, use_container_width=True)
+                    
+                    # Fungsi untuk memberikan highlight merah muda jika teks mengandung icon merah 🔴
+                    def highlight_markup(s):
+                        return ['background-color: #FEE2E2; color: #DC2626; font-weight: bold' if '🔴' in str(v) else '' for v in s]
+                    
+                    st.dataframe(df_eval.style.apply(highlight_markup, subset=['Status Jarak', 'Status Konsumsi BBM']), hide_index=True, use_container_width=True)
                 else:
                     st.info("Belum ada data realisasi PJB yang dapat disandingkan dengan Satelit.")
