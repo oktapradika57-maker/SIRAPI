@@ -152,10 +152,8 @@ def fetch_spreadsheet_data(spreadsheet_id):
         except: data[name] = []
     return data
 
-# MENGGUNAKAN TTL=60 AGAR JIKA FILE CSV DIGANTI DI GITHUB, DATA AUTO REFRESH TIAP 1 MENIT
 @st.cache_data(ttl=60)
 def load_excel_data():
-    # 1. Load Site Data
     try:
         df_site = pd.read_excel("Hasil_910_Site.xlsx").fillna(0)
         site_dict = df_site.set_index('Site ID')[['Latitude Tujuan', 'Longtitude Tujuan']].to_dict('index')
@@ -163,8 +161,6 @@ def load_excel_data():
     except: site_dict, site_list = {}, []
     
     tim_dict = {}
-    
-    # 2. Load Longitude & Latitude
     try:
         df_tim = pd.read_excel("lonlat tim.xlsx").fillna(0)
         for _, row in df_tim.iterrows():
@@ -176,13 +172,9 @@ def load_excel_data():
     except: 
         pass
         
-    # 3. Load NOPOL dengan format yang super dinamis (Tahan banting pergeseran header)
     list_nopol = []
     try:
-        # Baca csv menggunakan engine python agar separator bisa dideteksi otomatis
         df_nopol = pd.read_csv("DATA NOPOL MOBIL DAN GENSET NOP PLK.csv", sep=None, engine='python')
-        
-        # Jika header aslinya turun ke baris data (karena baris kosong di atasnya hilang), kita set ulang
         if 'NOPOL' not in df_nopol.columns and 'PIC' not in df_nopol.columns:
             df_nopol.columns = df_nopol.iloc[0].astype(str).str.strip()
             df_nopol = df_nopol[1:].reset_index(drop=True)
@@ -191,7 +183,6 @@ def load_excel_data():
         
         if 'NOPOL' in df_nopol.columns:
             list_nopol_raw = df_nopol['NOPOL'].astype(str).unique().tolist()
-            # Buang nilai-nilai yang kosong atau tidak valid
             list_nopol = sorted([n for n in list_nopol_raw if n.strip() not in ["", "0", "nan", "None", "NOPOL"]])
             
             for _, row in df_nopol.iterrows():
@@ -381,7 +372,6 @@ elif st.session_state.page == "📝 Form Request Dana":
             cluster = st.selectbox("Cluster Regional", [""] + MASTER_DATA[nop]["clusters"])
             nama = st.selectbox("Nama Petugas / Pemohon", [""] + MASTER_DATA[nop]["names"])
             
-            # Format UPPERCASE untuk pencocokan ke file
             nama_lookup = nama.strip().upper()
             
             out_all, out_lock, aging_august, _ = get_user_tickets_status(nama, req_r, pjb_r)
@@ -417,7 +407,6 @@ elif st.session_state.page == "📝 Form Request Dana":
                 jenis_bahan_bakar = st.selectbox("Pilih Jenis BBM (Wajib)", ["", "Pertalite", "Pertamax", "Dexlite", "Bio Solar", "Pertamina Dex"])
             final_bbm = f"{jns_kendaraan} - {jenis_bahan_bakar}" if jenis_bahan_bakar else jns_kendaraan
             
-            # --- LOGIKA OTOMATISASI NOPOL BERDASARKAN ROLE & PIC DARI CSV ---
             auto_nopol = ""
             if nama_lookup != "" and nama_lookup in tim_dict:
                 auto_nopol = str(tim_dict[nama_lookup].get("NOPOL", "")).strip()
@@ -666,10 +655,35 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                         st.stop()
 
                 st.markdown("<br>", unsafe_allow_html=True)
-                if st.button("🚀 Sahkan Pelaporan PJB", type="primary", use_container_width=True):
-                    if any(len(r)>21 and r[21].strip().upper() == cari_tiket.strip().upper() and clean_nominal(r[11]) == nominal_pjb for r in pjb_r[1:]):
-                        st.error("⛔ Terindikasi Double Input (Tiket & Nominal Sama).")
+                
+                # --- CEK DOUBLE INPUT DENGAN BYPASS PASSWORD "Koordokt" ---
+                is_double_input = any(len(r)>21 and r[21].strip().upper() == cari_tiket.strip().upper() and clean_nominal(r[11]) == nominal_pjb for r in pjb_r[1:])
+                
+                if is_double_input:
+                    st.warning("⚠️ **PERINGATAN DOUBLE INPUT:** Tiket dan nominal ini sudah pernah di-PJB sebelumnya.")
+                    bypass_pwd = st.text_input("🔑 Masukkan Password Kondisional (Ketik: Koordokt untuk bypass):", type="password")
+                    
+                    if bypass_pwd != "Koordokt":
+                        st.error("⛔ Terindikasi Double Input. Masukkan password **Koordokt** di atas untuk melanjutkan.")
                     else:
+                        st.success("✅ Password Kondisional benar! Anda diizinkan melakukan PJB dengan tiket yang sama.")
+                        if st.button("🚀 Sahkan Pelaporan PJB (Bypass)", type="primary", use_container_width=True):
+                            with st.spinner("Mengupload foto dan memproses ke Database..."):
+                                data_pjb = [
+                                    datetime.now().strftime("%d/%m/%Y %H:%M:%S"), 
+                                    tgl_pjb.strftime("%d/%m/%Y"), 
+                                    d["NOP"], d["Cluster"], d["Nama"], d["Role"], d["Site"], d["Keperluan"], d["BBM"], d["Desc"], 
+                                    str(km_akhir), nominal_pjb, d["Plat"], 
+                                    upload_foto(f_isi), upload_foto(f_nota_bbm), upload_foto(f_km), upload_foto(f_mat), 
+                                    upload_foto(f_notamat), upload_foto(f_inap), upload_foto(f_kerja), 
+                                    tot_nilai_nota, cari_tiket, tot_liter, harga_satuan, str(total_km_tempuh), 
+                                    "", "", upload_foto(f_transfer)
+                                ]
+                                append_data(SHEET_PJB, [(r+[""]*28)[:28] for r in [data_pjb]][0], target_ss)
+                                st.balloons(); st.success("🎉 Laporan Berhasil Ditutup (Bypass)!"); st.session_state.pjb_data = None
+                                time.sleep(2.5); st.rerun()
+                else:
+                    if st.button("🚀 Sahkan Pelaporan PJB", type="primary", use_container_width=True):
                         with st.spinner("Mengupload foto dan memproses ke Database..."):
                             data_pjb = [
                                 datetime.now().strftime("%d/%m/%Y %H:%M:%S"), 
@@ -914,7 +928,6 @@ elif st.session_state.page == "📈 Live Monitoring":
                 if eval_list:
                     df_eval = pd.DataFrame(eval_list)
                     
-                    # Fungsi untuk memberikan highlight merah muda jika teks mengandung icon merah 🔴
                     def highlight_markup(s):
                         return ['background-color: #FEE2E2; color: #DC2626; font-weight: bold' if '🔴' in str(v) else '' for v in s]
                     
