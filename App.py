@@ -167,7 +167,7 @@ def load_excel_data():
     return site_dict, site_list, tim_dict
 
 def get_user_tickets_status(nama, req_rows, pjb_rows):
-    if nama == "-- Pilih Nama --": return [], [], [], []
+    if nama == "-- Pilih Nama --" or nama == "": return [], [], [], []
     req_tickets = {}
     for r in req_rows[1:]:
         if len(r) > 5 and r[5].strip().upper() == nama.strip().upper():
@@ -235,7 +235,7 @@ cek_nop = st.sidebar.selectbox("📂 Area", ["-- Pilih Area --"] + list(MASTER_D
 if cek_nop != "-- Pilih Area --":
     cek_nama = st.sidebar.selectbox("👤 Petugas", ["-- Pilih Nama --"] + MASTER_DATA[cek_nop]["names"])
     if st.sidebar.button("Cari Histori"):
-        if cek_nama != "-- Pilih Nama --":
+        if cek_nama != "-- Pilih Nama --" and cek_nama != "":
             data_cek = fetch_spreadsheet_data(MASTER_DATA[cek_nop]["spreadsheet_id"])
             out_all, out_lock, aging_august, hist_tkt = get_user_tickets_status(cek_nama, data_cek[SHEET_REQUEST], data_cek[SHEET_PJB])
             if hist_tkt:
@@ -340,7 +340,7 @@ elif st.session_state.page == "📝 Form Request Dana":
                 st.warning(f"🔔 PENGINGAT: Sdr/i {nama}, Anda memiliki **{len(aging_august)}** tiket bulan Agustus yang sudah lewat >3 Hari belum di-PJB. Jadikan ini prioritas!")
 
             default_bank, default_no_rek = "BNI", ""
-            if nama != "-- Pilih Nama --" and nama in tim_dict:
+            if nama != "" and nama in tim_dict:
                 auto_lat_brgkt, auto_long_brgkt = str(tim_dict[nama].get("Latitude", "0")), str(tim_dict[nama].get("Longtitude", "0"))
                 for r in reversed(req_r[1:]): 
                     if len(r) > 18 and r[5].strip().upper() == nama.strip().upper():
@@ -368,24 +368,30 @@ elif st.session_state.page == "📝 Form Request Dana":
                 jenis_bahan_bakar = st.selectbox("Pilih Jenis BBM (Wajib)", ["", "Pertalite", "Pertamax", "Dexlite", "Bio Solar", "Pertamina Dex"])
             final_bbm = f"{jns_kendaraan} - {jenis_bahan_bakar}" if jenis_bahan_bakar else jns_kendaraan
             
+            plat = st.text_input("Plat Nomor Kendaraan / ID Genset")
+            plat_clean = plat.strip().replace(" ", "").upper()
+            
             last_indikator = 0
-            if nama != "-- Pilih Nama --" and jns_kendaraan.lower() in ["mobil", "motor", "genset"]:
+            if plat_clean != "" and jns_kendaraan.lower() in ["mobil", "motor", "genset"]:
+                # Menggunakan plat (anti typo spasi) untuk menarik histori KM terakhir kendaraan
                 for r in reversed(pjb_r[1:]): 
-                    if len(r) > 10 and r[4].strip().upper() == nama.strip().upper():
-                        if (jns_kendaraan.lower() == "genset" and "genset" in r[8].lower()) or (jns_kendaraan.lower() in ["mobil", "motor"] and any(v in r[8].lower() for v in ["mobil", "motor"])):
-                            try: last_indikator = int(clean_nominal(r[10])); break
+                    if len(r) > 12:
+                        history_plat = r[12].strip().replace(" ", "").upper()
+                        if history_plat == plat_clean:
+                            try: 
+                                last_indikator = int(clean_nominal(r[10]))
+                                break
                             except: pass
 
             if jns_kendaraan.lower() == "genset":
-                st.info(f"⏱️ Histori PJB: RH Genset terakhir Anda adalah **{last_indikator}**")
+                st.info(f"⏱️ Histori PJB: RH Genset terakhir untuk plat/ID **{plat}** adalah **{last_indikator}**")
                 label_indikator = "Input RH Genset Awal (Hour)"
             elif jns_kendaraan.lower() in ["mobil", "motor"]:
-                st.info(f"🛣️ Histori PJB: KM Kendaraan terakhir Anda adalah **{last_indikator}**")
+                st.info(f"🛣️ Histori PJB: KM Kendaraan terakhir untuk plat **{plat}** adalah **{last_indikator}**")
                 label_indikator = "Input KM Awal Kendaraan"
             else: label_indikator = "Indikator Awal (Ketik 0 jika tidak relevan)"
                 
             km_awal = st.number_input(label_indikator, min_value=0, value=last_indikator)
-            plat = st.text_input("Plat Nomor Kendaraan / ID Genset")
             deskripsi = st.text_area("Deskripsi Pekerjaan / Justifikasi")
 
         is_vehicle = jns_kendaraan.lower() in ['mobil', 'motor']
@@ -426,7 +432,7 @@ elif st.session_state.page == "📝 Form Request Dana":
         with c_up1: foto_km = st.file_uploader("Upload Foto KM / RH Genset Awal", type=["jpg", "png", "jpeg"])
         with c_up2: foto_evidance = st.file_uploader("Upload Foto Kendaraan/Pekerjaan", type=["jpg", "png", "jpeg"])
         
-        form_invalid = (nama == "-- Pilih Nama --" or cluster == "-- Pilih Cluster --" or role == "-- Pilih Role --" or keperluan == "-- Pilih Keperluan --" or jns_kendaraan == "-- Pilih Kategori --")
+        form_invalid = (nama == "" or cluster == "" or role == "-- Pilih Role --" or keperluan == "" or jns_kendaraan == "")
         izin_lanjut = True
         if is_duplicate:
             st.warning("⚠️ DATA DUPLIKAT: Sistem mendeteksi Tiket ini sudah diinput.")
@@ -510,89 +516,99 @@ elif st.session_state.page == "✅ Form PJB Operasional":
 
         if st.session_state.get("pjb_data"):
             d = st.session_state.pjb_data
-            st.markdown("<div class='section-title'>🔒 Rincian Terkunci (Sistem)</div>", unsafe_allow_html=True)
-            c_a, c_b = st.columns(2)
-            with c_a:
-                tgl_pjb = st.date_input("Tanggal PJB")
-                st.text_input("Nama Petugas", d["Nama"], disabled=True)
-                st.text_input("Kategori & Plat", f'{d["BBM"]} - {d["Plat"]}', disabled=True)
-            with c_b:
-                st.text_input("Site ID Tujuan", d["Site"], disabled=True)
-                st.text_input("Keperluan", d["Keperluan"], disabled=True)
-                nominal_pjb = st.number_input("Nominal PJB Terpakai (Otomatis Dikunci)", value=int(d["NominalReq"]), disabled=True)
+            
+            st.markdown("<div class='section-title'>💸 Validasi Budget & Bukti Transfer</div>", unsafe_allow_html=True)
+            f_transfer = st.file_uploader("Upload Foto Bukti Transfer Dana (WAJIB untuk mengakses Form PJB)", type=["jpg", "png", "jpeg"])
+            
+            if f_transfer is None:
+                st.warning("⚠️ **AKSES TERKUNCI:** Silakan upload Bukti Transfer dari Admin terlebih dahulu agar form pengisian PJB terbuka.")
+            else:
+                st.success("✅ Bukti Transfer terlampir. Akses form PJB terbuka.")
+                
+                st.markdown("<div class='section-title'>🔒 Rincian Terkunci (Sistem)</div>", unsafe_allow_html=True)
+                c_a, c_b = st.columns(2)
+                with c_a:
+                    tgl_pjb = st.date_input("Tanggal PJB")
+                    st.text_input("Nama Petugas", d["Nama"], disabled=True)
+                    st.text_input("Kategori & Plat", f'{d["BBM"]} - {d["Plat"]}', disabled=True)
+                with c_b:
+                    st.text_input("Site ID Tujuan", d["Site"], disabled=True)
+                    st.text_input("Keperluan", d["Keperluan"], disabled=True)
+                    nominal_pjb = st.number_input("Nominal PJB Terpakai (Otomatis Dikunci)", value=int(d["NominalReq"]), disabled=True)
 
-            st.markdown("<div class='section-title'>📝 Realisasi Lapangan & KM/RH</div>", unsafe_allow_html=True)
-            c_c, c_d = st.columns(2)
-            
-            is_genset = "genset" in str(d["BBM"]).lower()
-            label_akhir = "RH Genset Akhir" if is_genset else "KM Akhir Kendaraan"
-            info_text = "Total Jam Backup (RH)" if is_genset else "Total Perjalanan (KM)"
-            icon_text = "⏱️" if is_genset else "🛣️"
-            
-            with c_c:
-                km_akhir = st.number_input(f"{label_akhir} (Wajib Update)", min_value=int(d["KMAwal"]), value=int(d["KMAwal"]))
-                total_km_tempuh = km_akhir - int(d["KMAwal"])
-                st.info(f"{icon_text} Kalkulasi {info_text}: **{total_km_tempuh}**")
+                st.markdown("<div class='section-title'>📝 Realisasi Lapangan & KM/RH</div>", unsafe_allow_html=True)
+                c_c, c_d = st.columns(2)
                 
-            with c_d:
-                tot_liter = st.text_input("Total Liter BBM/Material", value="0")
-                harga_satuan = st.number_input("Harga Satuan (BBM/Material)", min_value=0, step=500)
-                tot_nilai_nota = st.number_input("Total Fisik Sesuai Nota (Rp)", min_value=0, step=1000)
-            
-            st.markdown("<div class='section-title'>📸 Lampiran Bukti (Foto)</div>", unsafe_allow_html=True)
-            p1, p2, p3 = st.columns(3)
-            with p1: f_isi = st.file_uploader("Evidance Pengisian", type=["jpg","png"]); f_nota_bbm = st.file_uploader("Nota BBM", type=["jpg","png"])
-            with p2: f_mat = st.file_uploader("Foto Material", type=["jpg","png"]); f_notamat = st.file_uploader("Nota Material", type=["jpg","png"])
-            with p3: f_inap = st.file_uploader("Nota Penginapan", type=["jpg","png"]); f_kerja = st.file_uploader("Evidance Pekerjaan", type=["jpg","png"]); f_km = st.file_uploader("Foto KM/RH Akhir (Disanding)", type=["jpg","png"])
-            
-            # PROTEKSI BBM ANOMALI (HANYA GENSET)
-            is_bbm_anomali = is_genset and ("dexlite" in str(d["BBM"]).lower() or "bio solar" in str(d["BBM"]).lower()) and (harga_satuan > 28000)
-            
-            if is_bbm_anomali:
-                st.markdown("<hr>", unsafe_allow_html=True)
-                st.error("🚨 DETEKSI ANOMALI GENSET: Harga Dexlite / Bio Solar melebihi batas wajar (Rp 28.000). Anda tidak bisa memproses PJB sebelum mendapat persetujuan Atasan segera lakukan klarifikasi atau buat evidance lengkap terkait harga aktual.")
+                is_genset = "genset" in str(d["BBM"]).lower()
+                label_akhir = "RH Genset Akhir" if is_genset else "KM Akhir Kendaraan"
+                info_text = "Total Jam Backup (RH)" if is_genset else "Total Perjalanan (KM)"
+                icon_text = "⏱️" if is_genset else "🛣️"
                 
-                status_approval = "NONE"
-                for r in reversed(app_r):
-                    if len(r) > 5 and r[2] == cari_tiket.strip().upper():
-                        status_approval = r[5]
-                        break
+                with c_c:
+                    km_akhir = st.number_input(f"{label_akhir} (Wajib Update)", min_value=int(d["KMAwal"]), value=int(d["KMAwal"]))
+                    total_km_tempuh = km_akhir - int(d["KMAwal"])
+                    st.info(f"{icon_text} Kalkulasi {info_text}: **{total_km_tempuh}**")
+                    
+                with c_d:
+                    tot_liter = st.text_input("Total Liter BBM/Material", value="0")
+                    harga_satuan = st.number_input("Harga Satuan (BBM/Material)", min_value=0, step=500)
+                    tot_nilai_nota = st.number_input("Total Fisik Sesuai Nota (Rp)", min_value=0, step=1000)
                 
-                if status_approval == "PENDING":
-                    st.warning("⏳ Status: **MENUNGGU APPROVAL**. Permohonan sudah masuk ke sistem Admin. Silakan hubungi atasan.")
-                    st.stop()
-                elif status_approval == "REJECTED":
-                    st.error("❌ Status: **DITOLAK!** Harga satuan tidak disetujui Admin. Silakan perbaiki kesepakatan harga / evidance, lalu ajukan ulang.")
-                    if st.button("Ajukan Ulang Approval"):
-                        append_data(SHEET_APP, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), d["Nama"], cari_tiket.strip().upper(), d["BBM"], harga_satuan, "PENDING", "-"], target_ss)
-                        st.success("Terkirim ulang!"); time.sleep(1.5); st.rerun()
-                    st.stop()
-                elif status_approval == "APPROVED":
-                    st.success("✅ Harga Anomali telah di-APPROVE oleh Admin. Anda dapat melanjutkan PJB.")
-                else:
-                    st.info("Kirim notifikasi ke email Oktapradika@57gmail.com agar Admin dapat mengecek faktual harga di lapangan.")
-                    col_b1, col_b2 = st.columns(2)
-                    with col_b1:
-                        if st.button("🚨 Ajukan Approval Anomali ke Admin", type="primary"):
+                st.markdown("<div class='section-title'>📸 Lampiran Bukti (Foto)</div>", unsafe_allow_html=True)
+                p1, p2, p3 = st.columns(3)
+                with p1: f_isi = st.file_uploader("Evidance Pengisian", type=["jpg","png"]); f_nota_bbm = st.file_uploader("Nota BBM", type=["jpg","png"])
+                with p2: f_mat = st.file_uploader("Foto Material", type=["jpg","png"]); f_notamat = st.file_uploader("Nota Material", type=["jpg","png"])
+                with p3: f_inap = st.file_uploader("Nota Penginapan", type=["jpg","png"]); f_kerja = st.file_uploader("Evidance Pekerjaan", type=["jpg","png"]); f_km = st.file_uploader("Foto KM/RH Akhir (Disanding)", type=["jpg","png"])
+                
+                # PROTEKSI BBM ANOMALI (HANYA GENSET)
+                is_bbm_anomali = is_genset and ("dexlite" in str(d["BBM"]).lower() or "bio solar" in str(d["BBM"]).lower()) and (harga_satuan > 28000)
+                
+                if is_bbm_anomali:
+                    st.markdown("<hr>", unsafe_allow_html=True)
+                    st.error("🚨 DETEKSI ANOMALI GENSET: Harga Dexlite / Bio Solar melebihi batas wajar (Rp 28.000). Anda tidak bisa memproses PJB sebelum mendapat persetujuan Atasan segera lakukan klarifikasi atau buat evidance lengkap terkait harga aktual.")
+                    
+                    status_approval = "NONE"
+                    for r in reversed(app_r):
+                        if len(r) > 5 and r[2] == cari_tiket.strip().upper():
+                            status_approval = r[5]
+                            break
+                    
+                    if status_approval == "PENDING":
+                        st.warning("⏳ Status: **MENUNGGU APPROVAL**. Permohonan sudah masuk ke sistem Admin. Silakan hubungi atasan.")
+                        st.stop()
+                    elif status_approval == "REJECTED":
+                        st.error("❌ Status: **DITOLAK!** Harga satuan tidak disetujui Admin. Silakan perbaiki kesepakatan harga / evidance, lalu ajukan ulang.")
+                        if st.button("Ajukan Ulang Approval"):
                             append_data(SHEET_APP, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), d["Nama"], cari_tiket.strip().upper(), d["BBM"], harga_satuan, "PENDING", "-"], target_ss)
-                            st.success("Sistem berhasil mencatat! Silakan klik tombol di samping untuk kirim Email.")
-                            time.sleep(2); st.rerun()
-                    with col_b2:
-                        mail_body = f"Halo Admin,%0A%0AMohon approval untuk harga BBM Genset Anomali berikut:%0ANama: {d['Nama']}%0ATiket: {cari_tiket.strip().upper()}%0AJenis BBM: {d['BBM']}%0AHarga Diajukan: Rp {harga_satuan}%0A%0ATerima kasih."
-                        st.markdown(f"""<a href="mailto:Oktapradika@57gmail.com?subject=Approval BBM Genset Anomali - {cari_tiket.strip().upper()}&body={mail_body}" target="_blank">
-                                    <button style="width:100%; height:42px; background-color:#EA4335; color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer;">📧 Buka Gmail (Kirim Pesan)</button></a>""", unsafe_allow_html=True)
-                    st.stop()
+                            st.success("Terkirim ulang!"); time.sleep(1.5); st.rerun()
+                        st.stop()
+                    elif status_approval == "APPROVED":
+                        st.success("✅ Harga Anomali telah di-APPROVE oleh Admin. Anda dapat melanjutkan PJB.")
+                    else:
+                        st.info("Kirim notifikasi ke email Oktapradika@57gmail.com agar Admin dapat mengecek faktual harga di lapangan.")
+                        col_b1, col_b2 = st.columns(2)
+                        with col_b1:
+                            if st.button("🚨 Ajukan Approval Anomali ke Admin", type="primary"):
+                                append_data(SHEET_APP, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), d["Nama"], cari_tiket.strip().upper(), d["BBM"], harga_satuan, "PENDING", "-"], target_ss)
+                                st.success("Sistem berhasil mencatat! Silakan klik tombol di samping untuk kirim Email.")
+                                time.sleep(2); st.rerun()
+                        with col_b2:
+                            mail_body = f"Halo Admin,%0A%0AMohon approval untuk harga BBM Genset Anomali berikut:%0ANama: {d['Nama']}%0ATiket: {cari_tiket.strip().upper()}%0AJenis BBM: {d['BBM']}%0AHarga Diajukan: Rp {harga_satuan}%0A%0ATerima kasih."
+                            st.markdown(f"""<a href="mailto:Oktapradika@57gmail.com?subject=Approval BBM Genset Anomali - {cari_tiket.strip().upper()}&body={mail_body}" target="_blank">
+                                        <button style="width:100%; height:42px; background-color:#EA4335; color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer;">📧 Buka Gmail (Kirim Pesan)</button></a>""", unsafe_allow_html=True)
+                        st.stop()
 
-            st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("🚀 Sahkan Pelaporan PJB", type="primary", use_container_width=True):
-                if any(len(r)>21 and r[21].strip().upper() == cari_tiket.strip().upper() and clean_nominal(r[11]) == nominal_pjb for r in pjb_r[1:]):
-                    st.error("⛔ Terindikasi Double Input (Tiket & Nominal Sama).")
-                else:
-                    with st.spinner("Memproses ke Database..."):
-                        data_pjb = [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), tgl_pjb.strftime("%d/%m/%Y"), d["NOP"], d["Cluster"], d["Nama"], d["Role"], d["Site"], d["Keperluan"], d["BBM"], d["Desc"], str(km_akhir), nominal_pjb, d["Plat"], upload_foto(f_isi), upload_foto(f_nota_bbm), upload_foto(f_km), upload_foto(f_mat), upload_foto(f_notamat), upload_foto(f_inap), upload_foto(f_kerja), tot_nilai_nota, cari_tiket, tot_liter, harga_satuan, str(total_km_tempuh)]
-                        append_data(SHEET_PJB, [(r+[""]*25)[:25] for r in [data_pjb]][0], target_ss)
-                        st.balloons(); st.success("🎉 Laporan Berhasil Ditutup!"); st.session_state.pjb_data = None
-                        time.sleep(2.5); st.rerun()
+                st.markdown("<br>", unsafe_allow_html=True)
+                if st.button("🚀 Sahkan Pelaporan PJB", type="primary", use_container_width=True):
+                    if any(len(r)>21 and r[21].strip().upper() == cari_tiket.strip().upper() and clean_nominal(r[11]) == nominal_pjb for r in pjb_r[1:]):
+                        st.error("⛔ Terindikasi Double Input (Tiket & Nominal Sama).")
+                    else:
+                        with st.spinner("Mengupload foto dan memproses ke Database..."):
+                            # Penambahan element baru (f_transfer) di index terakhir
+                            data_pjb = [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), tgl_pjb.strftime("%d/%m/%Y"), d["NOP"], d["Cluster"], d["Nama"], d["Role"], d["Site"], d["Keperluan"], d["BBM"], d["Desc"], str(km_akhir), nominal_pjb, d["Plat"], upload_foto(f_isi), upload_foto(f_nota_bbm), upload_foto(f_km), upload_foto(f_mat), upload_foto(f_notamat), upload_foto(f_inap), upload_foto(f_kerja), tot_nilai_nota, cari_tiket, tot_liter, harga_satuan, str(total_km_tempuh), upload_foto(f_transfer)]
+                            append_data(SHEET_PJB, [(r+[""]*26)[:26] for r in [data_pjb]][0], target_ss)
+                            st.balloons(); st.success("🎉 Laporan Berhasil Ditutup!"); st.session_state.pjb_data = None
+                            time.sleep(2.5); st.rerun()
 
 # ==========================================
 # PAGE 3: APPROVAL CENTER (KHUSUS ADMIN)
@@ -686,7 +702,8 @@ elif st.session_state.page == "📊 Neraca / Buku Kas":
                     
                     with t2:
                         if len(pjb_r) > 1:
-                            df_p = pd.DataFrame([(r + [""] * 25)[:25] for r in pjb_r[1:]], columns=["Waktu","Tanggal","N","C","Nama","R","S","Keperluan","B","D","K","Nominal","Pl","u1","u2","u3","u4","u5","u6","u7","NN","NoTiket","Lt","Hs","TKM_RH"])
+                            # Ditambahkan kolom "BuktiTF" ke-26
+                            df_p = pd.DataFrame([(r + [""] * 26)[:26] for r in pjb_r[1:]], columns=["Waktu","Tanggal","N","C","Nama","R","S","Keperluan","B","D","K","Nominal","Pl","u1","u2","u3","u4","u5","u6","u7","NN","NoTiket","Lt","Hs","TKM_RH","BuktiTF"])
                             df_p['Nominal'] = df_p['Nominal'].apply(clean_nominal)
                             st.markdown("### Detail Histori PJB")
                             st.dataframe(df_p[['Tanggal', 'NoTiket', 'Nama', 'Keperluan', 'TKM_RH', 'Nominal']], use_container_width=True)
@@ -756,7 +773,7 @@ elif st.session_state.page == "📈 Live Monitoring":
                                 if match: angka_satelit = float(match.group(1))
                             except: pass
 
-                            # LOGIKA KM PASTI AKURAT: KM AKHIR - KM AWAL (Sesuai Permintaan)
+                            # LOGIKA KM PASTI AKURAT: KM AKHIR - KM AWAL
                             km_awal = int(clean_nominal(req_match[12]))
                             km_akhir = int(clean_nominal(pjb[10]))
                             total_input_tim = km_akhir - km_awal
