@@ -16,7 +16,6 @@ import re
 # ==========================================
 st.set_page_config(page_title="SiRAPI", page_icon="💵", layout="wide")
 
-# MENGUBAH TOMBOL BAWAAN STREAMLIT MENJADI CARD UI (100% CLICKABLE)
 st.markdown("""
     <style>
         .main { background-color: #F8FAFC; font-family: 'Inter', sans-serif; }
@@ -656,7 +655,6 @@ elif st.session_state.page == "✅ Form PJB Operasional":
 
                 st.markdown("<br>", unsafe_allow_html=True)
                 
-                # --- CEK DOUBLE INPUT DENGAN BYPASS PASSWORD "Koordokt" ---
                 is_double_input = any(len(r)>21 and r[21].strip().upper() == cari_tiket.strip().upper() and clean_nominal(r[11]) == nominal_pjb for r in pjb_r[1:])
                 
                 if is_double_input:
@@ -808,7 +806,7 @@ elif st.session_state.page == "📊 Neraca / Buku Kas":
 # PAGE 5: LIVE MONITORING
 # ==========================================
 elif st.session_state.page == "📈 Live Monitoring":
-    st.markdown("<div class='header-card' style='background: linear-gradient(135deg, #020617 0%, #0F172A 100%); color:#10B981; border-bottom: 4px solid #10B981;'><h2>📈 LIVE MONITORING & EVALUASI TIM</h2><p style='color:#94A3B8;'>Sistem Analisa Kas, Tracker KM Satelit, & Record Anomali Genset</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='header-card' style='background: linear-gradient(135deg, #020617 0%, #0F172A 100%); color:#10B981; border-bottom: 4px solid #10B981;'><h2>📈 LIVE MONITORING & EVALUASI TIM</h2><p style='color:#94A3B8;'>Sistem Analisa Kas, Daily Pengeluaran, Tracker KM Satelit, & Anomali BBM</p></div>", unsafe_allow_html=True)
     if st.button("🏠 Kembali ke Home Menu", use_container_width=True): st.session_state.page = "🏠 Hub Menu Utama"; st.rerun()
     
     if st.session_state.get("admin_password") not in AUTHORIZED_PASSWORDS: st.error("⛔ AKSES TERKUNCI")
@@ -818,9 +816,9 @@ elif st.session_state.page == "📈 Live Monitoring":
             data_all = fetch_spreadsheet_data(MASTER_DATA[nop_live]["spreadsheet_id"])
             um_r, rekap_r, pjb_r, req_r, app_r = data_all[SHEET_UM], data_all["Rekap PJB"], data_all[SHEET_PJB], data_all[SHEET_REQUEST], data_all[SHEET_APP]
             
-            t1, t2, t3 = st.tabs(["💰 1. Sisa Kas & Burn Rate", "🚨 2. Record Anomali Genset", "🕵️ 3. Evaluasi Kinerja (Track KM/RH)"])
+            t1, t2, t3 = st.tabs(["💰 1. Sisa Kas, Daily PJB & Kategori BBM", "🚨 2. Record Anomali & Warning Tim", "🕵️ 3. Evaluasi Kinerja (Track KM/RH)"])
             
-            # --- TAB 1: KEUANGAN ---
+            # --- TAB 1: KEUANGAN, DAILY PJB & KATEGORI BBM ---
             with t1:
                 total_um = sum([clean_nominal(r[3]) for r in um_r[1:] if len(r)>3]) if len(um_r)>1 else 0
                 tot_serap = sum([clean_nominal(r[15]) for r in rekap_r[1:] if len(r)>15]) if len(rekap_r)>1 else 0
@@ -829,26 +827,94 @@ elif st.session_state.page == "📈 Live Monitoring":
                 
                 m1, m2, m3 = st.columns(3)
                 m1.markdown(f"<div class='metric-3d'><div class='metric-title'>Total Kas Masuk</div><div class='metric-value'>Rp {total_um:,.0f}</div></div>", unsafe_allow_html=True)
-                m2.markdown(f"<div class='metric-3d'><div class='metric-title'>Total Penyerapan</div><div class='metric-value'>Rp {tot_serap:,.0f}</div></div>", unsafe_allow_html=True)
+                m2.markdown(f"<div class='metric-3d'><div class='metric-title'>Total Penyerapan PJB</div><div class='metric-value'>Rp {tot_serap:,.0f}</div></div>", unsafe_allow_html=True)
                 m3.markdown(f"<div class='metric-3d'><div class='metric-title'>Sisa Kas (Burn Rate: {burn_rate:.1f}%)</div><div class='metric-value' style='color:#10B981;'>Rp {sisa_kas:,.0f}</div></div>", unsafe_allow_html=True)
-            
-            # --- TAB 2: RECORD ANOMALI GENSET ---
-            with t2:
-                st.markdown("### 🚨 Daftar Record BBM Genset Anomali (> Rp 28.000)")
-                if len(app_r) > 1:
-                    df_app = pd.DataFrame(app_r[1:], columns=["Waktu", "Nama", "Tiket", "BBM", "Harga", "Status", "Catatan"])
-                    df_genset = df_app[df_app["BBM"].str.contains("Genset", case=False, na=False)]
-                    if not df_genset.empty:
-                        st.dataframe(df_genset, hide_index=True, use_container_width=True)
-                    else:
-                        st.info("Tidak ada histori anomali harga BBM Genset di wilayah ini.")
+                
+                st.markdown("### 📅 Daily Pengeluaran PJB & Rekap Berdasarkan Kategori Jenis BBM")
+                if len(pjb_r) > 1:
+                    df_pjb_all = pd.DataFrame([(r + [""] * 28)[:28] for r in pjb_r[1:]], columns=["Waktu","Tanggal","N","C","Nama","R","S","Keperluan","BBM","D","KMAkhir","Nominal","Pl","u1","u2","u3","u4","u5","u6","u7","NN","NoTiket","Lt","Hs","TKM_RH","u8","u9","BuktiTF"])
+                    df_pjb_all['Nominal_Clean'] = df_pjb_all['Nominal'].apply(clean_nominal)
+                    df_pjb_all['Tanggal_PJB'] = pd.to_datetime(df_pjb_all['Tanggal'], format='%d/%m/%Y', errors='coerce').dt.date
+                    
+                    col_d1, col_d2 = st.columns(2)
+                    with col_d1:
+                        st.markdown("#### 📆 Daily Pengeluaran PJB")
+                        df_daily = df_pjb_all.groupby('Tanggal_PJB')['Nominal_Clean'].sum().reset_index().sort_values('Tanggal_PJB', ascending=False)
+                        df_daily.columns = ['Tanggal PJB', 'Total Pengeluaran (Rp)']
+                        df_daily['Total Pengeluaran (Rp)'] = df_daily['Total Pengeluaran (Rp)'].apply(lambda x: f"Rp {x:,.0f}")
+                        st.dataframe(df_daily, hide_index=True, use_container_width=True)
+                        
+                    with col_d2:
+                        st.markdown("#### ⛽ Total Pengeluaran per Jenis BBM / Kategori")
+                        df_cat = df_pjb_all.groupby('BBM')['Nominal_Clean'].sum().reset_index().sort_values('Nominal_Clean', ascending=False)
+                        df_cat.columns = ['Jenis BBM / Kategori', 'Total Nominal (Rp)']
+                        df_cat['Total Nominal (Rp)'] = df_cat['Total Nominal (Rp)'].apply(lambda x: f"Rp {x:,.0f}")
+                        st.dataframe(df_cat, hide_index=True, use_container_width=True)
                 else:
-                    st.info("Belum ada record approval sama sekali.")
+                    st.info("Belum ada data PJB untuk rekap harian dan kategori.")
+            
+            # --- TAB 2: RECORD ANOMALI & WARNING TIM ---
+            with t2:
+                st.markdown("### 🚨 List Warning & Tracking Anomali Konsumsi BBM Tim (Mobil / Motor / Genset)")
+                st.markdown("Daftar tim yang terindikasi boros atau memiliki anomali rasio konsumsi BBM berdasarkan data aktual PJB.")
+                
+                warning_list = []
+                for pjb in pjb_r[1:]:
+                    if len(pjb) > 24:
+                        no_tiket = pjb[21]
+                        req_match = next((x for x in req_r[1:] if len(x) > 13 and x[3] == no_tiket), None)
+                        if req_match:
+                            nama_petugas = req_match[5]
+                            kategori_bbm = req_match[10]
+                            km_awal = int(clean_nominal(req_match[12]))
+                            km_akhir = int(clean_nominal(pjb[10]))
+                            total_km = km_akhir - km_awal
+                            nominal_pjb_val = clean_nominal(pjb[11]) if len(pjb)>11 else clean_nominal(req_match[9])
+                            
+                            try: liter_val = float(str(pjb[22]).replace(',', '.'))
+                            except: liter_val = 0.0
+                            
+                            is_mobil = "mobil" in str(kategori_bbm).lower()
+                            is_motor = "motor" in str(kategori_bbm).lower()
+                            is_genset = "genset" in str(kategori_bbm).lower()
+                            
+                            is_boros = False
+                            ket_status = "Normal"
+                            if liter_val > 0:
+                                ratio = total_km / liter_val
+                                if is_mobil and ratio < 7:
+                                    is_boros = True
+                                    ket_status = f"🔴 Mobil Boros ({ratio:.1f} KM/L < 7)"
+                                elif is_motor and ratio < 15:
+                                    is_boros = True
+                                    ket_status = f"🔴 Motor Boros ({ratio:.1f} KM/L < 15)"
+                            
+                            harga_satuan_val = clean_nominal(pjb[23]) if len(pjb)>23 else 0
+                            if is_genset and ("dexlite" in str(kategori_bbm).lower() or "bio solar" in str(kategori_bbm).lower()) and harga_satuan_val > 28000:
+                                is_boros = True
+                                ket_status = f"🚨 Anomali Harga Genset (Rp {harga_satuan_val:,})"
+                                
+                            if is_boros:
+                                warning_list.append({
+                                "Nama Tim": nama_petugas,
+                                "Tiket": no_tiket,
+                                "Nominal PJB": f"Rp {nominal_pjb_val:,.0f}",
+                                "Kategori": kategori_bbm,
+                                "Total Jarak/RH": total_km,
+                                "Liter": liter_val,
+                                "Status Warning": ket_status
+                            })
+                            
+                if warning_list:
+                    df_warn = pd.DataFrame(warning_list)
+                    st.dataframe(df_warn, hide_index=True, use_container_width=True)
+                else:
+                    st.success("✨ Aman! Tidak ada tim yang terdeteksi boros atau memiliki anomali BBM.")
 
             # --- TAB 3: EVALUASI KINERJA (KM TIM VS SATELIT) ---
             with t3:
-                st.markdown("### 🕵️ Tracker KM / RH Tim vs Satelit & Analisa BBM")
-                st.markdown("Analisa perbandingan aktual lapangan dengan perhitungan Satelit, beserta rasio penggunaan BBM standar.")
+                st.markdown("### 🕵️ Tracker KM / RH Tim (Awal & Akhir) vs Satelit & Analisa BBM")
+                st.markdown("Rincian lengkap histori KM/RH Awal, KM/RH Akhir, Nomor Tiket, Nominal PJB, dan perbandingan dengan Satelit.")
                 
                 eval_list = []
                 for pjb in pjb_r[1:]:
@@ -869,6 +935,7 @@ elif st.session_state.page == "📈 Live Monitoring":
                             km_awal = int(clean_nominal(req_match[12]))
                             km_akhir = int(clean_nominal(pjb[10]))
                             total_input_tim = km_akhir - km_awal
+                            nominal_pjb_val = clean_nominal(pjb[11]) if len(pjb)>11 else clean_nominal(req_match[9])
                             
                             status_jarak = "🟢 Aman"
                             is_genset = "genset" in str(kategori).lower()
@@ -887,38 +954,30 @@ elif st.session_state.page == "📈 Live Monitoring":
                                 val_per_liter = total_input_tim / liter_val
                                 analisa_bbm = f"{val_per_liter:.1f} {'KM/L' if not is_genset else 'RH/L'}"
                                 
-                                # Logika Penilaian Standar BBM
                                 if is_mobil:
-                                    if val_per_liter < 7:
-                                        status_bbm = "🔴 Boros (< 7 KM/L)"
-                                    else:
-                                        status_bbm = "🟢 Normal"
+                                    if val_per_liter < 7: status_bbm = "🔴 Boros (< 7 KM/L)"
+                                    else: status_bbm = "🟢 Normal"
                                 elif is_motor:
-                                    if val_per_liter < 15:
-                                        status_bbm = "🔴 Boros (< 15 KM/L)"
-                                    else:
-                                        status_bbm = "🟢 Normal"
-                                else:
-                                    status_bbm = "⚪ N/A"
-                            else:
-                                status_bbm = "-"
+                                    if val_per_liter < 15: status_bbm = "🔴 Boros (< 15 KM/L)"
+                                    else: status_bbm = "🟢 Normal"
+                                else: status_bbm = "⚪ N/A"
+                            else: status_bbm = "-"
 
                             if not is_genset:
                                 if angka_satelit > 0:
-                                    if total_input_tim > angka_satelit:
-                                        status_jarak = "🟢 Aman & Wajar"
-                                    else:
-                                        status_jarak = "🟢 Aman"
-                                else:
-                                    status_jarak = "⚪ Data Satelit Kosong"
-                            else:
-                                status_jarak = "⏱️ (RH Genset)"
+                                    if total_input_tim > angka_satelit: status_jarak = "🟢 Aman & Wajar"
+                                    else: status_jarak = "🟢 Aman"
+                                else: status_jarak = "⚪ Data Satelit Kosong"
+                            else: status_jarak = "⏱️ (RH Genset)"
 
                             eval_list.append({
                                 "Nama Tim": req_match[5],
                                 "Tiket": no_tiket,
+                                "Nominal PJB": f"Rp {nominal_pjb_val:,.0f}",
                                 "Kategori": kategori,
-                                "Jarak Input Tim": f"{total_input_tim} {'RH' if is_genset else 'KM'}",
+                                "KM/RH Awal": km_awal,
+                                "KM/RH Akhir": km_akhir,
+                                "Total Jarak Tim": f"{total_input_tim} {'RH' if is_genset else 'KM'}",
                                 "Jarak Satelit": f"{angka_satelit} KM" if not is_genset and angka_satelit > 0 else "-",
                                 "Status Jarak": status_jarak,
                                 "Konsumsi Aktual": analisa_bbm,
