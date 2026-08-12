@@ -379,7 +379,7 @@ elif st.session_state.page == "📝 Form Request Dana":
         with col1:
             tanggal = st.date_input("Tanggal Pengajuan")
             cluster = st.selectbox("Cluster Regional", [""] + MASTER_DATA[nop]["clusters"])
-            nama = st.selectbox("Nama Petugas / Pemohon", [""] + MASTER_DATA[nop]["names"])
+            nama = st.selectbox("Nama Petugas / Pemohon (PIC Utama)", [""] + MASTER_DATA[nop]["names"])
             
             nama_lookup = nama.strip().upper()
             
@@ -410,7 +410,24 @@ elif st.session_state.page == "📝 Form Request Dana":
             keperluan = st.selectbox("Klasifikasi Keperluan Dana", LIST_KEPERLUAN)
             jns_kendaraan = st.selectbox("Jenis Kendaraan / Peralatan", ["", "Mobil", "Motor", "Genset", "Lainnya"])
             
-            # --- LOGIKA MOTOR, GENSET, DLL ---
+            # --- LOGIKA KENDARAAN MOBIL (REKAN TIM) ---
+            tim_bareng = []
+            tim_terkunci = []
+            if jns_kendaraan.lower() == "mobil":
+                st.markdown("<div style='background-color:#F8FAFC; padding:15px; border-radius:10px; border-left: 5px solid #3B82F6; margin-bottom: 15px;'><b>🚙 Info Perjalanan Mobil</b></div>", unsafe_allow_html=True)
+                
+                # Filter list nama agar nama PIC Utama tidak muncul
+                list_nama_tim = [n for n in MASTER_DATA[nop]["names"] if n.strip().upper() != nama_lookup and n != ""]
+                tim_bareng = st.multiselect("👥 Pilih Rekan Tim yang Berangkat Bersama (Opsional)", list_nama_tim)
+                
+                # Cek Blocker untuk rekan tim HANYA JIKA role TE, MBP, atau CME
+                if role in ["TE", "MBP", "CME"] and tim_bareng:
+                    for member in tim_bareng:
+                        m_out_all, _, _, _ = get_user_tickets_status(member, req_r, pjb_r)
+                        if len(m_out_all) > 0: # Jika ada tiket yang belum di-PJB
+                            tim_terkunci.append(member)
+            
+            # --- LOGIKA KENDARAAN LAINNYA & MOTOR LIMIT ---
             kebutuhan = 0
             jenis_bahan_bakar = ""
             motor_anomali = False
@@ -514,6 +531,12 @@ elif st.session_state.page == "📝 Form Request Dana":
                 
             km_awal = st.number_input(label_indikator, min_value=0, value=last_indikator)
             deskripsi = st.text_area("Deskripsi Pekerjaan / Justifikasi")
+            
+            # Menyisipkan info tim bareng ke dalam deskripsi jika ada
+            if tim_bareng:
+                deskripsi_final = deskripsi + f"\n\n[Berangkat bersama tim: {', '.join(tim_bareng)}]"
+            else:
+                deskripsi_final = deskripsi
 
         is_vehicle = jns_kendaraan.lower() in ['mobil', 'motor']
         st.markdown("<div class='section-title'>📍 3. Rute Peta (Satelit) & Keuangan</div>", unsafe_allow_html=True)
@@ -555,22 +578,27 @@ elif st.session_state.page == "📝 Form Request Dana":
         
         form_invalid = (nama == "" or cluster == "" or role == "-- Pilih Role --" or keperluan == "" or jns_kendaraan == "")
         izin_lanjut = True
+        is_team_locked = len(tim_terkunci) > 0
+        
         if is_duplicate:
             st.warning("⚠️ DATA DUPLIKAT: Sistem mendeteksi Tiket ini sudah diinput.")
             if not st.checkbox("✅ Ya, saya yakin data ini aman (Revisi/Baru)."): izin_lanjut = False
 
-        # LOGIKA BLOKIR UTAMA: (Locked by Outstanding, Limit Motor, atau Anomali Kapasitas)
-        if is_locked_user or motor_anomali or motor_limit_lock or (is_duplicate and not izin_lanjut):
+        # LOGIKA BLOKIR UTAMA: (Locked by Outstanding, Limit Motor, Anomali Kapasitas, atau Tim Belum PJB)
+        if is_locked_user or motor_anomali or motor_limit_lock or is_team_locked or (is_duplicate and not izin_lanjut):
+            
             if is_locked_user: st.error(f"⛔ AKSES DITOLAK: Sdr. {nama} memiliki {len(out_lock)} tiket yang belum PJB!")
             if motor_anomali: st.error("⛔ AKSES DITOLAK: Liter Kebutuhan melebih Kapasitas Tangki Motor.")
             if motor_limit_lock: st.error("⛔ AKSES DITOLAK: Limit BBM Motor Bulanan melebihi 500k. Tunggu Approval Admin.")
+            if is_team_locked: 
+                st.error(f"⛔ AKSES DITOLAK: Rekan setim yang Anda bawa berangkat ({', '.join(tim_terkunci)}) masih memiliki tiket yang BELUM DI-PJB. Silakan minta tim Anda menyelesaikan PJB mereka terlebih dahulu (Aturan ini tidak berlaku khusus untuk role PM)!")
             
             if st.text_input("🔑 Password Khusus (Bypass Admin):", type="password") in AUTHORIZED_PASSWORDS:
                 if st.button("💡 Paksakan Kirim Request Dana (Bypass)", type="primary"):
                     if form_invalid or not tiket.strip() or invalid_coords: st.error("Lengkapi form!")
                     else:
                         with st.spinner("Processing..."):
-                            data_req = [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), tanggal.strftime("%d/%m/%Y"), nop, tiket, cluster, nama, role, site_id, keperluan, kebutuhan, final_bbm, deskripsi, str(km_awal), jarak_final_text, lat_berangkat, long_berangkat, plat, rek_penerima, no_rek, nominal_tf, upload_foto(foto_km), upload_foto(foto_evidance), lat_tujuan, long_tujuan]
+                            data_req = [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), tanggal.strftime("%d/%m/%Y"), nop, tiket, cluster, nama, role, site_id, keperluan, kebutuhan, final_bbm, deskripsi_final, str(km_awal), jarak_final_text, lat_berangkat, long_berangkat, plat, rek_penerima, no_rek, nominal_tf, upload_foto(foto_km), upload_foto(foto_evidance), lat_tujuan, long_tujuan]
                             append_data(SHEET_REQUEST, data_req, target_ss)
                             st.balloons(); st.success("🎉 Berhasil Bypass!"); time.sleep(2); st.rerun()
         else:
@@ -578,7 +606,7 @@ elif st.session_state.page == "📝 Form Request Dana":
                 if form_invalid or not tiket.strip() or invalid_coords: st.error("Lengkapi form!")
                 else:
                     with st.spinner("Memproses ke Database..."):
-                        data_req = [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), tanggal.strftime("%d/%m/%Y"), nop, tiket, cluster, nama, role, site_id, keperluan, kebutuhan, final_bbm, deskripsi, str(km_awal), jarak_final_text, lat_berangkat, long_berangkat, plat, rek_penerima, no_rek, nominal_tf, upload_foto(foto_km), upload_foto(foto_evidance), lat_tujuan, long_tujuan]
+                        data_req = [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), tanggal.strftime("%d/%m/%Y"), nop, tiket, cluster, nama, role, site_id, keperluan, kebutuhan, final_bbm, deskripsi_final, str(km_awal), jarak_final_text, lat_berangkat, long_berangkat, plat, rek_penerima, no_rek, nominal_tf, upload_foto(foto_km), upload_foto(foto_evidance), lat_tujuan, long_tujuan]
                         append_data(SHEET_REQUEST, data_req, target_ss)
                         st.balloons(); st.success("🎉 Data Anda Berhasil Dikirim!"); time.sleep(2.5); st.rerun()
 
