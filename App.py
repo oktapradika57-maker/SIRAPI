@@ -12,42 +12,69 @@ import time
 import re
 
 # ==========================================
-# 0. KONFIGURASI HALAMAN & UI ENTERPRISE
+# 0. KONFIGURASI HALAMAN & SUPER PREMIUM UI
 # ==========================================
-st.set_page_config(page_title="SiRAPI", page_icon="💵", layout="wide")
+st.set_page_config(page_title="SiRAPI Enterprise", page_icon="💎", layout="wide")
 
 st.markdown("""
     <style>
-        .main { background-color: #F8FAFC; font-family: 'Inter', sans-serif; }
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;800;900&display=swap');
+        
+        .main { background: #f4f7f6; font-family: 'Plus Jakarta Sans', sans-serif; }
+        
+        /* Premium Header Card */
         .header-card {
-            background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%);
-            padding: 30px; border-radius: 16px; color: white; text-align: center;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1); margin-bottom: 30px;
-            border-bottom: 4px solid #3B82F6;
+            background: linear-gradient(135deg, #0F2027 0%, #203A43 50%, #2C5364 100%);
+            padding: 45px 30px; border-radius: 24px; color: white; text-align: center;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.25); margin-bottom: 40px;
+            animation: fadeInDown 0.8s cubic-bezier(0.25, 0.8, 0.25, 1);
+            position: relative; overflow: hidden;
+            border-bottom: 6px solid #00F2FE;
         }
+        .header-card h1, .header-card h2 { font-weight: 900; letter-spacing: 1px; margin-bottom: 5px; }
+        .header-card p { font-size: 1.1rem; color: #cbd5e1; }
+        
+        /* Glassmorphism 3D Metrics */
+        .metric-3d {
+            background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(15px);
+            padding: 30px; border-radius: 24px; text-align: center;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.05); border: 1px solid rgba(255,255,255,0.7);
+            border-top: 6px solid #4FACFE; margin-bottom: 25px;
+            transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+        .metric-3d:hover {
+            transform: translateY(-12px) scale(1.03);
+            box-shadow: 0 25px 45px rgba(79, 172, 254, 0.2);
+            border-top: 6px solid #00F2FE;
+        }
+        .metric-title { font-size: 0.85rem; color: #64748b; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px;}
+        .metric-value { font-size: 2rem; font-weight: 900; margin-top: 10px; background: -webkit-linear-gradient(45deg, #0F2027, #4FACFE); -webkit-background-clip: text; -webkit-text-fill-color: transparent;}
+        
+        /* Dashboard Main Buttons */
         div[data-testid="stButton"] > button {
-            width: 100%; height: 180px; border-radius: 16px;
-            background-color: #ffffff; border: 1px solid #E2E8F0;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.02);
-            color: #1E293B; font-size: 18px; font-weight: 800;
-            display: flex; flex-direction: column; justify-content: center; align-items: center;
-            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.95) !important;
+            border: 1px solid #e2e8f0 !important; border-radius: 24px !important;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.03) !important;
+            height: 180px !important;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
         }
         div[data-testid="stButton"] > button:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 15px 25px -5px rgba(59, 130, 246, 0.15);
-            border-color: #3B82F6; color: #3B82F6;
+            background: linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%) !important;
+            border: none !important;
+            transform: translateY(-10px) !important;
+            box-shadow: 0 20px 40px rgba(0, 242, 254, 0.35) !important;
         }
-        div[data-testid="stButton"] > button p {
-            margin: 0; font-size: 1.1rem;
+        div[data-testid="stButton"] > button p { color: #1e293b !important; font-size: 1.25rem !important; font-weight: 800 !important; transition: color 0.3s ease; }
+        div[data-testid="stButton"] > button:hover p { color: white !important; }
+        
+        /* Section Titles */
+        .section-title { color: #0F2027; font-size: 1.35rem; font-weight: 900; border-bottom: 3px solid #e2e8f0; padding-bottom: 10px; margin-top: 35px; margin-bottom: 25px;}
+        
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-30px); }
+            to { opacity: 1; transform: translateY(0); }
         }
-        .section-title { color: #1E293B; font-size: 1.25rem; font-weight: 800; border-bottom: 2px solid #E2E8F0; padding-bottom: 8px; margin-top: 30px; margin-bottom: 20px;}
-        .metric-3d {
-            background: #ffffff; padding: 20px; border-radius: 16px; text-align: center;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); border: 1px solid #E2E8F0; border-top: 5px solid #3B82F6; margin-bottom: 15px;
-        }
-        .metric-title { font-size: 0.8rem; color: #64748B; font-weight: 700; text-transform: uppercase; }
-        .metric-value { font-size: 1.5rem; color: #0F172A; font-weight: 900; }
+        .stApp { animation: fadeInDown 0.6s ease-out; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -188,12 +215,11 @@ def load_excel_data():
                 if 'PIC' in df_nopol.columns:
                     pic_name = str(row['PIC']).strip().upper()
                     nopol_val = str(row['NOPOL']).strip()
-                    
                     if pic_name:
                         if pic_name not in tim_dict:
                             tim_dict[pic_name] = {'Latitude': 0, 'Longtitude': 0}
                         tim_dict[pic_name]['NOPOL'] = nopol_val
-    except Exception as e:
+    except Exception:
         pass
         
     return site_dict, site_list, tim_dict, list_nopol
@@ -248,7 +274,7 @@ def update_approval_status(spreadsheet_id, row_index, new_status):
 if 'page' not in st.session_state: st.session_state.page = "🏠 Hub Menu Utama"
 
 try: st.sidebar.image("koperasi-jasa-konstruksi-tower-event-organizer-network-monitoring-telekomunikasi-kisel-group-logo-kut.webp", use_container_width=True)
-except: st.sidebar.markdown("<h3 style='text-align:center;'>PT KUT</h3>", unsafe_allow_html=True)
+except: st.sidebar.markdown("<h2 style='text-align:center; font-weight:900;'>KUT SYSTEM</h2>", unsafe_allow_html=True)
 st.sidebar.markdown("<hr>", unsafe_allow_html=True)
 
 if st.sidebar.button("🏠 Home Dashboard", use_container_width=True): st.session_state.page = "🏠 Hub Menu Utama"; st.rerun()
@@ -256,7 +282,7 @@ if st.sidebar.button("🏠 Home Dashboard", use_container_width=True): st.sessio
 st.sidebar.markdown("### 📊 MENU ADMIN")
 st.sidebar.text_input("🔑 Password Akses Analitik:", type="password", key="admin_password")
 if st.session_state.get("admin_password") in AUTHORIZED_PASSWORDS:
-    st.sidebar.success("✅ Akses Terbuka")
+    st.sidebar.success("✅ Akses Admin Terbuka")
     if st.sidebar.button("🛡️ Approval Center", use_container_width=True): st.session_state.page = "🛡️ Approval Center"; st.rerun()
     if st.sidebar.button("📊 Neraca / Buku Kas", use_container_width=True): st.session_state.page = "📊 Neraca / Buku Kas"; st.rerun()
     if st.sidebar.button("📈 Live Monitoring", use_container_width=True): st.session_state.page = "📈 Live Monitoring"; st.rerun()
@@ -273,16 +299,15 @@ if cek_nop != "-- Pilih Area --":
             if hist_tkt:
                 st.sidebar.dataframe(pd.DataFrame(hist_tkt), hide_index=True)
                 if aging_august:
-                    st.sidebar.warning(f"🔔 PENGINGAT AGING: Ada {len(aging_august)} tiket di bulan Agustus yang tertunda >3 Hari. Mohon segera lakukan PJB!")
+                    st.sidebar.warning(f"🔔 PENGINGAT AGING: Ada {len(aging_august)} tiket tertunda >3 Hari. Mohon segera lakukan PJB!")
                 if out_all: 
                     st.sidebar.error(f"⚠️ {len(out_all)} Tiket tertunggak keseluruhan.")
                     if out_lock: st.sidebar.error(f"🔒 {len(out_lock)} Tiket memblokir akun.")
                 else: st.sidebar.success("✅ Seluruh tiket aman!")
             else: st.sidebar.info("Tidak ada data.")
 
-# CREDIT FOOTER
 st.sidebar.markdown("---")
-st.sidebar.markdown("<div style='text-align: center; color: #64748B; font-size: 0.9rem; font-weight: bold;'>Created by Okta Pradika</div>", unsafe_allow_html=True)
+st.sidebar.markdown("<div style='text-align: center; color: #64748B; font-size: 0.85rem; font-weight: bold; margin-top:20px;'>Created by Okta Pradika<br>v3.0 Enterprise Edition</div>", unsafe_allow_html=True)
 
 
 # ==========================================
@@ -292,30 +317,15 @@ if st.session_state.page == "🏠 Hub Menu Utama":
     st.markdown("""
         <style>
             section.main div[data-testid="column"] div[data-testid="stButton"] > button {
-                height: 160px !important;
-                border-radius: 16px !important;
-                border: 2px solid #E2E8F0 !important;
-                background-color: #ffffff !important;
-                box-shadow: 0 4px 6px rgba(0,0,0,0.02) !important;
-                transition: all 0.3s ease !important;
-            }
-            section.main div[data-testid="column"] div[data-testid="stButton"] > button:hover {
-                transform: translateY(-5px) !important;
-                border-color: #3B82F6 !important; 
-                color: #3B82F6 !important;
-                box-shadow: 0 15px 25px -5px rgba(59, 130, 246, 0.15) !important;
-            }
-            section.main div[data-testid="column"] div[data-testid="stButton"] > button p {
-                font-size: 1.15rem !important; font-weight: 800 !important;
-                white-space: pre-wrap !important; text-align: center !important; line-height: 1.5 !important;
+                height: 180px !important;
             }
         </style>
     """, unsafe_allow_html=True)
 
     st.markdown("""
-        <div style="padding: 10px 0 30px 0;">
-            <h1 style="font-size: 2.2rem; font-weight: 900; color: #1E293B; margin-bottom: 5px;">SiRAPI <span style="color: #6366F1;">KUT</span></h1>
-            <p style="color: #64748B; font-size: 1rem;">Sistem Rekapitulasi Anggaran Pertanggungjawaban Informasi.</p>
+        <div style="padding: 10px 0 40px 0; text-align:center;">
+            <h1 style="font-size: 2.8rem; font-weight: 900; color: #0F2027; margin-bottom: 5px;">Si<span style="color: #4FACFE;">RAPI</span> Enterprise</h1>
+            <p style="color: #64748B; font-size: 1.1rem; font-weight:600;">Sistem Rekapitulasi Anggaran Pertanggungjawaban Informasi.</p>
         </div>
     """, unsafe_allow_html=True)
 
@@ -325,7 +335,7 @@ if st.session_state.page == "🏠 Hub Menu Utama":
     with c2:
         if st.button("✅\nPJB OPERASIONAL\nRealisasi & Kalkulasi", use_container_width=True): st.session_state.page = "✅ Form PJB Operasional"; st.rerun()
     with c3:
-        if st.button("🛡️\nAPPROVAL CENTER\nVerifikasi Anomali BBM", use_container_width=True): 
+        if st.button("🛡️\nAPPROVAL CENTER\nVerifikasi Admin", use_container_width=True): 
             if st.session_state.get("admin_password") in AUTHORIZED_PASSWORDS: st.session_state.page = "🛡️ Approval Center"; st.rerun()
             else: st.error("Silakan login Admin di Sidebar terlebih dahulu.")
             
@@ -344,7 +354,7 @@ if st.session_state.page == "🏠 Hub Menu Utama":
 # PAGE 1: FORM REQUEST DANA
 # ==========================================
 elif st.session_state.page == "📝 Form Request Dana":
-    st.markdown("<div class='header-card'><h2>📝 PORTAL PENGAJUAN DANA</h2><p>PT Kinarya Utama Teknik - Operational System</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='header-card'><h2>📝 PORTAL PENGAJUAN DANA</h2><p>Operational System - Input Pengajuan Baru</p></div>", unsafe_allow_html=True)
     
     col_nav1, col_nav2 = st.columns([1, 1])
     with col_nav1:
@@ -359,7 +369,7 @@ elif st.session_state.page == "📝 Form Request Dana":
         st.markdown("<div class='section-title'>📋 2. Informasi Petugas & Tiket</div>", unsafe_allow_html=True)
         target_ss = MASTER_DATA[nop]["spreadsheet_id"]
         data_all = fetch_spreadsheet_data(target_ss)
-        req_r, pjb_r = data_all[SHEET_REQUEST], data_all[SHEET_PJB]
+        req_r, pjb_r, app_r = data_all[SHEET_REQUEST], data_all[SHEET_PJB], data_all[SHEET_APP]
         
         all_requested_tickets = [r[3].strip().upper() for r in req_r[1:] if len(r) > 3]
         site_dict, site_list, tim_dict, list_nopol = load_excel_data()
@@ -398,31 +408,86 @@ elif st.session_state.page == "📝 Form Request Dana":
             
         with col2:
             keperluan = st.selectbox("Klasifikasi Keperluan Dana", LIST_KEPERLUAN)
-            kebutuhan = st.number_input("Estimasi Kebutuhan Dana (Rp)", min_value=0, step=1000)
-            
             jns_kendaraan = st.selectbox("Jenis Kendaraan / Peralatan", ["", "Mobil", "Motor", "Genset", "Lainnya"])
-            jenis_bahan_bakar = ""
-            if jns_kendaraan.lower() in ["mobil", "motor", "genset"]:
-                jenis_bahan_bakar = st.selectbox("Pilih Jenis BBM (Wajib)", ["", "Pertalite", "Pertamax", "Dexlite", "Bio Solar", "Pertamina Dex"])
-            final_bbm = f"{jns_kendaraan} - {jenis_bahan_bakar}" if jenis_bahan_bakar else jns_kendaraan
             
+            # --- LOGIKA MOTOR, GENSET, DLL ---
+            kebutuhan = 0
+            jenis_bahan_bakar = ""
+            motor_anomali = False
+            motor_limit_lock = False
+            
+            if jns_kendaraan.lower() == "motor":
+                st.markdown("<div style='background-color:#E0F2FE; padding:15px; border-radius:10px; border-left: 5px solid #0284C7; margin-bottom: 15px;'><b>🏍️ Kalkulasi BBM Motor Spesifik</b></div>", unsafe_allow_html=True)
+                k_tangki = st.number_input("Kapasitas Tangki (Liter)", min_value=0.0, step=0.1)
+                h_satuan = st.number_input("Harga Satuan BBM (Rp/Liter)", min_value=0, step=500)
+                l_butuh = st.number_input("Berapa Liter Kebutuhan?", min_value=0.0, step=0.1)
+                
+                kebutuhan = int(l_butuh * h_satuan)
+                st.info(f"💰 Estimasi Kebutuhan Dana (Otomatis): **Rp {kebutuhan:,.0f}**")
+                jenis_bahan_bakar = st.selectbox("Pilih Jenis BBM (Wajib)", ["", "Pertalite", "Pertamax"])
+                final_bbm = f"{jns_kendaraan} - {jenis_bahan_bakar}" if jenis_bahan_bakar else jns_kendaraan
+                
+                # Cek Anomali Tangki
+                if l_butuh > k_tangki and k_tangki > 0:
+                    motor_anomali = True
+                    st.error("🚨 ANOMALI DANA REQUEST: Pengisian liter melebihi kapasitas tangki! TOLONG SESUAIKAN KEBUTUHAN DAN KEAKTUALAN.")
+                
+                # Cek Limit 500k Bulanan
+                current_month_str = datetime.now().strftime("%m/%Y")
+                total_motor_this_month = 0
+                for r in req_r[1:]:
+                    if len(r) > 10:
+                        try:
+                            tgl_req = parse_date(r[1])
+                            if tgl_req.strftime("%m/%Y") == current_month_str and r[5].strip().upper() == nama_lookup:
+                                if "motor" in str(r[10]).lower():
+                                    total_motor_this_month += clean_nominal(r[9])
+                        except: pass
+                
+                if (total_motor_this_month + kebutuhan) > 500000:
+                    st.error(f"⚠️ LIMIT MOTOR TERCAPAI: Total request BBM Motor Anda bulan ini mencapai Rp {total_motor_this_month:,.0f}. Sisa kuota tidak mencukupi untuk request Rp {kebutuhan:,.0f} (Maks 500k/bulan).")
+                    
+                    status_app_motor = "NONE"
+                    for r in reversed(app_r):
+                        if len(r) > 5 and r[2] == tiket.strip().upper() and r[3] == "Limit Motor":
+                            status_app_motor = r[5]
+                            break
+                    
+                    if status_app_motor == "APPROVED":
+                        st.success("✅ Request kelebihan limit telah disetujui Admin. Anda dapat melanjutkan.")
+                    elif status_app_motor == "PENDING":
+                        st.warning("⏳ Menunggu approval Admin untuk kelebihan limit Motor.")
+                        motor_limit_lock = True
+                    else:
+                        if st.button("🚨 Ajukan Approval Limit BBM Motor", type="primary"):
+                            append_data(SHEET_APP, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), nama, tiket.strip().upper(), "Limit Motor", kebutuhan, "PENDING", f"Bulan ini: {total_motor_this_month}"], target_ss)
+                            st.success("Terkirim ke Admin! Silakan tunggu approval.")
+                            time.sleep(2)
+                            st.rerun()
+                        motor_limit_lock = True
+                        
+            elif jns_kendaraan.lower() in ["mobil", "genset"]:
+                jenis_bahan_bakar = st.selectbox("Pilih Jenis BBM (Wajib)", ["", "Pertalite", "Pertamax", "Dexlite", "Bio Solar", "Pertamina Dex"])
+                final_bbm = f"{jns_kendaraan} - {jenis_bahan_bakar}" if jenis_bahan_bakar else jns_kendaraan
+                kebutuhan = st.number_input("Estimasi Kebutuhan Dana (Rp)", min_value=0, step=1000)
+            else:
+                final_bbm = jns_kendaraan
+                kebutuhan = st.number_input("Estimasi Kebutuhan Dana (Rp)", min_value=0, step=1000)
+            
+            # --- AUTO NOPOL CSV ---
             auto_nopol = ""
             if nama_lookup != "" and nama_lookup in tim_dict:
                 auto_nopol = str(tim_dict[nama_lookup].get("NOPOL", "")).strip()
                 if auto_nopol in ["nan", "0", "None"]: auto_nopol = ""
                 
             if role in ["PM", "MBP", "CME"]:
-                if auto_nopol != "":
-                    plat = st.text_input("Plat Nomor Kendaraan (Otomatis Sesuai PIC)", value=auto_nopol, disabled=True)
-                else:
-                    plat = st.text_input("Plat Nomor Kendaraan / ID Genset (Ketik Manual)")
+                if auto_nopol != "": plat = st.text_input("Plat Nomor Kendaraan (Otomatis)", value=auto_nopol, disabled=True)
+                else: plat = st.text_input("Plat Nomor Kendaraan / ID Genset (Ketik Manual)")
             elif role != "-- Pilih Role --":
                 plat_options = ["-- Pilih NOPOL --"] + list_nopol + ["Lainnya (Ketik Manual)"]
                 plat_choice = st.selectbox("Pilih Plat Nomor Kendaraan", plat_options)
-                if plat_choice == "Lainnya (Ketik Manual)":
-                    plat = st.text_input("Ketik Plat Nomor Manual")
-                else:
-                    plat = "" if plat_choice == "-- Pilih NOPOL --" else plat_choice
+                if plat_choice == "Lainnya (Ketik Manual)": plat = st.text_input("Ketik Plat Nomor Manual")
+                else: plat = "" if plat_choice == "-- Pilih NOPOL --" else plat_choice
             else:
                 plat = st.text_input("Plat Nomor Kendaraan / ID Genset")
                 
@@ -494,16 +559,20 @@ elif st.session_state.page == "📝 Form Request Dana":
             st.warning("⚠️ DATA DUPLIKAT: Sistem mendeteksi Tiket ini sudah diinput.")
             if not st.checkbox("✅ Ya, saya yakin data ini aman (Revisi/Baru)."): izin_lanjut = False
 
-        if is_locked_user or (is_duplicate and not izin_lanjut):
+        # LOGIKA BLOKIR UTAMA: (Locked by Outstanding, Limit Motor, atau Anomali Kapasitas)
+        if is_locked_user or motor_anomali or motor_limit_lock or (is_duplicate and not izin_lanjut):
             if is_locked_user: st.error(f"⛔ AKSES DITOLAK: Sdr. {nama} memiliki {len(out_lock)} tiket yang belum PJB!")
-            if st.text_input("🔑 Password Khusus (Bypass):", type="password") in AUTHORIZED_PASSWORDS:
-                if st.button("💡 Paksakan Kirim Request Dana", type="primary"):
+            if motor_anomali: st.error("⛔ AKSES DITOLAK: Liter Kebutuhan melebih Kapasitas Tangki Motor.")
+            if motor_limit_lock: st.error("⛔ AKSES DITOLAK: Limit BBM Motor Bulanan melebihi 500k. Tunggu Approval Admin.")
+            
+            if st.text_input("🔑 Password Khusus (Bypass Admin):", type="password") in AUTHORIZED_PASSWORDS:
+                if st.button("💡 Paksakan Kirim Request Dana (Bypass)", type="primary"):
                     if form_invalid or not tiket.strip() or invalid_coords: st.error("Lengkapi form!")
                     else:
                         with st.spinner("Processing..."):
                             data_req = [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), tanggal.strftime("%d/%m/%Y"), nop, tiket, cluster, nama, role, site_id, keperluan, kebutuhan, final_bbm, deskripsi, str(km_awal), jarak_final_text, lat_berangkat, long_berangkat, plat, rek_penerima, no_rek, nominal_tf, upload_foto(foto_km), upload_foto(foto_evidance), lat_tujuan, long_tujuan]
                             append_data(SHEET_REQUEST, data_req, target_ss)
-                            st.balloons(); st.success("🎉 Berhasil!"); time.sleep(2); st.rerun()
+                            st.balloons(); st.success("🎉 Berhasil Bypass!"); time.sleep(2); st.rerun()
         else:
             if st.button("📤 Kirim Form Request Dana", type="primary"):
                 if form_invalid or not tiket.strip() or invalid_coords: st.error("Lengkapi form!")
@@ -517,7 +586,7 @@ elif st.session_state.page == "📝 Form Request Dana":
 # PAGE 2: FORM PJB OPERASIONAL 
 # ==========================================
 elif st.session_state.page == "✅ Form PJB Operasional":
-    st.markdown("<div class='header-card' style='background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); border-bottom: 4px solid #11998e;'><h2>✅ PORTAL PJB (PENYELESAIAN)</h2><p>Lengkapi nota realisasi untuk menghapus status tunggakan.</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='header-card'><h2>✅ PORTAL PJB (PENYELESAIAN)</h2><p>Lengkapi nota realisasi untuk menghapus status tunggakan.</p></div>", unsafe_allow_html=True)
     
     col_nav1, col_nav2 = st.columns([1, 1])
     with col_nav1:
@@ -701,7 +770,7 @@ elif st.session_state.page == "✅ Form PJB Operasional":
 # PAGE 3: APPROVAL CENTER (KHUSUS ADMIN)
 # ==========================================
 elif st.session_state.page == "🛡️ Approval Center":
-    st.markdown("<div class='header-card' style='background: linear-gradient(135deg, #e11d48 0%, #be123c 100%); border-bottom: 4px solid #9f1239;'><h2>🛡️ APPROVAL CENTER</h2><p>Pusat verifikasi harga BBM Anomali (Genset: Dexlite/Bio Solar > 28.000)</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='header-card'><h2>🛡️ APPROVAL CENTER</h2><p>Pusat verifikasi Anomali Harga & Kelebihan Limit Kebutuhan Tim</p></div>", unsafe_allow_html=True)
     if st.button("🏠 Kembali ke Home Menu", use_container_width=True): st.session_state.page = "🏠 Hub Menu Utama"; st.rerun()
     
     if st.session_state.get("admin_password") not in AUTHORIZED_PASSWORDS:
@@ -717,7 +786,7 @@ elif st.session_state.page == "🛡️ Approval Center":
                 pending_list = []
                 for idx, r in enumerate(app_r):
                     if len(r) > 5 and r[5] == "PENDING":
-                        pending_list.append({"Row Index": idx, "Waktu": r[0], "Nama": r[1], "No Tiket": r[2], "BBM": r[3], "Harga Diajukan": f"Rp {int(r[4]):,.0f}", "Status": r[5]})
+                        pending_list.append({"Row Index": idx, "Waktu": r[0], "Nama": r[1], "No Tiket": r[2], "Jenis/Tipe": r[3], "Nominal/Harga": f"Rp {int(r[4]):,.0f}", "Status": r[5], "Catatan Tambahan": r[6] if len(r)>6 else "-"})
                 
                 st.markdown("### 📋 Daftar Tunggu Verifikasi (PENDING)")
                 if pending_list:
@@ -726,7 +795,7 @@ elif st.session_state.page == "🛡️ Approval Center":
                     
                     st.markdown("### ⚡ Eksekusi Keputusan")
                     col_e1, col_e2 = st.columns(2)
-                    with col_e1: target_tiket = st.selectbox("Pilih Tiket yang akan diproses:", [p["No Tiket"] for p in pending_list])
+                    with col_e1: target_tiket = st.selectbox("Pilih Tiket / Nama yang akan diproses:", [p["No Tiket"] for p in pending_list])
                     with col_e2: action = st.radio("Keputusan Admin:", ["Setujui (APPROVE)", "Tolak (REJECT)"])
                     
                     if st.button("Proses Keputusan", type="primary"):
@@ -734,16 +803,16 @@ elif st.session_state.page == "🛡️ Approval Center":
                         new_status = "APPROVED" if "APPROVE" in action else "REJECTED"
                         with st.spinner("Memperbarui database..."):
                             update_approval_status(target_ss, target_row_idx, new_status)
-                            st.success(f"✅ Tiket {target_tiket} berhasil di-{new_status}!")
+                            st.success(f"✅ Pengajuan untuk {target_tiket} berhasil di-{new_status}!")
                             time.sleep(2); st.rerun()
                 else:
-                    st.success("✅ Tidak ada permintaan Approval yang menggantung. Semua aman!")
+                    st.success("✅ Tidak ada permintaan Approval yang menggantung. Semua clear!")
 
 # ==========================================
 # PAGE 4: NERACA & BUKU KAS
 # ==========================================
 elif st.session_state.page == "📊 Neraca / Buku Kas":
-    st.markdown("<div class='header-card' style='background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); border-bottom: 4px solid #b45309;'><h2>📊 BUKU BESAR & LAPORAN KEUANGAN</h2></div>", unsafe_allow_html=True)
+    st.markdown("<div class='header-card'><h2>📊 BUKU BESAR & LAPORAN KEUANGAN</h2><p>Rekapitulasi Kas Regional</p></div>", unsafe_allow_html=True)
     if st.button("🏠 Kembali ke Home Menu", use_container_width=True): st.session_state.page = "🏠 Hub Menu Utama"; st.rerun()
     if st.session_state.get("admin_password") not in AUTHORIZED_PASSWORDS: st.error("⛔ AKSES TERKUNCI")
     else:
@@ -806,7 +875,7 @@ elif st.session_state.page == "📊 Neraca / Buku Kas":
 # PAGE 5: LIVE MONITORING
 # ==========================================
 elif st.session_state.page == "📈 Live Monitoring":
-    st.markdown("<div class='header-card' style='background: linear-gradient(135deg, #020617 0%, #0F172A 100%); color:#10B981; border-bottom: 4px solid #10B981;'><h2>📈 LIVE MONITORING & EVALUASI TIM</h2><p style='color:#94A3B8;'>Sistem Analisa Kas, Daily Pengeluaran, Tracker KM Satelit, & Anomali BBM</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='header-card'><h2>📈 LIVE MONITORING DASHBOARD</h2><p>Sistem Analisa Kas, Daily Pengeluaran, Tracker Satelit, & Anomali BBM</p></div>", unsafe_allow_html=True)
     if st.button("🏠 Kembali ke Home Menu", use_container_width=True): st.session_state.page = "🏠 Hub Menu Utama"; st.rerun()
     
     if st.session_state.get("admin_password") not in AUTHORIZED_PASSWORDS: st.error("⛔ AKSES TERKUNCI")
@@ -816,7 +885,7 @@ elif st.session_state.page == "📈 Live Monitoring":
             data_all = fetch_spreadsheet_data(MASTER_DATA[nop_live]["spreadsheet_id"])
             um_r, rekap_r, pjb_r, req_r, app_r = data_all[SHEET_UM], data_all["Rekap PJB"], data_all[SHEET_PJB], data_all[SHEET_REQUEST], data_all[SHEET_APP]
             
-            t1, t2, t3 = st.tabs(["💰 1. Sisa Kas, Daily PJB & Kategori BBM", "🚨 2. Record Anomali & Warning Tim", "🕵️ 3. Evaluasi Kinerja (Track KM/RH)"])
+            t1, t2, t3 = st.tabs(["💰 1. Sisa Kas, Daily Graph & Kategori BBM", "🚨 2. Record Anomali & Warning Tim", "🕵️ 3. Evaluasi Kinerja (Track KM/RH)"])
             
             # --- TAB 1: KEUANGAN, DAILY PJB & KATEGORI BBM ---
             with t1:
@@ -828,35 +897,41 @@ elif st.session_state.page == "📈 Live Monitoring":
                 m1, m2, m3 = st.columns(3)
                 m1.markdown(f"<div class='metric-3d'><div class='metric-title'>Total Kas Masuk</div><div class='metric-value'>Rp {total_um:,.0f}</div></div>", unsafe_allow_html=True)
                 m2.markdown(f"<div class='metric-3d'><div class='metric-title'>Total Penyerapan PJB</div><div class='metric-value'>Rp {tot_serap:,.0f}</div></div>", unsafe_allow_html=True)
-                m3.markdown(f"<div class='metric-3d'><div class='metric-title'>Sisa Kas (Burn Rate: {burn_rate:.1f}%)</div><div class='metric-value' style='color:#10B981;'>Rp {sisa_kas:,.0f}</div></div>", unsafe_allow_html=True)
+                m3.markdown(f"<div class='metric-3d'><div class='metric-title'>Sisa Kas (Burn Rate: {burn_rate:.1f}%)</div><div class='metric-value'>Rp {sisa_kas:,.0f}</div></div>", unsafe_allow_html=True)
                 
-                st.markdown("### 📅 Daily Pengeluaran PJB & Rekap Berdasarkan Kategori Jenis BBM")
+                st.markdown("<div class='section-title'>📅 Daily Pengeluaran PJB & Rekap Berdasarkan Kategori</div>", unsafe_allow_html=True)
                 if len(pjb_r) > 1:
                     df_pjb_all = pd.DataFrame([(r + [""] * 28)[:28] for r in pjb_r[1:]], columns=["Waktu","Tanggal","N","C","Nama","R","S","Keperluan","BBM","D","KMAkhir","Nominal","Pl","u1","u2","u3","u4","u5","u6","u7","NN","NoTiket","Lt","Hs","TKM_RH","u8","u9","BuktiTF"])
                     df_pjb_all['Nominal_Clean'] = df_pjb_all['Nominal'].apply(clean_nominal)
                     df_pjb_all['Tanggal_PJB'] = pd.to_datetime(df_pjb_all['Tanggal'], format='%d/%m/%Y', errors='coerce').dt.date
                     
+                    df_daily = df_pjb_all.dropna(subset=['Tanggal_PJB']).groupby('Tanggal_PJB')['Nominal_Clean'].sum().reset_index().sort_values('Tanggal_PJB')
+                    df_daily.columns = ['Tanggal PJB', 'Total Pengeluaran (Rp)_num']
+                    
+                    st.markdown("#### 📈 Grafik Tren Pengeluaran Harian")
+                    if not df_daily.empty:
+                        st.area_chart(df_daily.set_index('Tanggal PJB')['Total Pengeluaran (Rp)_num'], use_container_width=True)
+                    
                     col_d1, col_d2 = st.columns(2)
                     with col_d1:
-                        st.markdown("#### 📆 Daily Pengeluaran PJB")
-                        df_daily = df_pjb_all.groupby('Tanggal_PJB')['Nominal_Clean'].sum().reset_index().sort_values('Tanggal_PJB', ascending=False)
-                        df_daily.columns = ['Tanggal PJB', 'Total Pengeluaran (Rp)']
-                        df_daily['Total Pengeluaran (Rp)'] = df_daily['Total Pengeluaran (Rp)'].apply(lambda x: f"Rp {x:,.0f}")
-                        st.dataframe(df_daily, hide_index=True, use_container_width=True)
+                        st.markdown("#### 📆 Histori Pengeluaran PJB")
+                        df_daily_tabel = df_daily.copy().sort_values('Tanggal PJB', ascending=False)
+                        df_daily_tabel['Total Pengeluaran (Rp)'] = df_daily_tabel['Total Pengeluaran (Rp)_num'].apply(lambda x: f"Rp {x:,.0f}")
+                        st.dataframe(df_daily_tabel[['Tanggal PJB', 'Total Pengeluaran (Rp)']], hide_index=True, use_container_width=True)
                         
                     with col_d2:
-                        st.markdown("#### ⛽ Total Pengeluaran per Jenis BBM / Kategori")
+                        st.markdown("#### ⛽ Total Pengeluaran per Jenis BBM/Kategori")
                         df_cat = df_pjb_all.groupby('BBM')['Nominal_Clean'].sum().reset_index().sort_values('Nominal_Clean', ascending=False)
                         df_cat.columns = ['Jenis BBM / Kategori', 'Total Nominal (Rp)']
                         df_cat['Total Nominal (Rp)'] = df_cat['Total Nominal (Rp)'].apply(lambda x: f"Rp {x:,.0f}")
                         st.dataframe(df_cat, hide_index=True, use_container_width=True)
                 else:
-                    st.info("Belum ada data PJB untuk rekap harian dan kategori.")
+                    st.info("Belum ada data PJB untuk direkap.")
             
             # --- TAB 2: RECORD ANOMALI & WARNING TIM ---
             with t2:
-                st.markdown("### 🚨 List Warning & Tracking Anomali Konsumsi BBM Tim (Mobil / Motor / Genset)")
-                st.markdown("Daftar tim yang terindikasi boros atau memiliki anomali rasio konsumsi BBM berdasarkan data aktual PJB.")
+                st.markdown("### 🚨 List Warning & Tracking Anomali Konsumsi BBM Tim")
+                st.markdown("Daftar tim yang terindikasi boros, melebihi limit, atau memiliki anomali rasio konsumsi BBM.")
                 
                 warning_list = []
                 for pjb in pjb_r[1:]:
@@ -909,12 +984,11 @@ elif st.session_state.page == "📈 Live Monitoring":
                     df_warn = pd.DataFrame(warning_list)
                     st.dataframe(df_warn, hide_index=True, use_container_width=True)
                 else:
-                    st.success("✨ Aman! Tidak ada tim yang terdeteksi boros atau memiliki anomali BBM.")
+                    st.success("✨ Sempurna! Tidak ada anomali atau pemborosan pada tim wilayah ini.")
 
             # --- TAB 3: EVALUASI KINERJA (KM TIM VS SATELIT) ---
             with t3:
-                st.markdown("### 🕵️ Tracker KM / RH Tim (Awal & Akhir) vs Satelit & Analisa BBM")
-                st.markdown("Rincian lengkap histori KM/RH Awal, KM/RH Akhir, Nomor Tiket, Nominal PJB, dan perbandingan dengan Satelit.")
+                st.markdown("### 🕵️ Tracker KM / RH Tim (Awal & Akhir) vs Satelit")
                 
                 eval_list = []
                 for pjb in pjb_r[1:]:
@@ -977,11 +1051,11 @@ elif st.session_state.page == "📈 Live Monitoring":
                                 "Kategori": kategori,
                                 "KM/RH Awal": km_awal,
                                 "KM/RH Akhir": km_akhir,
-                                "Total Jarak Tim": f"{total_input_tim} {'RH' if is_genset else 'KM'}",
-                                "Jarak Satelit": f"{angka_satelit} KM" if not is_genset and angka_satelit > 0 else "-",
+                                "Total Jarak": f"{total_input_tim}",
+                                "Jarak Satelit": f"{angka_satelit}" if not is_genset and angka_satelit > 0 else "-",
                                 "Status Jarak": status_jarak,
-                                "Konsumsi Aktual": analisa_bbm,
-                                "Status Konsumsi BBM": status_bbm
+                                "Rasio Aktual": analisa_bbm,
+                                "Status Konsumsi": status_bbm
                             })
                 
                 if eval_list:
@@ -990,6 +1064,6 @@ elif st.session_state.page == "📈 Live Monitoring":
                     def highlight_markup(s):
                         return ['background-color: #FEE2E2; color: #DC2626; font-weight: bold' if '🔴' in str(v) else '' for v in s]
                     
-                    st.dataframe(df_eval.style.apply(highlight_markup, subset=['Status Jarak', 'Status Konsumsi BBM']), hide_index=True, use_container_width=True)
+                    st.dataframe(df_eval.style.apply(highlight_markup, subset=['Status Jarak', 'Status Konsumsi']), hide_index=True, use_container_width=True)
                 else:
                     st.info("Belum ada data realisasi PJB yang dapat disandingkan dengan Satelit.")
