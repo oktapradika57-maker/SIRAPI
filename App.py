@@ -238,7 +238,7 @@ def get_user_tickets_status(nama, req_rows, pjb_rows, app_rows):
     for r in app_rows[1:]:
         if len(r) > 5 and r[3] == "Verifikasi PJB":
             tiket_app = r[2].strip().upper()
-            pjb_app_status[tiket_app] = {"status": r[5], "catatan": r[6] if len(r)>6 else ""}
+            pjb_app_status[tiket_app] = {"status": r[5].strip(), "catatan": r[6] if len(r)>6 else ""}
 
     outstanding_all, outstanding_lock, aging_august, history = [], [], [], []
     
@@ -394,6 +394,10 @@ elif st.session_state.page == "📝 Form Request Dana":
         site_dict, site_list, tim_dict, list_nopol = load_excel_data()
         auto_lat_tujuan, auto_long_tujuan, auto_lat_brgkt, auto_long_brgkt = "0", "0", "0", "0"
 
+        # Global variabel agar bisa diakses tombol bawah
+        status_app_motor = "NONE"
+        motor_limit_lock = False
+
         col1, col2 = st.columns(2)
         with col1:
             tanggal = st.date_input("Tanggal Pengajuan")
@@ -435,7 +439,6 @@ elif st.session_state.page == "📝 Form Request Dana":
             keperluan = st.selectbox("Klasifikasi Keperluan Dana", LIST_KEPERLUAN)
             jns_kendaraan = st.selectbox("Jenis Kendaraan / Peralatan", ["", "Mobil", "Motor", "Genset", "Lainnya"])
             
-            # --- LOGIKA KENDARAAN MOBIL (REKAN TIM) ---
             tim_bareng = []
             tim_terkunci = []
             if jns_kendaraan.lower() == "mobil":
@@ -449,11 +452,10 @@ elif st.session_state.page == "📝 Form Request Dana":
                         if len(m_out_lock) > 0: 
                             tim_terkunci.append(member)
             
-            # --- LOGIKA KENDARAAN LAINNYA & MOTOR LIMIT ---
             kebutuhan = 0
             jenis_bahan_bakar = ""
             motor_anomali = False
-            motor_limit_lock = False
+            total_motor_this_month = 0
             
             if jns_kendaraan.lower() == "motor":
                 st.markdown("<div style='background-color:#E0F2FE; padding:15px; border-radius:10px; border-left: 5px solid #0284C7; margin-bottom: 15px;'><b>🏍️ Kalkulasi BBM Motor Spesifik</b></div>", unsafe_allow_html=True)
@@ -471,7 +473,6 @@ elif st.session_state.page == "📝 Form Request Dana":
                     st.error("🚨 ANOMALI DANA REQUEST: Pengisian liter melebihi kapasitas tangki! TOLONG SESUAIKAN KEBUTUHAN DAN KEAKTUALAN.")
                 
                 current_month_str = datetime.now().strftime("%m/%Y")
-                total_motor_this_month = 0
                 for r in req_r[1:]:
                     if len(r) > 10:
                         try:
@@ -482,30 +483,17 @@ elif st.session_state.page == "📝 Form Request Dana":
                         except: pass
                 
                 if (total_motor_this_month + kebutuhan) > 500000:
-                    st.error(f"⚠️ LIMIT MOTOR TERCAPAI: Total request BBM Motor Anda bulan ini mencapai Rp {total_motor_this_month:,.0f}. Sisa kuota tidak mencukupi untuk request Rp {kebutuhan:,.0f} (Maks 500k/bulan).")
+                    st.error(f"⚠️ LIMIT MOTOR TERCAPAI: Total request BBM Motor Anda bulan ini telah mencapai limit. Limit digunakan memblokir tombol simpan di bawah.")
                     
-                    status_app_motor = "NONE"
                     for r in reversed(app_r):
-                        if len(r) > 5 and r[2] == tiket.strip().upper() and r[3] == "Limit Motor":
-                            status_app_motor = r[5]
+                        if len(r) > 5 and r[2].strip().upper() == tiket.strip().upper() and r[3] == "Limit Motor":
+                            status_app_motor = r[5].strip().upper()
                             break
                     
                     if status_app_motor == "APPROVED":
-                        st.success("✅ Request kelebihan limit telah disetujui Admin. Anda dapat melanjutkan.")
-                    elif status_app_motor == "PENDING":
-                        st.warning("⏳ Menunggu approval Admin untuk kelebihan limit Motor.")
-                        motor_limit_lock = True
+                        st.success("✅ Request kelebihan limit telah disetujui Admin. Anda dapat melanjutkan Form ke bawah.")
                     else:
-                        if not tiket.strip():
-                            st.warning("⚠️ Ketik Nomor Tiket Anda di atas terlebih dahulu untuk memunculkan tombol Ajukan Approval.")
-                            motor_limit_lock = True
-                        else:
-                            if st.button("🚨 Ajukan Approval Limit BBM Motor", type="primary"):
-                                append_data(SHEET_APP, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), nama, tiket.strip().upper(), "Limit Motor", kebutuhan, "PENDING", f"Bulan ini: Rp {total_motor_this_month:,.0f}"], target_ss)
-                                st.success("Terkirim ke Admin! Silakan tunggu approval.")
-                                time.sleep(2)
-                                st.rerun()
-                            motor_limit_lock = True
+                        motor_limit_lock = True # Kunci tombol di bawah!
                         
             elif jns_kendaraan.lower() in ["mobil", "genset"]:
                 jenis_bahan_bakar = st.selectbox("Pilih Jenis BBM (Wajib)", ["", "Pertalite", "Pertamax", "Dexlite", "Bio Solar", "Pertamina Dex"])
@@ -600,7 +588,6 @@ elif st.session_state.page == "📝 Form Request Dana":
         
         form_invalid = (nama == "" or cluster == "" or role == "-- Pilih Role --" or keperluan == "" or jns_kendaraan == "")
         izin_lanjut = True
-        is_team_locked = len(tim_terkunci) > 0
         
         if is_duplicate:
             st.warning("⚠️ DATA DUPLIKAT: Sistem mendeteksi Tiket ini sudah diinput.")
@@ -609,9 +596,31 @@ elif st.session_state.page == "📝 Form Request Dana":
         if is_locked_user or motor_anomali or motor_limit_lock or is_team_locked or (is_duplicate and not izin_lanjut):
             if is_locked_user: st.error(f"⛔ AKSES DITOLAK: Sdr. {nama} dilarang Request Dana karena masih memiliki tiket PENDING Verifikasi, DITOLAK Admin, atau Belum di-PJB!")
             if motor_anomali: st.error("⛔ AKSES DITOLAK: Liter Kebutuhan melebih Kapasitas Tangki Motor.")
-            if motor_limit_lock: st.error("⛔ AKSES DITOLAK: Limit BBM Motor Bulanan melebihi 500k. Tunggu Approval Admin.")
             if is_team_locked: st.error(f"⛔ AKSES DITOLAK: Rekan setim yang Anda bawa ({', '.join(tim_terkunci)}) memiliki PJB yang bermasalah/pending! Minta mereka verifikasi terlebih dahulu (Kecuali Role PM).")
             
+            # --- PENEMPATAN TOMBOL APPROVAL ADMIN AGAR MUDAH DILIHAT TIM ---
+            if motor_limit_lock:
+                st.markdown("<div style='background-color:#FFE4E6; padding:20px; border-radius:10px; border-left: 5px solid #E11D48; margin-top:15px; margin-bottom: 25px;'>", unsafe_allow_html=True)
+                if status_app_motor == "PENDING":
+                    st.warning("⏳ **STATUS APPROVAL:** Request kelebihan Limit Motor Anda sedang MENUNGGU VERIFIKASI Admin. Tolong hubungi Admin untuk cek Approval Center.")
+                elif status_app_motor == "REJECTED":
+                    st.error("❌ **STATUS APPROVAL:** DITOLAK Admin. Silakan kurangi nominal pengajuan atau hubungi Atasan.")
+                    if st.button("🔄 Ajukan Ulang Approval Limit Motor", type="primary", use_container_width=True):
+                        append_data(SHEET_APP, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), nama, tiket.strip().upper(), "Limit Motor", kebutuhan, "PENDING", f"Bulan ini: Rp {total_motor_this_month:,.0f}"], target_ss)
+                        st.success("Terkirim ulang ke Admin!")
+                        time.sleep(2); st.rerun()
+                else:
+                    st.error("🚨 **AKSES DITOLAK (LIMIT MOTOR):** Anda mencapai batas limit BBM Motor bulanan (>500k). Anda HARUS meminta persetujuan khusus dari Admin untuk melanjutkan tiket ini.")
+                    if not tiket.strip():
+                        st.warning("⚠️ **WAJIB:** Ketik [Nomor Tiket] pada form di atas terlebih dahulu agar tombol 'Minta Approval' muncul di sini.")
+                    else:
+                        if st.button("🚨 Minta Approval Kelebihan Limit ke Admin Sekarang", type="primary", use_container_width=True):
+                            append_data(SHEET_APP, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), nama, tiket.strip().upper(), "Limit Motor", kebutuhan, "PENDING", f"Bulan ini: Rp {total_motor_this_month:,.0f}"], target_ss)
+                            st.success("Berhasil diajukan ke Admin! Silakan tunggu Admin melakukan Approve di Approval Center.")
+                            time.sleep(2.5); st.rerun()
+                st.markdown("</div>", unsafe_allow_html=True)
+            
+            # Form Bypass Admin
             if st.text_input("🔑 Password Khusus (Bypass Admin):", type="password") in AUTHORIZED_PASSWORDS:
                 if st.button("💡 Paksakan Kirim Request Dana (Bypass)", type="primary"):
                     if form_invalid or not tiket.strip() or invalid_coords: st.error("Lengkapi form!")
@@ -655,7 +664,7 @@ elif st.session_state.page == "✅ Form PJB Operasional":
         for r in app_r[1:]:
             if len(r) > 5 and r[3] == "Verifikasi PJB":
                 tk = r[2].strip().upper()
-                status_verif_dict[tk] = r[5]
+                status_verif_dict[tk] = r[5].strip()
                 if len(r) > 6: catatan_verif_dict[tk] = r[6]
         
         st.markdown("<div class='section-title'>🔍 2. Identifikasi Tim & Tarik Data</div>", unsafe_allow_html=True)
@@ -760,7 +769,7 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                     st.error("🚨 DETEKSI ANOMALI GENSET: Harga Dexlite/Bio Solar melebihi batas wajar.")
                     status_approval = "NONE"
                     for r in reversed(app_r):
-                        if len(r) > 5 and r[2] == cari_tiket.strip().upper() and "Genset" in r[3]: status_approval = r[5]; break
+                        if len(r) > 5 and r[2].strip().upper() == cari_tiket.strip().upper() and "Genset" in r[3]: status_approval = r[5].strip(); break
                     
                     if status_approval == "PENDING":
                         st.warning("⏳ Status: **MENUNGGU APPROVAL Harga**. Silakan hubungi atasan.")
@@ -840,7 +849,7 @@ elif st.session_state.page == "🛡️ Approval Center":
             
             if len(app_r) > 0:
                 for idx, r in enumerate(app_r):
-                    if len(r) > 5 and r[5] == "PENDING":
+                    if len(r) > 5 and r[5].strip() == "PENDING":
                         item = {
                             "Row Index": idx, 
                             "Waktu": r[0], 
@@ -848,7 +857,7 @@ elif st.session_state.page == "🛡️ Approval Center":
                             "No Tiket": r[2], 
                             "Jenis Pengajuan": r[3], 
                             "Nominal": f"Rp {clean_nominal(r[4]):,.0f}", 
-                            "Status": r[5],
+                            "Status": r[5].strip(),
                             "Keterangan": r[6] if len(r) > 6 else "-"
                         }
                         if r[3] == "Verifikasi PJB": pending_pjb.append(item)
@@ -886,10 +895,12 @@ elif st.session_state.page == "🛡️ Approval Center":
                         if "REJECT" in action_pjb and not remark_pjb.strip():
                             st.error("⚠️ Mohon berikan Alasan / Catatan Penolakan agar tim tahu bagian yang harus direvisi.")
                         else:
-                            target_row_idx = next(p["Row Index"] for p in pending_pjb if p["No Tiket"] == target_tiket_pjb)
+                            # Update ALL matching duplicates to prevent ghost bugs
+                            target_indices = [p["Row Index"] for p in pending_pjb if p["No Tiket"] == target_tiket_pjb]
                             new_status = "APPROVED" if "APPROVE" in action_pjb else "REJECTED"
                             with st.spinner("Memperbarui database..."):
-                                update_approval_status(target_ss, target_row_idx, new_status, remark_pjb if remark_pjb else "-")
+                                for idx in target_indices:
+                                    update_approval_status(target_ss, idx, new_status, remark_pjb if remark_pjb else "-")
                                 st.success(f"✅ Tiket {target_tiket_pjb} berhasil di-{new_status}!")
                                 time.sleep(2); st.rerun()
                 else:
@@ -905,10 +916,12 @@ elif st.session_state.page == "🛡️ Approval Center":
                     with ce2: action_anm = st.radio("Keputusan Admin:", ["Setujui (APPROVE)", "Tolak (REJECT)"], key="rad_anm")
                     
                     if st.button("Proses Keputusan Harga/Limit", type="primary"):
-                        target_row_idx = next(p["Row Index"] for p in pending_anomali if p["No Tiket"] == target_tiket_anm)
+                        # Update ALL matching duplicates to prevent ghost bugs
+                        target_indices = [p["Row Index"] for p in pending_anomali if p["No Tiket"] == target_tiket_anm]
                         new_status = "APPROVED" if "APPROVE" in action_anm else "REJECTED"
                         with st.spinner("Memperbarui database..."):
-                            update_approval_status(target_ss, target_row_idx, new_status, "-")
+                            for idx in target_indices:
+                                update_approval_status(target_ss, idx, new_status, "-")
                             st.success(f"✅ Pengajuan untuk {target_tiket_anm} berhasil di-{new_status}!")
                             time.sleep(2); st.rerun()
                 else:
