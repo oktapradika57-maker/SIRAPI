@@ -110,7 +110,7 @@ LIST_KEPERLUAN = ["", "Tshoot", "Backup", "Support", "PM", "Program BCP", "Progr
 # 2. FUNGSI INTI & CACHING 
 # ==========================================
 def parse_date(date_str):
-    try: return datetime.strptime(date_str.strip(), "%d/%m/%Y").date()
+    try: return datetime.strptime(str(date_str).strip(), "%d/%m/%Y").date()
     except: return datetime(1970, 1, 1).date()
 
 def clean_nominal(val):
@@ -228,21 +228,25 @@ def get_user_tickets_status(nama, req_rows, pjb_rows, app_rows):
     if nama == "-- Pilih Nama --" or nama == "": return [], [], [], []
     req_tickets = {}
     for r in req_rows[1:]:
+        # Safety net: pastikan baris memiliki index ke-5 & nama cocok
         if len(r) > 5 and r[5].strip().upper() == nama.strip().upper():
-            req_tickets[r[3].strip().upper()] = r[1]
+            tk_raw = r[3].strip().upper()
+            if tk_raw != "":
+                req_tickets[tk_raw] = r[1]
                 
-    pjb_tickets = {r[21].strip().upper() for r in pjb_rows[1:] if len(r) > 21 and r[4].strip().upper() == nama.strip().upper()}
+    pjb_tickets = {r[21].strip().upper() for r in pjb_rows[1:] if len(r) > 21 and r[4].strip().upper() == nama.strip().upper() and r[21].strip() != ""}
     
     # Mapping Data Approval PJB Terakhir
     pjb_app_status = {}
     for r in app_rows[1:]:
         if len(r) > 5 and r[3] == "Verifikasi PJB":
             tiket_app = r[2].strip().upper()
-            pjb_app_status[tiket_app] = {"status": r[5].strip(), "catatan": r[6] if len(r)>6 else ""}
+            if tiket_app != "":
+                pjb_app_status[tiket_app] = {"status": r[5].strip(), "catatan": r[6] if len(r)>6 else ""}
 
     outstanding_all, outstanding_lock, aging_august, history = [], [], [], []
-    
     today = datetime.now().date()
+    
     for tkt, tgl in req_tickets.items():
         if tkt not in pjb_tickets:
             outstanding_all.append(tkt)
@@ -282,11 +286,16 @@ def append_data(sheet_name, data, spreadsheet_id):
     fetch_spreadsheet_data.clear()
 
 def update_approval_status(spreadsheet_id, row_index, new_status, remark="-"):
-    client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
-    ws = client.worksheet(SHEET_APP)
-    ws.update_cell(row_index + 1, 6, new_status)
-    ws.update_cell(row_index + 1, 7, remark)
-    fetch_spreadsheet_data.clear()
+    try:
+        client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
+        ws = client.worksheet(SHEET_APP)
+        # Ingat: row_index dari enumerate berawal dari 0 (header=0, data=1). 
+        # Update_cell membutuhkan 1-based index (header=1, data=2). Jadi: idx + 1
+        ws.update_cell(row_index + 1, 6, new_status)
+        ws.update_cell(row_index + 1, 7, remark)
+        fetch_spreadsheet_data.clear()
+    except Exception as e:
+        st.error(f"Terjadi kendala saat update ke Google Sheets. Sistem membatalkan aksi ini. (Code: {e})")
 
 # ==========================================
 # 3. SIDEBAR & NAVIGASI 
@@ -394,7 +403,7 @@ elif st.session_state.page == "📝 Form Request Dana":
         site_dict, site_list, tim_dict, list_nopol = load_excel_data()
         auto_lat_tujuan, auto_long_tujuan, auto_lat_brgkt, auto_long_brgkt = "0", "0", "0", "0"
 
-        # Global variabel agar bisa diakses tombol bawah
+        # Variabel global pengaman akses kondisi Error Motor Limit
         status_app_motor = "NONE"
         motor_limit_lock = False
 
@@ -487,7 +496,7 @@ elif st.session_state.page == "📝 Form Request Dana":
                     
                     for r in reversed(app_r):
                         if len(r) > 5 and r[2].strip().upper() == tiket.strip().upper() and r[3] == "Limit Motor":
-                            status_app_motor = r[5].strip().upper()
+                            status_app_motor = str(r[5]).strip().upper()
                             break
                     
                     if status_app_motor == "APPROVED":
@@ -593,12 +602,12 @@ elif st.session_state.page == "📝 Form Request Dana":
             st.warning("⚠️ DATA DUPLIKAT: Sistem mendeteksi Tiket ini sudah diinput.")
             if not st.checkbox("✅ Ya, saya yakin data ini aman (Revisi/Baru)."): izin_lanjut = False
 
-        if is_locked_user or motor_anomali or motor_limit_lock or is_team_locked or (is_duplicate and not izin_lanjut):
+        if is_locked_user or motor_anomali or motor_limit_lock or len(tim_terkunci) > 0 or (is_duplicate and not izin_lanjut):
             if is_locked_user: st.error(f"⛔ AKSES DITOLAK: Sdr. {nama} dilarang Request Dana karena masih memiliki tiket PENDING Verifikasi, DITOLAK Admin, atau Belum di-PJB!")
             if motor_anomali: st.error("⛔ AKSES DITOLAK: Liter Kebutuhan melebih Kapasitas Tangki Motor.")
-            if is_team_locked: st.error(f"⛔ AKSES DITOLAK: Rekan setim yang Anda bawa ({', '.join(tim_terkunci)}) memiliki PJB yang bermasalah/pending! Minta mereka verifikasi terlebih dahulu (Kecuali Role PM).")
+            if len(tim_terkunci) > 0: st.error(f"⛔ AKSES DITOLAK: Rekan setim yang Anda bawa ({', '.join(tim_terkunci)}) memiliki PJB yang bermasalah/pending! Minta mereka verifikasi terlebih dahulu (Kecuali Role PM).")
             
-            # --- PENEMPATAN TOMBOL APPROVAL ADMIN AGAR MUDAH DILIHAT TIM ---
+            # --- TAMPILAN APPROVAL LIMIT AGAR TERLIHAT TIM ---
             if motor_limit_lock:
                 st.markdown("<div style='background-color:#FFE4E6; padding:20px; border-radius:10px; border-left: 5px solid #E11D48; margin-top:15px; margin-bottom: 25px;'>", unsafe_allow_html=True)
                 if status_app_motor == "PENDING":
@@ -664,8 +673,9 @@ elif st.session_state.page == "✅ Form PJB Operasional":
         for r in app_r[1:]:
             if len(r) > 5 and r[3] == "Verifikasi PJB":
                 tk = r[2].strip().upper()
-                status_verif_dict[tk] = r[5].strip()
-                if len(r) > 6: catatan_verif_dict[tk] = r[6]
+                if tk != "":
+                    status_verif_dict[tk] = str(r[5]).strip()
+                    if len(r) > 6: catatan_verif_dict[tk] = r[6]
         
         st.markdown("<div class='section-title'>🔍 2. Identifikasi Tim & Tarik Data</div>", unsafe_allow_html=True)
         col_id1, col_id2 = st.columns([2, 2])
@@ -683,9 +693,9 @@ elif st.session_state.page == "✅ Form PJB Operasional":
             
         pending_list, pending_options = [], []
         for r in req_r[1:]:
-            if len(r)>5 and r[3].strip() != "":
-                tk = r[3].strip().upper()
-                nm = r[5].strip().upper()
+            if len(r)>5 and str(r[3]).strip() != "":
+                tk = str(r[3]).strip().upper()
+                nm = str(r[5]).strip().upper()
                 
                 is_ready_to_pjb = False
                 if tk not in pjb_tickets_all:
@@ -707,12 +717,16 @@ elif st.session_state.page == "✅ Form PJB Operasional":
         with col_s2: 
             pilihan_tiket = st.selectbox("🎫 Pilih Nomor Tiket Pending:", ["-- Pilih Tiket --"] + pending_options + ["-- Ketik Manual --"]) if pending_options else "-- Ketik Manual --"
             cari_tiket = st.text_input("Ketik Manual:") if pilihan_tiket == "-- Ketik Manual --" else ("" if pilihan_tiket == "-- Pilih Tiket --" else pilihan_tiket)
+        
+        # Saring input string kosong untuk hindari bug
+        valid_cari_tiket = str(cari_tiket).strip().upper()
+
         with col_s3: 
             st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
-            if st.button("Tarik Data", type="primary", use_container_width=True) and cari_tiket:
+            if st.button("Tarik Data", type="primary", use_container_width=True) and valid_cari_tiket:
                 ditemukan = None
                 for r in req_r[1:]:
-                    if len(r) > 3 and r[3].strip().upper() == cari_tiket.strip().upper():
+                    if len(r) > 3 and str(r[3]).strip().upper() == valid_cari_tiket:
                         ditemukan = {"NOP": r[2], "Cluster": r[4], "Nama": r[5], "Role": r[6], "Site": r[7], "Keperluan": r[8], "BBM": r[10], "Desc": r[11], "KMAwal": clean_nominal(r[12]) if len(r)>12 else 0, "NominalReq": clean_nominal(r[9]) if len(r)>9 else 0, "Jarak": r[13] if len(r)>13 else "", "Plat": r[16] if len(r)>16 else ""}
                 if ditemukan: st.session_state.pjb_data = ditemukan; st.success("🎉 Data Ditarik!")
                 else: st.session_state.pjb_data = None; st.error("❌ Tidak ditemukan.")
@@ -769,7 +783,9 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                     st.error("🚨 DETEKSI ANOMALI GENSET: Harga Dexlite/Bio Solar melebihi batas wajar.")
                     status_approval = "NONE"
                     for r in reversed(app_r):
-                        if len(r) > 5 and r[2].strip().upper() == cari_tiket.strip().upper() and "Genset" in r[3]: status_approval = r[5].strip(); break
+                        if len(r) > 5 and str(r[2]).strip().upper() == valid_cari_tiket and "Genset" in str(r[3]): 
+                            status_approval = str(r[5]).strip()
+                            break
                     
                     if status_approval == "PENDING":
                         st.warning("⏳ Status: **MENUNGGU APPROVAL Harga**. Silakan hubungi atasan.")
@@ -777,22 +793,22 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                     elif status_approval == "REJECTED":
                         st.error("❌ Status: **DITOLAK!** Harga satuan tidak disetujui. Ajukan ulang.")
                         if st.button("Ajukan Ulang Approval Harga"):
-                            append_data(SHEET_APP, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), d["Nama"], cari_tiket.strip().upper(), f"Genset Anomali ({d['BBM']})", harga_satuan, "PENDING", "-"], target_ss)
+                            append_data(SHEET_APP, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), d["Nama"], valid_cari_tiket, f"Genset Anomali ({d['BBM']})", harga_satuan, "PENDING", "-"], target_ss)
                             st.success("Terkirim ulang!"); time.sleep(1.5); st.rerun()
                         st.stop()
                     elif status_approval == "APPROVED": st.success("✅ Harga Anomali telah di-APPROVE.")
                     else:
                         if st.button("🚨 Ajukan Approval Harga ke Admin", type="primary"):
-                            append_data(SHEET_APP, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), d["Nama"], cari_tiket.strip().upper(), f"Genset Anomali ({d['BBM']})", harga_satuan, "PENDING", "-"], target_ss)
+                            append_data(SHEET_APP, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), d["Nama"], valid_cari_tiket, f"Genset Anomali ({d['BBM']})", harga_satuan, "PENDING", "-"], target_ss)
                             st.success("Sistem berhasil mencatat!"); time.sleep(2); st.rerun()
                         st.stop()
 
                 st.markdown("<br>", unsafe_allow_html=True)
                 
                 # --- LOGIKA DOUBLE PJB / REVISI / PENDING ---
-                is_double_input = any(len(r)>21 and r[21].strip().upper() == cari_tiket.strip().upper() for r in pjb_r[1:])
-                status_v = status_verif_dict.get(cari_tiket.strip().upper(), "NONE")
-                catatan_v = catatan_verif_dict.get(cari_tiket.strip().upper(), "")
+                is_double_input = any(len(r)>21 and str(r[21]).strip().upper() == valid_cari_tiket for r in pjb_r[1:])
+                status_v = status_verif_dict.get(valid_cari_tiket, "NONE")
+                catatan_v = catatan_verif_dict.get(valid_cari_tiket, "")
                 
                 if status_v == "PENDING":
                     st.warning("⏳ PJB tiket ini sedang dalam proses review Admin. Anda belum bisa mensubmit/mengubah data saat ini.")
@@ -804,9 +820,9 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                         st.info("Silakan perbaiki data/foto yang direquest oleh Admin dan Submit Ulang (Revisi) di bawah ini.")
                         if st.button("🚀 Submit Ulang (Revisi PJB)", type="primary", use_container_width=True):
                             with st.spinner("Mengupload foto revisi..."):
-                                data_pjb = [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), tgl_pjb.strftime("%d/%m/%Y"), d["NOP"], d["Cluster"], d["Nama"], d["Role"], d["Site"], d["Keperluan"], d["BBM"], d["Desc"], str(km_akhir), nominal_pjb, d["Plat"], upload_foto(f_isi), upload_foto(f_nota_bbm), upload_foto(f_km), upload_foto(f_mat), upload_foto(f_notamat), upload_foto(f_inap), upload_foto(f_kerja), tot_nilai_nota, cari_tiket, tot_liter, harga_satuan, str(total_km_tempuh), "", "", upload_foto(f_transfer)]
+                                data_pjb = [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), tgl_pjb.strftime("%d/%m/%Y"), d["NOP"], d["Cluster"], d["Nama"], d["Role"], d["Site"], d["Keperluan"], d["BBM"], d["Desc"], str(km_akhir), nominal_pjb, d["Plat"], upload_foto(f_isi), upload_foto(f_nota_bbm), upload_foto(f_km), upload_foto(f_mat), upload_foto(f_notamat), upload_foto(f_inap), upload_foto(f_kerja), tot_nilai_nota, valid_cari_tiket, tot_liter, harga_satuan, str(total_km_tempuh), "", "", upload_foto(f_transfer)]
                                 append_data(SHEET_PJB, [(r+[""]*28)[:28] for r in [data_pjb]][0], target_ss)
-                                append_data(SHEET_APP, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), d["Nama"], cari_tiket.strip().upper(), "Verifikasi PJB", nominal_pjb, "PENDING", "-"], target_ss)
+                                append_data(SHEET_APP, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), d["Nama"], valid_cari_tiket, "Verifikasi PJB", nominal_pjb, "PENDING", "-"], target_ss)
                                 st.balloons(); st.success("🎉 PJB Revisi Berhasil Dikirim ke Admin!"); st.session_state.pjb_data = None; time.sleep(2.5); st.rerun()
                     else:
                         st.warning("⚠️ **PERINGATAN DOUBLE INPUT:** Tiket ini sudah pernah di-PJB dan diverifikasi.")
@@ -815,17 +831,17 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                             st.success("✅ Password benar! Anda diizinkan melakukan PJB duplikat.")
                             if st.button("🚀 Sahkan Pelaporan PJB (Bypass)", type="primary", use_container_width=True):
                                 with st.spinner("Mengupload foto..."):
-                                    data_pjb = [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), tgl_pjb.strftime("%d/%m/%Y"), d["NOP"], d["Cluster"], d["Nama"], d["Role"], d["Site"], d["Keperluan"], d["BBM"], d["Desc"], str(km_akhir), nominal_pjb, d["Plat"], upload_foto(f_isi), upload_foto(f_nota_bbm), upload_foto(f_km), upload_foto(f_mat), upload_foto(f_notamat), upload_foto(f_inap), upload_foto(f_kerja), tot_nilai_nota, cari_tiket, tot_liter, harga_satuan, str(total_km_tempuh), "", "", upload_foto(f_transfer)]
+                                    data_pjb = [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), tgl_pjb.strftime("%d/%m/%Y"), d["NOP"], d["Cluster"], d["Nama"], d["Role"], d["Site"], d["Keperluan"], d["BBM"], d["Desc"], str(km_akhir), nominal_pjb, d["Plat"], upload_foto(f_isi), upload_foto(f_nota_bbm), upload_foto(f_km), upload_foto(f_mat), upload_foto(f_notamat), upload_foto(f_inap), upload_foto(f_kerja), tot_nilai_nota, valid_cari_tiket, tot_liter, harga_satuan, str(total_km_tempuh), "", "", upload_foto(f_transfer)]
                                     append_data(SHEET_PJB, [(r+[""]*28)[:28] for r in [data_pjb]][0], target_ss)
-                                    append_data(SHEET_APP, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), d["Nama"], cari_tiket.strip().upper(), "Verifikasi PJB", nominal_pjb, "PENDING", "-"], target_ss)
+                                    append_data(SHEET_APP, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), d["Nama"], valid_cari_tiket, "Verifikasi PJB", nominal_pjb, "PENDING", "-"], target_ss)
                                     st.balloons(); st.success("🎉 Laporan Berhasil Ditutup!"); st.session_state.pjb_data = None; time.sleep(2.5); st.rerun()
                         else: st.error("Password salah.")
                 else:
                     if st.button("🚀 Sahkan Pelaporan PJB (Kirim ke Admin)", type="primary", use_container_width=True):
                         with st.spinner("Mengupload foto dan memproses PJB..."):
-                            data_pjb = [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), tgl_pjb.strftime("%d/%m/%Y"), d["NOP"], d["Cluster"], d["Nama"], d["Role"], d["Site"], d["Keperluan"], d["BBM"], d["Desc"], str(km_akhir), nominal_pjb, d["Plat"], upload_foto(f_isi), upload_foto(f_nota_bbm), upload_foto(f_km), upload_foto(f_mat), upload_foto(f_notamat), upload_foto(f_inap), upload_foto(f_kerja), tot_nilai_nota, cari_tiket, tot_liter, harga_satuan, str(total_km_tempuh), "", "", upload_foto(f_transfer)]
+                            data_pjb = [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), tgl_pjb.strftime("%d/%m/%Y"), d["NOP"], d["Cluster"], d["Nama"], d["Role"], d["Site"], d["Keperluan"], d["BBM"], d["Desc"], str(km_akhir), nominal_pjb, d["Plat"], upload_foto(f_isi), upload_foto(f_nota_bbm), upload_foto(f_km), upload_foto(f_mat), upload_foto(f_notamat), upload_foto(f_inap), upload_foto(f_kerja), tot_nilai_nota, valid_cari_tiket, tot_liter, harga_satuan, str(total_km_tempuh), "", "", upload_foto(f_transfer)]
                             append_data(SHEET_PJB, [(r+[""]*28)[:28] for r in [data_pjb]][0], target_ss)
-                            append_data(SHEET_APP, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), d["Nama"], cari_tiket.strip().upper(), "Verifikasi PJB", nominal_pjb, "PENDING", "-"], target_ss)
+                            append_data(SHEET_APP, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), d["Nama"], valid_cari_tiket, "Verifikasi PJB", nominal_pjb, "PENDING", "-"], target_ss)
                             st.balloons(); st.success("🎉 PJB Berhasil Dikirim untuk Verifikasi Admin!"); st.session_state.pjb_data = None; time.sleep(2.5); st.rerun()
 
 # ==========================================
@@ -849,16 +865,16 @@ elif st.session_state.page == "🛡️ Approval Center":
             
             if len(app_r) > 0:
                 for idx, r in enumerate(app_r):
-                    if len(r) > 5 and r[5].strip() == "PENDING":
+                    if len(r) > 5 and str(r[5]).strip() == "PENDING":
                         item = {
                             "Row Index": idx, 
-                            "Waktu": r[0], 
-                            "Nama": r[1], 
-                            "No Tiket": r[2], 
-                            "Jenis Pengajuan": r[3], 
+                            "Waktu": str(r[0]), 
+                            "Nama": str(r[1]), 
+                            "No Tiket": str(r[2]), 
+                            "Jenis Pengajuan": str(r[3]), 
                             "Nominal": f"Rp {clean_nominal(r[4]):,.0f}", 
-                            "Status": r[5].strip(),
-                            "Keterangan": r[6] if len(r) > 6 else "-"
+                            "Status": str(r[5]).strip(),
+                            "Keterangan": str(r[6]) if len(r) > 6 else "-"
                         }
                         if r[3] == "Verifikasi PJB": pending_pjb.append(item)
                         else: pending_anomali.append(item)
@@ -871,10 +887,9 @@ elif st.session_state.page == "🛡️ Approval Center":
                     st.dataframe(pd.DataFrame(pending_pjb).drop(columns=["Row Index"]), hide_index=True, use_container_width=True)
                     target_tiket_pjb = st.selectbox("Pilih Tiket PJB untuk divalidasi:", [p["No Tiket"] for p in pending_pjb], key="sel_pjb")
                     
-                    # Look up photos from Sheet PJB based on tiket
                     pjb_target = None
                     for r in reversed(pjb_r[1:]):
-                        if len(r) > 21 and r[21].strip().upper() == target_tiket_pjb: pjb_target = r; break
+                        if len(r) > 21 and str(r[21]).strip().upper() == target_tiket_pjb.strip().upper(): pjb_target = r; break
                             
                     if pjb_target:
                         st.markdown("<div style='background:#F8FAFC; padding:15px; border-radius:10px; margin-bottom:15px;'><b>Bukti Terlampir:</b></div>", unsafe_allow_html=True)
@@ -962,9 +977,15 @@ elif st.session_state.page == "📊 Neraca / Buku Kas":
                 with st.spinner("Mengkompilasi Data & Visualisasi..."):
                     tot_um = 0
                     if len(um_r) > 1:
-                        df_um = pd.DataFrame(um_r[1:], columns=["Waktu", "Tanggal", "Deskripsi", "Nominal"])
+                        # Safety: Pad UM array so pandas doesn't crash on empty row tails
+                        padded_um = [(r + [""] * 4)[:4] for r in um_r[1:]]
+                        df_um = pd.DataFrame(padded_um, columns=["Waktu", "Tanggal", "Deskripsi", "Nominal"])
+                        
                         df_um['Tanggal_Real'] = pd.to_datetime(df_um['Tanggal'], format='%d/%m/%Y', errors='coerce')
-                        tot_um = df_um[(df_um['Tanggal_Real'].dt.date >= start_date) & (df_um['Tanggal_Real'].dt.date <= end_date)]['Nominal'].apply(clean_nominal).sum()
+                        start_ts, end_ts = pd.to_datetime(start_date), pd.to_datetime(end_date)
+                        
+                        mask = (df_um['Tanggal_Real'] >= start_ts) & (df_um['Tanggal_Real'] <= end_ts)
+                        tot_um = df_um[mask]['Nominal'].apply(clean_nominal).sum()
                     
                     tot_pjb = sum([clean_nominal(r[15]) for r in rekap_r[1:] if len(r) > 16 and (r[16].strip() == filter_q_neraca or filter_q_neraca == "-- Semua Periode --")]) if len(rekap_r)>1 else 0
                     
@@ -1021,28 +1042,31 @@ elif st.session_state.page == "📈 Live Monitoring":
                 if len(pjb_r) > 1:
                     df_pjb_all = pd.DataFrame([(r + [""] * 28)[:28] for r in pjb_r[1:]], columns=["Waktu","Tanggal","N","C","Nama","R","S","Keperluan","BBM","D","KMAkhir","Nominal","Pl","u1","u2","u3","u4","u5","u6","u7","NN","NoTiket","Lt","Hs","TKM_RH","u8","u9","BuktiTF"])
                     df_pjb_all['Nominal_Clean'] = df_pjb_all['Nominal'].apply(clean_nominal)
-                    df_pjb_all['Tanggal_PJB'] = pd.to_datetime(df_pjb_all['Tanggal'], format='%d/%m/%Y', errors='coerce').dt.date
                     
+                    df_pjb_all['Tanggal_PJB'] = pd.to_datetime(df_pjb_all['Tanggal'], format='%d/%m/%Y', errors='coerce')
                     df_daily = df_pjb_all.dropna(subset=['Tanggal_PJB']).groupby('Tanggal_PJB')['Nominal_Clean'].sum().reset_index().sort_values('Tanggal_PJB')
-                    df_daily.columns = ['Tanggal PJB', 'Total Pengeluaran (Rp)_num']
                     
-                    st.markdown("#### 📈 Grafik Tren Pengeluaran Harian")
                     if not df_daily.empty:
+                        df_daily.columns = ['Tanggal PJB', 'Total Pengeluaran (Rp)_num']
+                        st.markdown("#### 📈 Grafik Tren Pengeluaran Harian")
                         st.area_chart(df_daily.set_index('Tanggal PJB')['Total Pengeluaran (Rp)_num'], use_container_width=True)
                     
-                    col_d1, col_d2 = st.columns(2)
-                    with col_d1:
-                        st.markdown("#### 📆 Histori Pengeluaran PJB")
-                        df_daily_tabel = df_daily.copy().sort_values('Tanggal PJB', ascending=False)
-                        df_daily_tabel['Total Pengeluaran (Rp)'] = df_daily_tabel['Total Pengeluaran (Rp)_num'].apply(lambda x: f"Rp {x:,.0f}")
-                        st.dataframe(df_daily_tabel[['Tanggal PJB', 'Total Pengeluaran (Rp)']], hide_index=True, use_container_width=True)
-                        
-                    with col_d2:
-                        st.markdown("#### ⛽ Total Pengeluaran per Jenis BBM/Kategori")
-                        df_cat = df_pjb_all.groupby('BBM')['Nominal_Clean'].sum().reset_index().sort_values('Nominal_Clean', ascending=False)
-                        df_cat.columns = ['Jenis BBM / Kategori', 'Total Nominal (Rp)']
-                        df_cat['Total Nominal (Rp)'] = df_cat['Total Nominal (Rp)'].apply(lambda x: f"Rp {x:,.0f}")
-                        st.dataframe(df_cat, hide_index=True, use_container_width=True)
+                        col_d1, col_d2 = st.columns(2)
+                        with col_d1:
+                            st.markdown("#### 📆 Histori Pengeluaran PJB")
+                            df_daily_tabel = df_daily.copy().sort_values('Tanggal PJB', ascending=False)
+                            # Convert timestamp back to string format for display
+                            df_daily_tabel['Tanggal PJB'] = df_daily_tabel['Tanggal PJB'].dt.strftime('%d/%m/%Y')
+                            df_daily_tabel['Total Pengeluaran (Rp)'] = df_daily_tabel['Total Pengeluaran (Rp)_num'].apply(lambda x: f"Rp {x:,.0f}")
+                            st.dataframe(df_daily_tabel[['Tanggal PJB', 'Total Pengeluaran (Rp)']], hide_index=True, use_container_width=True)
+                            
+                        with col_d2:
+                            st.markdown("#### ⛽ Total Pengeluaran per Jenis BBM/Kategori")
+                            df_cat = df_pjb_all.groupby('BBM')['Nominal_Clean'].sum().reset_index().sort_values('Nominal_Clean', ascending=False)
+                            if not df_cat.empty:
+                                df_cat.columns = ['Jenis BBM / Kategori', 'Total Nominal (Rp)']
+                                df_cat['Total Nominal (Rp)'] = df_cat['Total Nominal (Rp)'].apply(lambda x: f"Rp {x:,.0f}")
+                                st.dataframe(df_cat, hide_index=True, use_container_width=True)
                 else:
                     st.info("Belum ada data PJB untuk direkap.")
             
@@ -1097,8 +1121,8 @@ elif st.session_state.page == "📈 Live Monitoring":
                 eval_list = []
                 for pjb in pjb_r[1:]:
                     if len(pjb) > 24:
-                        no_tiket = pjb[21]
-                        req_match = next((x for x in req_r[1:] if len(x) > 13 and x[3] == no_tiket), None)
+                        no_tiket = str(pjb[21]).strip().upper()
+                        req_match = next((x for x in req_r[1:] if len(x) > 13 and str(x[3]).strip().upper() == no_tiket), None)
                         
                         if req_match:
                             kategori = req_match[10]
