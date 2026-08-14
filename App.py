@@ -496,12 +496,16 @@ elif st.session_state.page == "📝 Form Request Dana":
                         st.warning("⏳ Menunggu approval Admin untuk kelebihan limit Motor.")
                         motor_limit_lock = True
                     else:
-                        if st.button("🚨 Ajukan Approval Limit BBM Motor", type="primary"):
-                            append_data(SHEET_APP, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), nama, tiket.strip().upper(), "Limit Motor", kebutuhan, "PENDING", f"Bulan ini: {total_motor_this_month}"], target_ss)
-                            st.success("Terkirim ke Admin! Silakan tunggu approval.")
-                            time.sleep(2)
-                            st.rerun()
-                        motor_limit_lock = True
+                        if not tiket.strip():
+                            st.warning("⚠️ Ketik Nomor Tiket Anda di atas terlebih dahulu untuk memunculkan tombol Ajukan Approval.")
+                            motor_limit_lock = True
+                        else:
+                            if st.button("🚨 Ajukan Approval Limit BBM Motor", type="primary"):
+                                append_data(SHEET_APP, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), nama, tiket.strip().upper(), "Limit Motor", kebutuhan, "PENDING", f"Bulan ini: Rp {total_motor_this_month:,.0f}"], target_ss)
+                                st.success("Terkirim ke Admin! Silakan tunggu approval.")
+                                time.sleep(2)
+                                st.rerun()
+                            motor_limit_lock = True
                         
             elif jns_kendaraan.lower() in ["mobil", "genset"]:
                 jenis_bahan_bakar = st.selectbox("Pilih Jenis BBM (Wajib)", ["", "Pertalite", "Pertamax", "Dexlite", "Bio Solar", "Pertamina Dex"])
@@ -837,11 +841,20 @@ elif st.session_state.page == "🛡️ Approval Center":
             if len(app_r) > 0:
                 for idx, r in enumerate(app_r):
                     if len(r) > 5 and r[5] == "PENDING":
-                        item = {"Row Index": idx, "Waktu": r[0], "Nama": r[1], "No Tiket": r[2], "Jenis": r[3], "Nominal": f"Rp {int(r[4]):,.0f}", "Status": r[5]}
+                        item = {
+                            "Row Index": idx, 
+                            "Waktu": r[0], 
+                            "Nama": r[1], 
+                            "No Tiket": r[2], 
+                            "Jenis Pengajuan": r[3], 
+                            "Nominal": f"Rp {clean_nominal(r[4]):,.0f}", 
+                            "Status": r[5],
+                            "Keterangan": r[6] if len(r) > 6 else "-"
+                        }
                         if r[3] == "Verifikasi PJB": pending_pjb.append(item)
                         else: pending_anomali.append(item)
             
-            tab_app1, tab_app2 = st.tabs(["📸 Verifikasi Foto PJB", "⛽ Anomali BBM & Limit"])
+            tab_app1, tab_app2 = st.tabs(["📸 Verifikasi Foto PJB", "⛽ Approval Limit Motor & Anomali BBM"])
             
             with tab_app1:
                 st.markdown("### 🔍 Daftar Tunggu Verifikasi PJB")
@@ -883,7 +896,7 @@ elif st.session_state.page == "🛡️ Approval Center":
                     st.success("✅ Tidak ada PJB yang menunggu verifikasi (Inbox Kosong).")
                     
             with tab_app2:
-                st.markdown("### 🚨 Daftar Tunggu Approval Harga / Limit")
+                st.markdown("### 🚨 Daftar Tunggu Approval Harga / Limit Motor")
                 if pending_anomali:
                     st.dataframe(pd.DataFrame(pending_anomali).drop(columns=["Row Index"]), hide_index=True, use_container_width=True)
                     
