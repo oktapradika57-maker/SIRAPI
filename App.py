@@ -263,7 +263,6 @@ def get_user_tickets_status(nama, req_rows, pjb_rows, app_rows):
     pjb_tickets = {r[21].strip().upper() for r in pjb_rows[1:] if len(r) > 21 and r[4].strip().upper() == nama.strip().upper() and r[21].strip() != ""}
     pjb_app_status = {}
     
-    # Ambil status approval yang TERBARU untuk setiap tiket
     for r in app_rows[1:]:
         if len(r) > 5 and r[3] == "Verifikasi PJB":
             tiket_app = r[2].strip().upper()
@@ -338,6 +337,7 @@ if st.session_state.get("admin_password") in AUTHORIZED_PASSWORDS:
     if st.sidebar.button("📊 Neraca / Buku Kas", use_container_width=True): st.session_state.page = "📊 Neraca / Buku Kas"; st.rerun()
     if st.sidebar.button("📈 Live Monitoring", use_container_width=True): st.session_state.page = "📈 Live Monitoring"; st.rerun()
     if st.sidebar.button("🛠️ Tracker & SDM", use_container_width=True): st.session_state.page = "🛠️ Tracker Tools & SDM"; st.rerun()
+    if st.sidebar.button("🖨️ Auto PJB Report", use_container_width=True): st.session_state.page = "🖨️ Auto PJB Report"; st.rerun()
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 🔍 CEK STATUS TIKET")
@@ -404,6 +404,13 @@ if st.session_state.page == "🏠 Hub Menu Utama":
         if st.button("🛠️\nTRACKER TOOLS & SDM\nKondisi & Kelengkapan", use_container_width=True): 
             if st.session_state.get("admin_password") in AUTHORIZED_PASSWORDS: st.session_state.page = "🛠️ Tracker Tools & SDM"; st.rerun()
             else: st.error("Silakan login Admin di Sidebar.")
+            
+    st.markdown("<br>", unsafe_allow_html=True)
+    c7, c8, c9 = st.columns(3)
+    with c7:
+        if st.button("🖨️\nAUTO PJB REPORT\nGenerator Teks & Foto Laporan", use_container_width=True): 
+            if st.session_state.get("admin_password") in AUTHORIZED_PASSWORDS: st.session_state.page = "🖨️ Auto PJB Report"; st.rerun()
+            else: st.error("Silakan login Admin di Sidebar.")
 
 # ==========================================
 # PAGE 1: FORM REQUEST DANA
@@ -430,7 +437,6 @@ elif st.session_state.page == "📝 Form Request Dana":
         site_dict, site_list, tim_dict, list_nopol = load_excel_data()
         auto_lat_tujuan, auto_long_tujuan, auto_lat_brgkt, auto_long_brgkt = "0", "0", "0", "0"
 
-        # State penampung Revisi Request
         if "rev_req" not in st.session_state: st.session_state.rev_req = {}
         rev_data = st.session_state.rev_req
         
@@ -463,7 +469,6 @@ elif st.session_state.page == "📝 Form Request Dana":
                             
             is_locked_user = len(out_lock) > 0
             
-            # --- UI TARIK DATA REQUEST UNTUK REVISI ---
             col_t1, col_t2 = st.columns([3, 1])
             with col_t1: tiket = st.text_input("Nomor Tiket SWFM (WAJIB)")
             with col_t2: 
@@ -642,7 +647,6 @@ elif st.session_state.page == "📝 Form Request Dana":
         
         form_invalid = (nama == "" or cluster == "" or role == "-- Pilih Role --" or keperluan == "" or jns_kendaraan == "")
         
-        # --- PERUBAHAN: TIKET GANDA DIIZINKAN SECARA OTOMATIS (REVISI) ---
         if is_duplicate:
             st.info("💡 **INFO REVISI:** Tiket ini sudah ada di database. Sistem mendeteksi ini sebagai aktivitas **REVISI**. Data lama Anda akan tetap tersimpan aman di database.")
 
@@ -775,7 +779,6 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                         
                 if ditemukan_req:
                     if ditemukan_pjb:
-                        # Auto-fill values from old PJB if available
                         ditemukan_req["km_akhir_lama"] = int(clean_nominal(ditemukan_pjb[10])) if len(ditemukan_pjb)>10 else int(ditemukan_req["KMAwal"])
                         ditemukan_req["liter_lama"] = str(ditemukan_pjb[22]) if len(ditemukan_pjb)>22 else "0"
                         ditemukan_req["harga_lama"] = int(clean_nominal(ditemukan_pjb[23])) if len(ditemukan_pjb)>23 else 0
@@ -860,7 +863,6 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                 status_v = status_verif_dict.get(valid_cari_tiket, "NONE")
                 catatan_v = catatan_verif_dict.get(valid_cari_tiket, "")
                 
-                # --- PERUBAHAN: TIKET GANDA DIIZINKAN (REVISI) TANPA PASSWORD ---
                 if status_v == "PENDING":
                     st.warning("⏳ PJB tiket ini sedang dalam proses review Admin. Anda tetap bisa merevisinya kembali (Submit Ulang), dan statusnya akan menimpa / mengantri sebagai pengajuan terbaru.")
                 
@@ -934,7 +936,6 @@ elif st.session_state.page == "🛡️ Approval Center":
                         if "REJECT" in action_pjb and not remark_pjb.strip():
                             st.error("⚠️ Mohon berikan Alasan / Catatan Penolakan agar tim tahu bagian yang harus direvisi.")
                         else:
-                            # Update ALL matching duplicates to clean up ghost pending states from revisions
                             target_indices = [p["Row Index"] for p in pending_pjb if p["No Tiket"] == target_tiket_pjb]
                             new_status = "APPROVED" if "APPROVE" in action_pjb else "REJECTED"
                             with st.spinner("Memperbarui database..."):
@@ -1036,7 +1037,7 @@ elif st.session_state.page == "📈 Live Monitoring":
         nop_live = st.selectbox("🌐 Pilih Market (NOP):", ["-- Pilih NOP --"] + list(MASTER_DATA.keys()))
         if nop_live != "-- Pilih NOP --":
             data_all = fetch_spreadsheet_data(MASTER_DATA[nop_live]["spreadsheet_id"])
-            um_r, rekap_r, pjb_r, req_r, app_r = data_all[SHEET_UM], data_all["Rekap PJB"], data_all[SHEET_PJB], data_all[SHEET_REQUEST], data_all[SHEET_APP]
+            um_r, rekap_r, pjb_r, req_r, app_r = data_all[SHEET_UM], data_all["Rekap PJB"], data_all[SHEET_REQUEST], data_all[SHEET_APP]
             
             t1, t2, t3 = st.tabs(["💰 1. Sisa Kas, Daily Graph & Kategori BBM", "🚨 2. Record Anomali & Warning Tim", "🕵️ 3. Evaluasi Kinerja (Track KM/RH)"])
             with t1:
@@ -1151,7 +1152,7 @@ elif st.session_state.page == "📈 Live Monitoring":
 
 
 # ==========================================
-# PAGE 6: TRACKER & SDM (NEW FIX)
+# PAGE 6: TRACKER & SDM
 # ==========================================
 elif st.session_state.page == "🛠️ Tracker Tools & SDM":
     st.markdown("<div class='header-card'><h2>🛠️ TRACKER & SDM MONITORING</h2><p>Filter Makro, Tracking Registrasi & Kondisi Tools Tim</p></div>", unsafe_allow_html=True)
@@ -1268,3 +1269,114 @@ elif st.session_state.page == "🛠️ Tracker Tools & SDM":
                         }
                     )
                 else: st.info("Tidak ada data tools yang ditemukan.")
+
+
+# ==========================================
+# PAGE 7: AUTO PJB REPORT (NEW FIX)
+# ==========================================
+elif st.session_state.page == "🖨️ Auto PJB Report":
+    st.markdown("<div class='header-card'><h2>🖨️ AUTO PJB REPORT</h2><p>Generator Otomatis Laporan Teks dari Rekap PJB & Foto dari Form PJB</p></div>", unsafe_allow_html=True)
+    if st.button("🏠 Kembali ke Home Menu", use_container_width=True): st.session_state.page = "🏠 Hub Menu Utama"; st.rerun()
+    
+    if st.session_state.get("admin_password") not in AUTHORIZED_PASSWORDS: 
+        st.error("⛔ AKSES TERKUNCI: Halaman ini khusus Admin.")
+    else:
+        nop_report = st.selectbox("📂 Pilih Wilayah Database (NOP):", ["-- Pilih NOP --"] + list(MASTER_DATA.keys()))
+        
+        if nop_report != "-- Pilih NOP --":
+            with st.spinner("Membaca seluruh database laporan..."):
+                target_ss = MASTER_DATA[nop_report]["spreadsheet_id"]
+                data_all = fetch_spreadsheet_data(target_ss)
+                rekap_r = data_all.get("Rekap PJB", [])
+                pjb_r = data_all.get(SHEET_PJB, [])
+                
+            if len(rekap_r) > 1 and len(pjb_r) > 1:
+                # 1. Bikin Kamus/Dictionary Data Foto dari Form PJB berdasarkan No Tiket
+                dict_photos = {}
+                # Membalik PJB agar Revisi (baris paling bawah) tertimpa di dictionary (Data Terbaru yang diambil)
+                for r in reversed(pjb_r[1:]):
+                    if len(r) > 21:
+                        tk = str(r[21]).strip().upper()
+                        # Jika tiket belum masuk dictionary (artinya ini data paling baru dari bawah)
+                        if tk and tk not in dict_photos:
+                            dict_photos[tk] = {
+                                "N (Evidance Pengisian)": r[13] if len(r)>13 else "",
+                                "O (Nota BBM)": r[14] if len(r)>14 else "",
+                                "P (Foto KM/RH)": r[15] if len(r)>15 else "",
+                                "Q (Foto Material)": r[16] if len(r)>16 else "",
+                                "R (Nota Material)": r[17] if len(r)>17 else "",
+                                "S (Nota Penginapan)": r[18] if len(r)>18 else "",
+                                "T (Evidance Pekerjaan)": r[19] if len(r)>19 else ""
+                            }
+                
+                # 2. Tarik Pilihan Filter dari Rekap PJB (Kolom Q & Kolom G)
+                list_periode = sorted(list(set([r[16].strip() for r in rekap_r[1:] if len(r) > 16 and r[16].strip() != ""])))
+                list_role = sorted(list(set([r[6].strip() for r in rekap_r[1:] if len(r) > 6 and r[6].strip() != ""])))
+                
+                st.markdown("<div class='section-title'>🔍 1. Parameter Filter Laporan</div>", unsafe_allow_html=True)
+                col_f1, col_f2 = st.columns(2)
+                with col_f1: filter_periode = st.selectbox("📅 Periode Dana Ops (Dari Kolom Q Rekap):", ["Semua Periode"] + list_periode)
+                with col_f2: filter_role = st.selectbox("💼 Role Pekerjaan (Dari Kolom G Rekap):", ["Semua Role"] + list_role)
+
+                st.markdown("<div class='section-title'>📸 2. Pilih Lampiran Foto (Multi-Select)</div>", unsafe_allow_html=True)
+                pilihan_foto = st.multiselect(
+                    "Pilih kolom foto yang ingin ditarik dari Form PJB:",
+                    ["N (Evidance Pengisian)", "O (Nota BBM)", "P (Foto KM/RH)", "Q (Foto Material)", "R (Nota Material)", "S (Nota Penginapan)", "T (Evidance Pekerjaan)"],
+                    default=["O (Nota BBM)", "T (Evidance Pekerjaan)"]
+                )
+                
+                if st.button("🚀 Generate Auto Report", type="primary", use_container_width=True):
+                    st.markdown("<hr>", unsafe_allow_html=True)
+                    st.markdown("### 📑 HASIL AUTO-REPORT")
+                    
+                    count_match = 0
+                    for idx, row in enumerate(rekap_r[1:]):
+                        row_periode = row[16].strip() if len(row) > 16 else ""
+                        row_role = row[6].strip() if len(row) > 6 else ""
+                        
+                        pass_periode = (filter_periode == "Semua Periode") or (row_periode == filter_periode)
+                        pass_role = (filter_role == "Semua Role") or (row_role == filter_role)
+                        
+                        if pass_periode and pass_role:
+                            # [Smart Matching] Mencari mana Nomor Tiket di baris laporan Rekap PJB ini
+                            # Sistem akan otomatis mengecek setiap sel dalam tabel tersebut.
+                            found_tiket = None
+                            for cell in row:
+                                if str(cell).strip().upper() in dict_photos:
+                                    found_tiket = str(cell).strip().upper()
+                                    break
+                            
+                            if found_tiket:
+                                count_match += 1
+                                # Tampilkan Block Teks Laporan
+                                st.markdown(f"""
+                                <div style='background-color: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 10px; border-left: 5px solid #00F2FE;'>
+                                    <h4 style='color: #0F2027; margin-bottom: 10px;'>🎫 TIKET: {found_tiket}</h4>
+                                    <table style='width:100%; font-size:0.9rem; color:#334155;'>
+                                        <tr><td width='15%'><b>Tanggal</b></td><td width='35%'>: {row[0] if len(row)>0 else '-'}</td><td width='15%'><b>Periode</b></td><td>: {row_periode}</td></tr>
+                                        <tr><td><b>Nama</b></td><td>: {row[4] if len(row)>4 else '-'}</td><td><b>Nominal</b></td><td>: <span style='color:green; font-weight:bold;'>Rp {row[15] if len(row)>15 else '0'}</span></td></tr>
+                                        <tr><td><b>Role / Jabatan</b></td><td>: {row_role}</td><td><b>Keperluan</b></td><td>: {row[8] if len(row)>8 else '-'}</td></tr>
+                                        <tr><td valign='top'><b>Deskripsi</b></td><td colspan='3'>: {row[9] if len(row)>9 else '-'}</td></tr>
+                                    </table>
+                                </div>
+                                """, unsafe_allow_html=True)
+                                
+                                # Tampilkan Foto Bersandingan Berdasarkan Nomor Tiket (Smart Join)
+                                if pilihan_foto:
+                                    cols_photo = st.columns(len(pilihan_foto))
+                                    for i, p_name in enumerate(pilihan_foto):
+                                        url_foto = dict_photos[found_tiket].get(p_name, "")
+                                        with cols_photo[i]:
+                                            if url_foto and url_foto.startswith("http"):
+                                                st.image(url_foto, caption=p_name, use_container_width=True)
+                                            else:
+                                                st.markdown(f"<div style='background:#f1f5f9; padding:20px; text-align:center; color:#94a3b8; border-radius:10px; font-size:0.8rem;'>🚫 Tidak ada<br>{p_name}</div>", unsafe_allow_html=True)
+                                
+                                st.markdown("<hr style='margin: 30px 0; border-color:#e2e8f0;'>", unsafe_allow_html=True)
+                    
+                    if count_match == 0:
+                        st.warning("⚠️ Tidak ada data yang cocok dengan filter yang dipilih, atau Sistem tidak dapat menemukan kolom Nomor Tiket di Sheet Rekap PJB Anda.")
+                    else:
+                        st.success(f"✅ Selesai! Berhasil merangkum Laporan Teks dan Foto untuk **{count_match}** tiket.")
+            else:
+                st.info("⚠️ Data Sheet 'Rekap PJB' atau 'Form PJB' belum tersedia/masih kosong.")
