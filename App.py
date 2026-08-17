@@ -117,7 +117,6 @@ def clean_nominal(val):
     except: return 0
 
 def clean_indicator(val):
-    # FUNGSI BARU: Khusus untuk support desimal/float pada KM dan RH Genset
     try:
         if pd.isna(val) or val == "": return 0.0
         v = str(val).replace(',', '.').replace(' ', '').strip()
@@ -377,7 +376,17 @@ elif st.session_state.page == "📝 Form Request Dana":
         req_r, pjb_r, app_r = data_all[SHEET_REQUEST], data_all[SHEET_PJB], data_all[SHEET_APP]
         
         all_requested_tickets = [r[3].strip().upper() for r in req_r[1:] if len(r) > 3]
-        site_dict, site_list, tim_dict, list_nopol = load_excel_data()
+        site_dict, site_list, tim_dict, list_nopol_csv = load_excel_data()
+        
+        # FITUR BARU: AUTO-SAVE NOPOL. Gabungkan NOPOL CSV dengan NOPOL yang pernah diketik di riwayat Server (PJB & Request).
+        history_nopols = set()
+        for r in req_r[1:]:
+            if len(r) > 16 and r[16].strip(): history_nopols.add(r[16].strip().upper())
+        for r in pjb_r[1:]:
+            if len(r) > 12 and r[12].strip(): history_nopols.add(r[12].strip().upper())
+            
+        list_nopol = sorted(list(set([n.strip().upper() for n in list_nopol_csv if n.strip()] + list(history_nopols))))
+        
         auto_lat_tujuan, auto_long_tujuan, auto_lat_brgkt, auto_long_brgkt = "0", "0", "0", "0"
 
         if "rev_req" not in st.session_state: st.session_state.rev_req = {}
@@ -423,7 +432,7 @@ elif st.session_state.page == "📝 Form Request Dana":
                             st.session_state.rev_req = {
                                 "kebutuhan": clean_nominal(r[9]),
                                 "desc": r[11],
-                                "km_awal": clean_indicator(r[12]), # Modifikasi: Ambil float untuk desimal
+                                "km_awal": clean_indicator(r[12]),
                                 "plat": r[16]
                             }
                             found = True
@@ -518,37 +527,40 @@ elif st.session_state.page == "📝 Form Request Dana":
             elif role != "-- Pilih Role --":
                 plat_options = ["-- Pilih NOPOL --"] + list_nopol + ["Lainnya (Ketik Manual)"]
                 plat_choice = st.selectbox("Pilih Plat Nomor Kendaraan", plat_options)
-                # Validasi Nopol Manual (Sistem langsung mengikatnya tanpa celah bocor)
-                if plat_choice == "Lainnya (Ketik Manual)": plat = st.text_input("Ketik Plat Nomor Manual", value=auto_nopol)
+                # Nopol Ketik Manual
+                if plat_choice == "Lainnya (Ketik Manual)": 
+                    plat = st.text_input("Ketik Plat Nomor Baru (Akan otomatis tersimpan di Dropdown selanjutnya)", value=auto_nopol)
                 else: plat = "" if plat_choice == "-- Pilih NOPOL --" else plat_choice
             else:
                 plat = st.text_input("Plat Nomor Kendaraan / ID Genset", value=auto_nopol)
                 
             plat_clean = plat.strip().replace(" ", "").upper()
             
-            # PENARIKAN KM/RH TERAKHIR & PENGUNCIAN
+            # PENARIKAN KM/RH TERAKHIR & PENGUNCIAN ANTI-MALAS TIM
             last_indikator = 0.0
             if plat_clean != "" and jns_kendaraan.lower() in ["mobil", "motor", "genset"]:
                 for r in reversed(pjb_r[1:]): 
                     if len(r) > 12:
                         history_plat = str(r[12]).strip().replace(" ", "").upper()
                         if history_plat == plat_clean:
-                            last_indikator = clean_indicator(r[10]) # Gunakan clean_indicator agar desimal terbaca
+                            last_indikator = clean_indicator(r[10]) # Gunakan float
                             break
 
             if jns_kendaraan.lower() == "genset":
-                st.info(f"⏱️ **TERKUNCI:** RH Genset terakhir untuk **{plat}** adalah **{last_indikator}**. Anda tidak bisa memasukkan angka lebih kecil.")
-                label_indikator = "Input RH Genset SAAT INI (Wajib)"
+                st.info(f"⏱️ **INFO HISTORI:** RH Genset terakhir pada sistem untuk **{plat}** adalah **{last_indikator}**.")
+                label_indikator = "Ketik Angka RH Genset AKTUAL SAAT INI (Wajib)"
             elif jns_kendaraan.lower() in ["mobil", "motor"]:
-                st.info(f"🛣️ **TERKUNCI:** KM Kendaraan terakhir untuk **{plat}** adalah **{last_indikator}**. Anda tidak bisa memasukkan angka lebih kecil.")
-                label_indikator = "Input KM Kendaraan SAAT INI (Wajib)"
-            else: label_indikator = "Indikator Awal (Ketik 0 jika tidak relevan)"
+                st.info(f"🛣️ **INFO HISTORI:** KM Kendaraan terakhir pada sistem untuk **{plat}** adalah **{last_indikator}**.")
+                label_indikator = "Ketik Angka KM Kendaraan AKTUAL SAAT INI (Wajib)"
+            else: label_indikator = "Indikator Awal (Biarkan 0 jika tidak relevan)"
             
-            # Set default minimal terkunci sesuai Last Indikator
-            default_km = float(rev_data.get("km_awal", last_indikator))
-            if default_km < last_indikator: default_km = float(last_indikator)
+            # FITUR ANTI-MALAS: Default Input 0 agar wajib diketik.
+            # Jika merupakan data dari tombol Tarik (Revisi), barulah nilai rev_data dimunculkan.
+            if "km_awal" in rev_data and rev_data["km_awal"] > 0:
+                default_km = float(rev_data["km_awal"])
+            else: default_km = 0.0
                 
-            km_awal = st.number_input(label_indikator, min_value=float(last_indikator), value=default_km, step=0.1)
+            km_awal = st.number_input(label_indikator, min_value=0.0, value=default_km, step=0.1)
             
             deskripsi = st.text_area("Deskripsi Pekerjaan / Justifikasi", value=rev_data.get("desc", ""))
             if tim_bareng: deskripsi_final = deskripsi + f"\n\n[Berangkat bersama tim: {', '.join(tim_bareng)}]"
@@ -569,10 +581,10 @@ elif st.session_state.page == "📝 Form Request Dana":
             long_tujuan = st.text_input("Longitude Tujuan (Auto)", value=auto_long_tujuan if is_vehicle else "0", disabled=not is_vehicle)
             no_rek = st.text_input("Nomor Rekening Tujuan", value=default_no_rek)
             
-            # VALIDASI STRICT NOMINAL TRANSFER (Hanya Angka)
+            # VALIDASI STRICT NOMINAL TRANSFER (Hanya Angka tanpa tanda baca)
             nominal_tf_str = st.text_input("Total Nominal Transfer (TANPA TITIK/KOMA, Cth: 100000)", value="0")
             if not nominal_tf_str.isdigit():
-                st.warning("⚠️ FORMAT SALAH: Nominal Transfer HANYA BOLEH ANGKA (Tidak boleh ada titik / koma / huruf).")
+                st.warning("⚠️ FORMAT SALAH: Nominal Transfer HANYA BOLEH ANGKA murni (Tidak boleh ada titik atau koma).")
             try: nominal_tf = int(nominal_tf_str.replace(".", "").replace(",", "").strip())
             except: nominal_tf = 0
 
@@ -638,13 +650,15 @@ elif st.session_state.page == "📝 Form Request Dana":
                             st.session_state.rev_req = {}; st.balloons(); st.success("🎉 Berhasil Bypass!"); time.sleep(2); st.session_state.page = "🏠 Hub Menu Utama"; st.rerun()
         else:
             if st.button("📤 Kirim Form Request Dana / Revisi", type="primary", use_container_width=True):
-                # Ekstra Blokir: Cek apakah nominal 0 atau KM/RH kosong/0
+                # Validasi Ekstra untuk blokir submit salah:
                 if form_invalid or not tiket.strip() or invalid_coords: 
                     st.error("Lengkapi form (Semua isian wajib)!")
                 elif nominal_tf <= 0:
-                    st.error("❌ PENGIRIMAN DITOLAK: Total Nominal Transfer tidak boleh kosong / bernilai 0!")
+                    st.error("❌ PENGIRIMAN DITOLAK: Total Nominal Transfer tidak boleh 0 / kosong!")
                 elif (jns_kendaraan.lower() in ["mobil", "motor", "genset"]) and (km_awal <= 0):
-                    st.error(f"❌ PENGIRIMAN DITOLAK: Kolom {label_indikator} WAJIB diisi dengan angka aktual saat ini (Tidak Boleh 0).")
+                    st.error(f"❌ PENGIRIMAN DITOLAK: Anda dilarang membiarkan angka {label_indikator} bernilai 0!")
+                elif (jns_kendaraan.lower() in ["mobil", "motor", "genset"]) and (km_awal < last_indikator):
+                    st.error(f"❌ PENGIRIMAN DITOLAK: Angka yang Anda ketik ({km_awal}) tidak boleh lebih kecil dari histori pencatatan terakhir ({last_indikator})!")
                 else:
                     with st.spinner("Memproses ke Database..."):
                         data_req = [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), tanggal.strftime("%d/%m/%Y"), nop, tiket, cluster, nama, role, site_id, keperluan, kebutuhan, final_bbm, deskripsi_final, str(km_awal), jarak_final_text, lat_berangkat, long_berangkat, plat_clean, rek_penerima, no_rek, nominal_tf, upload_foto(foto_km), upload_foto(foto_evidance), lat_tujuan, long_tujuan]
@@ -734,7 +748,7 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                         
                 if ditemukan_req:
                     if ditemukan_pjb:
-                        ditemukan_req["km_akhir_lama"] = float(clean_indicator(ditemukan_pjb[10])) if len(ditemukan_pjb)>10 else float(ditemukan_req["KMAwal"])
+                        ditemukan_req["km_akhir_lama"] = float(clean_indicator(ditemukan_pjb[10])) if len(ditemukan_pjb)>10 else 0.0
                         ditemukan_req["liter_lama"] = str(ditemukan_pjb[22]) if len(ditemukan_pjb)>22 else "0"
                         ditemukan_req["harga_lama"] = int(clean_nominal(ditemukan_pjb[23])) if len(ditemukan_pjb)>23 else 0
                         ditemukan_req["nota_lama"] = int(clean_nominal(ditemukan_pjb[20])) if len(ditemukan_pjb)>20 else 0
@@ -774,15 +788,21 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                 icon_text = "⏱️" if is_genset else "🛣️"
                 
                 with c_c:
-                    # KM AKHIR TERKUNCI MINIMAL SAMA DENGAN KM AWAL 
                     d_km_awal = float(d["KMAwal"])
-                    default_km_akhir = float(d.get("km_akhir_lama", d_km_awal))
-                    if default_km_akhir < d_km_awal: default_km_akhir = d_km_awal
+                    st.info(f"📍 KM/RH saat Request awal: **{d_km_awal}**")
                     
-                    st.info(f"📍 KM/RH Awal Anda saat Request adalah: **{d_km_awal}**")
-                    km_akhir = st.number_input(f"{label_akhir} (Wajib Isi)", min_value=float(d_km_awal), value=default_km_akhir, step=0.1)
+                    # FITUR ANTI-MALAS: Input default 0 agar user mengetik ulang manual nilai akhir
+                    default_km_akhir = float(d.get("km_akhir_lama", 0.0))
+                    
+                    km_akhir = st.number_input(f"Ketik Angka {label_akhir} AKTUAL SAAT INI (Wajib)", min_value=0.0, value=default_km_akhir, step=0.1)
                     total_km_tempuh = km_akhir - d_km_awal
-                    st.info(f"{icon_text} Kalkulasi {info_text}: **{total_km_tempuh:.2f}**")
+                    
+                    # Kalkulasi hanya muncul jika angkanya masuk akal (> 0)
+                    if km_akhir > 0 and total_km_tempuh >= 0:
+                        st.info(f"{icon_text} Kalkulasi {info_text}: **{total_km_tempuh:.2f}**")
+                    elif km_akhir > 0 and total_km_tempuh < 0:
+                        st.error(f"⚠️ PERINGATAN: Angka yang diketik lebih kecil dari KM Awal!")
+                
                 with c_d:
                     tot_liter = st.text_input("Total Liter BBM/Material", value=d.get("liter_lama", "0"))
                     harga_satuan = st.number_input("Harga Satuan (BBM/Material)", min_value=0, step=500, value=d.get("harga_lama", 0))
@@ -834,8 +854,11 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                         st.error(f"❌ PJB Anda sebelumnya DITOLAK Admin! Alasan: **{catatan_v}**")
                         
                 if st.button("🚀 Sahkan Pelaporan PJB / Submit Revisi", type="primary", use_container_width=True):
+                    # Validasi anti malas ketik 0 dan mencegah angka mundur
                     if (is_vehicle or is_genset) and (km_akhir <= 0):
-                        st.error("❌ PENGIRIMAN DITOLAK: KM/RH Akhir wajib diisi dengan nilai yang benar!")
+                        st.error(f"❌ PENGIRIMAN DITOLAK: Anda belum mengisi {label_akhir} yang aktual. Tidak boleh 0!")
+                    elif (is_vehicle or is_genset) and (km_akhir < d_km_awal):
+                        st.error(f"❌ PENGIRIMAN DITOLAK: Angka yang dimasukkan ({km_akhir}) LEBIH KECIL dari KM/RH Awal Anda saat request ({d_km_awal})!")
                     else:
                         with st.spinner("Mengupload foto dan memproses PJB..."):
                             data_pjb = [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), tgl_pjb.strftime("%d/%m/%Y"), d["NOP"], d["Cluster"], d["Nama"], d["Role"], d["Site"], d["Keperluan"], d["BBM"], d["Desc"], str(km_akhir), nominal_pjb, d["Plat"], upload_foto(f_isi), upload_foto(f_nota_bbm), upload_foto(f_km), upload_foto(f_mat), upload_foto(f_notamat), upload_foto(f_inap), upload_foto(f_kerja), tot_nilai_nota, valid_cari_tiket, tot_liter, harga_satuan, str(round(total_km_tempuh, 2)), "", "", upload_foto(f_transfer)]
