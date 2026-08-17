@@ -95,7 +95,7 @@ cloudinary.config(cloud_name="fxm61tjv", api_key="624877324969231", api_secret="
 SHEET_REQUEST = "Form Request dana"        
 SHEET_PJB = "Form PJB"
 SHEET_UM = "Data UM"
-SHEET_DISTRIBUSI = "Distribusi UM" # <--- SHEET BARU UNTUK KREDIT
+SHEET_DISTRIBUSI = "Distribusi UM"
 SHEET_APP = "Approval BBM"
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
@@ -940,8 +940,9 @@ elif st.session_state.page == "🏦 Manajemen Kas & Distribusi":
             data_all = fetch_spreadsheet_data(target_ss)
             um_r = data_all.get(SHEET_UM, [])
             dist_r = data_all.get(SHEET_DISTRIBUSI, [])
+            rekap_r = data_all.get("Rekap PJB", [])
             
-            tab_in, tab_out, tab_report = st.tabs(["📥 1. Dana Masuk (Debit)", "📤 2. Distribusi Tim (Kredit)", "📊 3. Buku Besar Saldo Batch"])
+            tab_in, tab_out, tab_report, tab_pjb = st.tabs(["📥 1. Dana Masuk (Debit)", "📤 2. Distribusi Tim (Kredit)", "📊 3. Buku Besar Saldo Batch", "📋 4. List PJB & Dana Ops"])
             
             # --- TAB 1: DANA MASUK (DEBIT) ---
             with tab_in:
@@ -1006,14 +1007,12 @@ elif st.session_state.page == "🏦 Manajemen Kas & Distribusi":
             with tab_report:
                 st.markdown("<div class='section-title'>📊 Buku Besar Saldo per Batch Dana</div>", unsafe_allow_html=True)
                 
-                # Kalkulasi Total Masuk per Batch
                 in_data = {}
                 for r in um_r[1:]:
                     if len(r) > 3 and r[2].strip() != "":
                         batch = r[2].strip()
                         in_data[batch] = in_data.get(batch, 0) + clean_nominal(r[3])
                 
-                # Kalkulasi Total Keluar (Distribusi) per Batch
                 out_data = {}
                 for r in dist_r[1:]:
                     if len(r) > 4 and r[2].strip() != "":
@@ -1040,13 +1039,11 @@ elif st.session_state.page == "🏦 Manajemen Kas & Distribusi":
                     })
                 
                 if report_list:
-                    # Tampilkan Summary Metrics Atas
                     m1, m2, m3 = st.columns(3)
                     m1.markdown(f"<div class='metric-3d'><div class='metric-title'>Grand Total Kas Masuk</div><div class='metric-value'>Rp {total_in_global:,.0f}</div></div>", unsafe_allow_html=True)
                     m2.markdown(f"<div class='metric-3d'><div class='metric-title'>Grand Total Distribusi</div><div class='metric-value'>Rp {total_out_global:,.0f}</div></div>", unsafe_allow_html=True)
                     m3.markdown(f"<div class='metric-3d'><div class='metric-title'>Sisa Kas Keseluruhan</div><div class='metric-value'>Rp {(total_in_global - total_out_global):,.0f}</div></div>", unsafe_allow_html=True)
                     
-                    # Tampilkan Tabel
                     df_report = pd.DataFrame(report_list)
                     df_view_report = df_report.copy()
                     df_view_report["Total Dana Turun"] = df_view_report["Total Dana Turun"].apply(lambda x: f"Rp {x:,.0f}")
@@ -1056,11 +1053,60 @@ elif st.session_state.page == "🏦 Manajemen Kas & Distribusi":
                     st.markdown("#### Detail Saldo per Batch")
                     st.dataframe(df_view_report, hide_index=True, use_container_width=True)
                     
-                    # Export CSV
                     csv_neraca = df_report.to_csv(index=False).encode('utf-8')
                     st.download_button(label="📥 Download Detail Saldo CSV", data=csv_neraca, file_name=f"Saldo_Batch_{nop_admin}.csv", mime='text/csv', use_container_width=True)
                 else:
                     st.info("Belum ada perputaran dana pada NOP ini.")
+
+            # --- TAB 4: REKAP PJB & DANA OPS (NEW FEATURE) ---
+            with tab_pjb:
+                st.markdown("<div class='section-title'>📋 Rekap PJB (Cek Target per Dana Ops & Periode)</div>", unsafe_allow_html=True)
+                
+                if len(rekap_r) > 1:
+                    list_col_a = sorted(list(set([r[0].strip() for r in rekap_r[1:] if len(r) > 0 and r[0].strip() != ""])))
+                    list_col_q = sorted(list(set([r[16].strip() for r in rekap_r[1:] if len(r) > 16 and r[16].strip() != ""])))
+                    
+                    c_f1, c_f2 = st.columns(2)
+                    with c_f1: filter_col_a = st.selectbox("📅 Filter Kolom A (Periode/Waktu):", ["-- Semua Periode --"] + list_col_a)
+                    with c_f2: filter_col_q = st.selectbox("💰 Filter Kolom Q (Nama Dana Ops):", ["-- Semua Dana Ops --"] + list_col_q)
+                    
+                    filtered_pjb = []
+                    total_nominal_pjb = 0
+                    
+                    for r in rekap_r[1:]:
+                        val_a = r[0].strip() if len(r) > 0 else ""
+                        val_q = r[16].strip() if len(r) > 16 else ""
+                        
+                        pass_a = (filter_col_a == "-- Semua Periode --") or (val_a == filter_col_a)
+                        pass_q = (filter_col_q == "-- Semua Dana Ops --") or (val_q == filter_col_q)
+                        
+                        if pass_a and pass_q:
+                            nom = clean_nominal(r[15]) if len(r) > 15 else 0
+                            total_nominal_pjb += nom
+                            filtered_pjb.append({
+                                "Kolom A (Periode)": val_a,
+                                "Tanggal": r[1] if len(r) > 1 else "-",
+                                "Nama Tim": r[4] if len(r) > 4 else "-",
+                                "Role": r[6] if len(r) > 6 else "-",
+                                "Keperluan": r[8] if len(r) > 8 else "-",
+                                "No Tiket / Deskripsi": r[9] if len(r) > 9 else "-",
+                                "Kolom Q (Dana Ops)": val_q,
+                                "Nominal PJB": nom
+                            })
+                            
+                    st.markdown(f"<div class='metric-3d' style='border-top: 6px solid #10B981;'><div class='metric-title'>Total Nominal PJB (Filtered)</div><div class='metric-value' style='background: -webkit-linear-gradient(45deg, #10B981, #059669); -webkit-background-clip: text;'>Rp {total_nominal_pjb:,.0f}</div></div>", unsafe_allow_html=True)
+                    
+                    if filtered_pjb:
+                        df_pjb_ops = pd.DataFrame(filtered_pjb)
+                        df_pjb_ops["Nominal PJB"] = df_pjb_ops["Nominal PJB"].apply(lambda x: f"Rp {x:,.0f}")
+                        st.dataframe(df_pjb_ops, hide_index=True, use_container_width=True)
+                        
+                        csv_pjb_ops = df_pjb_ops.to_csv(index=False).encode('utf-8')
+                        st.download_button(label="📥 Export List PJB (CSV)", data=csv_pjb_ops, file_name=f"Rekap_PJB_DanaOps_{nop_admin}.csv", mime='text/csv', use_container_width=True)
+                    else:
+                        st.info("Tidak ada data PJB yang cocok dengan kombinasi filter di atas.")
+                else:
+                    st.info("⚠️ Data pada sheet 'Rekap PJB' masih kosong atau belum disinkronisasi.")
 
 # ==========================================
 # PAGE 5: LIVE MONITORING
