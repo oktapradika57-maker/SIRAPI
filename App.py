@@ -95,6 +95,7 @@ cloudinary.config(cloud_name="fxm61tjv", api_key="624877324969231", api_secret="
 SHEET_REQUEST = "Form Request dana"        
 SHEET_PJB = "Form PJB"
 SHEET_UM = "Data UM"
+SHEET_DISTRIBUSI = "Distribusi UM" # <--- SHEET BARU UNTUK KREDIT
 SHEET_APP = "Approval BBM"
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
@@ -171,7 +172,7 @@ def get_credentials():
 @st.cache_data(ttl=300)
 def fetch_spreadsheet_data(spreadsheet_id):
     client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
-    ws_names = [SHEET_REQUEST, SHEET_PJB, SHEET_UM, SHEET_APP, "Rekap PJB"]
+    ws_names = [SHEET_REQUEST, SHEET_PJB, SHEET_UM, SHEET_DISTRIBUSI, SHEET_APP, "Rekap PJB"]
     data = {}
     for name in ws_names:
         try: data[name] = client.worksheet(name).get_all_values()
@@ -301,7 +302,7 @@ st.sidebar.text_input("🔑 Password Akses Analitik:", type="password", key="adm
 if st.session_state.get("admin_password") in AUTHORIZED_PASSWORDS:
     st.sidebar.success("✅ Akses Admin Terbuka")
     if st.sidebar.button("🛡️ Approval Center", use_container_width=True): st.session_state.page = "🛡️ Approval Center"; st.rerun()
-    if st.sidebar.button("📊 Neraca / Buku Kas", use_container_width=True): st.session_state.page = "📊 Neraca / Buku Kas"; st.rerun()
+    if st.sidebar.button("🏦 Manajemen Kas & Distribusi", use_container_width=True): st.session_state.page = "🏦 Manajemen Kas & Distribusi"; st.rerun()
     if st.sidebar.button("📈 Live Monitoring", use_container_width=True): st.session_state.page = "📈 Live Monitoring"; st.rerun()
     if st.sidebar.button("🖨️ Report & Auto PJB", use_container_width=True): st.session_state.page = "🖨️ Auto PJB Report"; st.rerun()
 
@@ -324,7 +325,7 @@ if cek_nop != "-- Pilih Area --":
             else: st.sidebar.info("Tidak ada data.")
 
 st.sidebar.markdown("---")
-st.sidebar.markdown("<div style='text-align: center; color: #64748B; font-size: 0.85rem; font-weight: bold; margin-top:20px;'>Created by Okta Pradika<br>v4.0 Enterprise Edition</div>", unsafe_allow_html=True)
+st.sidebar.markdown("<div style='text-align: center; color: #64748B; font-size: 0.85rem; font-weight: bold; margin-top:20px;'>Created by Okta Pradika<br>v4.5 Enterprise Edition</div>", unsafe_allow_html=True)
 
 
 # ==========================================
@@ -359,11 +360,11 @@ if st.session_state.page == "🏠 Hub Menu Utama":
     st.markdown("<br>", unsafe_allow_html=True)
     c4, c5, c6 = st.columns(3)
     with c4:
-        if st.button("📊\nBUKU BESAR / NERACA\nHistori Kas (Admin)", use_container_width=True): 
-            if st.session_state.get("admin_password") in AUTHORIZED_PASSWORDS: st.session_state.page = "📊 Neraca / Buku Kas"; st.rerun()
+        if st.button("🏦\nMANAJEMEN KAS\nTracking Dana & Distribusi UM", use_container_width=True): 
+            if st.session_state.get("admin_password") in AUTHORIZED_PASSWORDS: st.session_state.page = "🏦 Manajemen Kas & Distribusi"; st.rerun()
             else: st.error("Silakan login Admin di Sidebar.")
     with c5:
-        if st.button("📈\nLIVE MONITORING\nBurn Rate & Tracker", use_container_width=True): 
+        if st.button("📈\nLIVE MONITORING\nBurn Rate & Analisa Satelit", use_container_width=True): 
             if st.session_state.get("admin_password") in AUTHORIZED_PASSWORDS: st.session_state.page = "📈 Live Monitoring"; st.rerun()
             else: st.error("Silakan login Admin di Sidebar.")
     with c6:
@@ -922,67 +923,144 @@ elif st.session_state.page == "🛡️ Approval Center":
                             time.sleep(2); st.rerun()
                 else: st.success("✅ Tidak ada anomali harga atau limit yang menggantung.")
 
+
 # ==========================================
-# PAGE 4: NERACA & BUKU KAS
+# PAGE 4: MANAJEMEN KAS & DISTRIBUSI DANA
 # ==========================================
-elif st.session_state.page == "📊 Neraca / Buku Kas":
-    st.markdown("<div class='header-card'><h2>📊 BUKU BESAR & LAPORAN KEUANGAN</h2><p>Rekapitulasi Kas Regional</p></div>", unsafe_allow_html=True)
+elif st.session_state.page == "🏦 Manajemen Kas & Distribusi":
+    st.markdown("<div class='header-card'><h2>🏦 MANAJEMEN KAS & DISTRIBUSI TIM</h2><p>Sistem Pencatatan Uang Masuk & Rekap Distribusi ke Petugas Lapangan</p></div>", unsafe_allow_html=True)
     if st.button("🏠 Kembali ke Home Menu", use_container_width=True): st.session_state.page = "🏠 Hub Menu Utama"; st.rerun()
-    if st.session_state.get("admin_password") not in AUTHORIZED_PASSWORDS: st.error("⛔ AKSES TERKUNCI")
+    
+    if st.session_state.get("admin_password") not in AUTHORIZED_PASSWORDS: 
+        st.error("⛔ AKSES TERKUNCI: Halaman ini khusus Admin.")
     else:
         nop_admin = st.selectbox("📂 Wilayah (NOP):", ["-- Pilih NOP --"] + list(MASTER_DATA.keys()))
         if nop_admin != "-- Pilih NOP --":
             target_ss = MASTER_DATA[nop_admin]["spreadsheet_id"]
             data_all = fetch_spreadsheet_data(target_ss)
-            req_r, pjb_r, um_r, rekap_r = data_all[SHEET_REQUEST], data_all[SHEET_PJB], data_all[SHEET_UM], data_all["Rekap PJB"]
+            um_r = data_all.get(SHEET_UM, [])
+            dist_r = data_all.get(SHEET_DISTRIBUSI, [])
             
-            st.markdown("<div class='section-title'>📥 1. Input Kas Masuk (Uang Muka)</div>", unsafe_allow_html=True)
-            with st.form("form_tambah_um"):
-                c_u1, c_u2, c_u3 = st.columns([1, 2, 1])
-                with c_u1: tgl_um = st.date_input("Tanggal UM Masuk")
-                with c_u2: um_nobis = st.text_input("Ref Dokumen UM")
-                with c_u3: um_nominal = st.number_input("Nominal (Rp)", min_value=0, step=1000)
-                if st.form_submit_button("💾 Rekam Kas Masuk"):
-                    if um_nominal > 0 and um_nobis:
-                        append_data(SHEET_UM, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), tgl_um.strftime("%d/%m/%Y"), um_nobis, um_nominal], target_ss); st.success("✅ Terekam!"); time.sleep(1); st.rerun()
+            tab_in, tab_out, tab_report = st.tabs(["📥 1. Dana Masuk (Debit)", "📤 2. Distribusi Tim (Kredit)", "📊 3. Buku Besar Saldo Batch"])
             
-            unique_periode = list(set([r[16].strip() for r in rekap_r[1:] if len(r) > 16 and r[16].strip() != ""]))
-            st.markdown("<div class='section-title'>📅 2. Laporan & Ekstraksi Data</div>", unsafe_allow_html=True)
-            c_d1, c_d2, c_d3 = st.columns(3)
-            with c_d1: start_date = st.date_input("Dari Tanggal")
-            with c_d2: end_date = st.date_input("Sampai")
-            with c_d3: filter_q_neraca = st.selectbox("📌 Filter Sinkronisasi Kolom Q", ["-- Semua Periode --"] + sorted(unique_periode))
-            
-            if st.button("🔄 Generate Report", type="primary", use_container_width=True):
-                with st.spinner("Mengkompilasi Data & Visualisasi..."):
-                    tot_um = 0
-                    if len(um_r) > 1:
-                        padded_um = [(r + [""] * 4)[:4] for r in um_r[1:]]
-                        df_um = pd.DataFrame(padded_um, columns=["Waktu", "Tanggal", "Deskripsi", "Nominal"])
-                        df_um['Tanggal_Real'] = pd.to_datetime(df_um['Tanggal'], format='%d/%m/%Y', errors='coerce')
-                        start_ts, end_ts = pd.to_datetime(start_date), pd.to_datetime(end_date)
-                        mask = (df_um['Tanggal_Real'] >= start_ts) & (df_um['Tanggal_Real'] <= end_ts)
-                        tot_um = df_um[mask]['Nominal'].apply(clean_nominal).sum()
+            # --- TAB 1: DANA MASUK (DEBIT) ---
+            with tab_in:
+                st.markdown("<div class='section-title'>📥 Tambah Kas Masuk Baru</div>", unsafe_allow_html=True)
+                st.info("💡 **INFO:** Gunakan form ini saat Anda menerima dropping dana (misal dari Pusat).")
+                with st.form("form_tambah_um"):
+                    c_u1, c_u2, c_u3 = st.columns([1, 2, 1])
+                    with c_u1: tgl_um = st.date_input("Tanggal UM Turun / Diterima")
+                    with c_u2: um_nobis = st.text_input("Nama Batch / Sumber Dana (Misal: 'UM Ops Tahap 3')")
+                    with c_u3: um_nominal = st.number_input("Nominal (Rp)", min_value=0, step=100000)
                     
-                    tot_pjb = sum([clean_nominal(r[15]) for r in rekap_r[1:] if len(r) > 16 and (r[16].strip() == filter_q_neraca or filter_q_neraca == "-- Semua Periode --")]) if len(rekap_r)>1 else 0
+                    if st.form_submit_button("💾 Rekam Kas Masuk"):
+                        if um_nominal > 0 and um_nobis.strip():
+                            append_data(SHEET_UM, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), tgl_um.strftime("%d/%m/%Y"), um_nobis.strip(), um_nominal], target_ss)
+                            st.success("✅ Dana Masuk berhasil direkam ke database!"); time.sleep(1.5); st.rerun()
+                        else: st.error("Harap isi Nama Batch dan Nominal dengan benar.")
+                
+                if len(um_r) > 1:
+                    st.markdown("#### Histori Dana Masuk")
+                    padded_um = [(r + [""] * 4)[:4] for r in um_r[1:]]
+                    df_um_view = pd.DataFrame(padded_um, columns=["Waktu", "Tanggal", "Nama Batch Dana", "Nominal"])
+                    df_um_view["Nominal"] = df_um_view["Nominal"].apply(lambda x: f"Rp {clean_nominal(x):,.0f}")
+                    st.dataframe(df_um_view, hide_index=True, use_container_width=True)
+
+            # --- TAB 2: DISTRIBUSI TIM (KREDIT) ---
+            with tab_out:
+                valid_batches = sorted(list(set([r[2].strip() for r in um_r[1:] if len(r) > 2 and r[2].strip() != ""])))
+                
+                st.markdown("<div class='section-title'>📤 Transfer Dana ke Tim Lapangan</div>", unsafe_allow_html=True)
+                if not valid_batches:
+                    st.warning("⚠️ Belum ada Data 'Dana Masuk'. Silakan tambahkan dana masuk di tab pertama terlebih dahulu.")
+                else:
+                    st.info("💡 **INFO:** Sistem ini mencatat transfer uang dari rekening kasbon Anda ke petugas, dan memotongnya otomatis dari Batch Sumber Dana yang dipilih.")
+                    with st.form("form_distribusi"):
+                        c_d1, c_d2 = st.columns(2)
+                        with c_d1:
+                            tgl_dist = st.date_input("Tanggal Transfer")
+                            sumber_dana = st.selectbox("Ambil dari Sumber Dana mana?", valid_batches)
+                            nama_tim = st.selectbox("Pilih Petugas Penerima:", ["-- Pilih Nama --"] + MASTER_DATA[nop_admin]["names"])
+                        with c_d2:
+                            nom_dist = st.number_input("Nominal Transfer (Rp)", min_value=0, step=50000)
+                            bukti_tf = st.file_uploader("Upload Bukti Transfer / Mutasi", type=['jpg','png','jpeg'])
+                            
+                        if st.form_submit_button("🚀 Kirim & Catat Distribusi"):
+                            if nama_tim != "-- Pilih Nama --" and nom_dist > 0 and bukti_tf is not None:
+                                with st.spinner("Mengupload foto bukti transfer..."):
+                                    url_bukti = upload_foto(bukti_tf)
+                                    data_dist = [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), tgl_dist.strftime("%d/%m/%Y"), sumber_dana, nama_tim, nom_dist, url_bukti]
+                                    append_data(SHEET_DISTRIBUSI, data_dist, target_ss)
+                                    st.success(f"✅ Berhasil mencatat transfer Rp {nom_dist:,.0f} ke {nama_tim} dari dana {sumber_dana}."); time.sleep(2.5); st.rerun()
+                            else:
+                                st.error("Lengkapi form (Pilih Nama, Nominal, dan wajib Upload Bukti Transfer).")
+
+                if len(dist_r) > 1:
+                    st.markdown("#### Histori Distribusi Terakhir")
+                    padded_dist = [(r + [""] * 6)[:6] for r in reversed(dist_r[1:])]
+                    df_dist_view = pd.DataFrame(padded_dist, columns=["Timestamp", "Tgl Transfer", "Sumber Dana", "Nama Penerima", "Nominal", "Link Bukti"])
+                    df_dist_view["Nominal"] = df_dist_view["Nominal"].apply(lambda x: f"Rp {clean_nominal(x):,.0f}")
+                    st.dataframe(df_dist_view.drop(columns=["Timestamp", "Link Bukti"]), hide_index=True, use_container_width=True)
+
+            # --- TAB 3: BUKU BESAR SALDO BATCH ---
+            with tab_report:
+                st.markdown("<div class='section-title'>📊 Buku Besar Saldo per Batch Dana</div>", unsafe_allow_html=True)
+                
+                # Kalkulasi Total Masuk per Batch
+                in_data = {}
+                for r in um_r[1:]:
+                    if len(r) > 3 and r[2].strip() != "":
+                        batch = r[2].strip()
+                        in_data[batch] = in_data.get(batch, 0) + clean_nominal(r[3])
+                
+                # Kalkulasi Total Keluar (Distribusi) per Batch
+                out_data = {}
+                for r in dist_r[1:]:
+                    if len(r) > 4 and r[2].strip() != "":
+                        batch = r[2].strip()
+                        out_data[batch] = out_data.get(batch, 0) + clean_nominal(r[4])
+                
+                report_list = []
+                total_in_global = 0
+                total_out_global = 0
+                
+                for batch in sorted(in_data.keys()):
+                    tot_in = in_data[batch]
+                    tot_out = out_data.get(batch, 0)
+                    saldo_sisa = tot_in - tot_out
                     
-                    t1, t2, t3 = st.tabs(["📊 Executive Summary", "📓 Buku Besar (Ledger)", "📈 Visualisasi Pengeluaran"])
-                    with t1:
-                        m1, m2, m3 = st.columns(3)
-                        m1.markdown(f"<div class='metric-3d'><div class='metric-title'>Total Kas Masuk</div><div class='metric-value'>Rp {tot_um:,.0f}</div></div>", unsafe_allow_html=True)
-                        m2.markdown(f"<div class='metric-3d'><div class='metric-title'>Total Penyerapan</div><div class='metric-value'>Rp {tot_pjb:,.0f}</div></div>", unsafe_allow_html=True)
-                        m3.markdown(f"<div class='metric-3d'><div class='metric-title'>Sisa Kas (Equity)</div><div class='metric-value'>Rp {tot_um - tot_pjb:,.0f}</div></div>", unsafe_allow_html=True)
-                    with t2:
-                        if len(pjb_r) > 1:
-                            df_p = pd.DataFrame([(r + [""] * 28)[:28] for r in pjb_r[1:]], columns=["Waktu","Tanggal","N","C","Nama","R","S","Keperluan","B","D","K","Nominal","Pl","u1","u2","u3","u4","u5","u6","u7","NN","NoTiket","Lt","Hs","TKM_RH","u8","u9","BuktiTF"])
-                            df_p['Nominal'] = df_p['Nominal'].apply(clean_nominal)
-                            st.dataframe(df_p[['Tanggal', 'NoTiket', 'Nama', 'Keperluan', 'TKM_RH', 'Nominal']], use_container_width=True)
-                            csv = df_p.to_csv(index=False).encode('utf-8')
-                            st.download_button(label="📥 Export Ledger ke CSV/Excel", data=csv, file_name=f"BukuBesar_{nop_admin}.csv", mime='text/csv', use_container_width=True)
-                    with t3:
-                        if len(pjb_r) > 1:
-                            df_grafik = df_p.groupby("Keperluan")["Nominal"].sum().reset_index()
-                            st.bar_chart(df_grafik.set_index("Keperluan"))
+                    total_in_global += tot_in
+                    total_out_global += tot_out
+                    
+                    report_list.append({
+                        "Nama Batch / Sumber Dana": batch,
+                        "Total Dana Turun": tot_in,
+                        "Total Distribusi ke Tim": tot_out,
+                        "Sisa Saldo Tersedia": saldo_sisa
+                    })
+                
+                if report_list:
+                    # Tampilkan Summary Metrics Atas
+                    m1, m2, m3 = st.columns(3)
+                    m1.markdown(f"<div class='metric-3d'><div class='metric-title'>Grand Total Kas Masuk</div><div class='metric-value'>Rp {total_in_global:,.0f}</div></div>", unsafe_allow_html=True)
+                    m2.markdown(f"<div class='metric-3d'><div class='metric-title'>Grand Total Distribusi</div><div class='metric-value'>Rp {total_out_global:,.0f}</div></div>", unsafe_allow_html=True)
+                    m3.markdown(f"<div class='metric-3d'><div class='metric-title'>Sisa Kas Keseluruhan</div><div class='metric-value'>Rp {(total_in_global - total_out_global):,.0f}</div></div>", unsafe_allow_html=True)
+                    
+                    # Tampilkan Tabel
+                    df_report = pd.DataFrame(report_list)
+                    df_view_report = df_report.copy()
+                    df_view_report["Total Dana Turun"] = df_view_report["Total Dana Turun"].apply(lambda x: f"Rp {x:,.0f}")
+                    df_view_report["Total Distribusi ke Tim"] = df_view_report["Total Distribusi ke Tim"].apply(lambda x: f"Rp {x:,.0f}")
+                    df_view_report["Sisa Saldo Tersedia"] = df_view_report["Sisa Saldo Tersedia"].apply(lambda x: f"Rp {x:,.0f}")
+                    
+                    st.markdown("#### Detail Saldo per Batch")
+                    st.dataframe(df_view_report, hide_index=True, use_container_width=True)
+                    
+                    # Export CSV
+                    csv_neraca = df_report.to_csv(index=False).encode('utf-8')
+                    st.download_button(label="📥 Download Detail Saldo CSV", data=csv_neraca, file_name=f"Saldo_Batch_{nop_admin}.csv", mime='text/csv', use_container_width=True)
+                else:
+                    st.info("Belum ada perputaran dana pada NOP ini.")
 
 # ==========================================
 # PAGE 5: LIVE MONITORING
@@ -1110,7 +1188,7 @@ elif st.session_state.page == "📈 Live Monitoring":
                 else: st.info("Belum ada data realisasi PJB yang dapat disandingkan dengan Satelit.")
 
 # ==========================================
-# PAGE 6: REPORT & AUTO PJB (NEW)
+# PAGE 6: REPORT & AUTO PJB
 # ==========================================
 elif st.session_state.page == "🖨️ Auto PJB Report":
     st.markdown("<div class='header-card'><h2>🖨️ REPORT & EXPORT CENTER</h2><p>Generator Laporan PDF Otomatis & Analisa Tabel Tiket Menyeluruh</p></div>", unsafe_allow_html=True)
