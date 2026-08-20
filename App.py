@@ -6,6 +6,7 @@ import cloudinary
 import cloudinary.uploader
 import requests
 import math
+import os
 from google.oauth2.service_account import Credentials
 from datetime import datetime
 import time
@@ -187,7 +188,7 @@ def load_excel_data():
         site_list = df_site['Site ID'].astype(str).tolist()
     except: site_dict, site_list = {}, []
     
-    tim_dict, list_nopol = {}, []
+    tim_dict, list_nopol_csv = {}, []
     try:
         df_tim = pd.read_excel("lonlat tim.xlsx").fillna(0)
         for _, row in df_tim.iterrows():
@@ -204,7 +205,7 @@ def load_excel_data():
         df_nopol = df_nopol.fillna("")
         if 'NOPOL' in df_nopol.columns:
             list_nopol_raw = df_nopol['NOPOL'].astype(str).unique().tolist()
-            list_nopol = sorted([n for n in list_nopol_raw if n.strip() not in ["", "0", "nan", "None", "NOPOL"]])
+            list_nopol_csv = sorted([n for n in list_nopol_raw if n.strip() not in ["", "0", "nan", "None", "NOPOL"]])
             for _, row in df_nopol.iterrows():
                 if 'PIC' in df_nopol.columns:
                     pic_name = str(row['PIC']).strip().upper()
@@ -212,7 +213,7 @@ def load_excel_data():
                     if pic_name and pic_name not in tim_dict: tim_dict[pic_name] = {'Latitude': 0, 'Longtitude': 0}
                     if pic_name: tim_dict[pic_name]['NOPOL'] = nopol_val
     except Exception: pass
-    return site_dict, site_list, tim_dict, list_nopol
+    return site_dict, site_list, tim_dict, list_nopol_csv
 
 def get_user_tickets_status(nama, req_rows, pjb_rows, app_rows):
     if nama == "-- Pilih Nama --" or nama == "": return [], [], [], []
@@ -275,6 +276,28 @@ def update_approval_status(spreadsheet_id, row_index, new_status, remark="-"):
         fetch_spreadsheet_data.clear()
     except Exception as e:
         st.error(f"Terjadi kendala saat update ke Google Sheets. (Code: {e})")
+
+# FITUR BARU: AUTO-SAVE NOPOL KE DALAM FILE CSV
+def save_new_nopol_to_csv(new_plat):
+    try:
+        file_name = "DATA NOPOL MOBIL DAN GENSET NOP PLK.csv"
+        if os.path.exists(file_name):
+            df = pd.read_csv(file_name, sep=None, engine='python')
+            cols = df.columns.tolist()
+            if 'NOPOL' in cols:
+                new_row = pd.DataFrame([{'NOPOL': new_plat}])
+                for c in cols:
+                    if c not in new_row.columns: new_row[c] = ""
+                new_row = new_row[cols]
+                new_row.to_csv(file_name, mode='a', header=False, index=False)
+            else:
+                with open(file_name, "a") as f:
+                    f.write(f"\n{new_plat}")
+        else:
+            with open(file_name, "w") as f:
+                f.write(f"NOPOL,PIC\n{new_plat},")
+    except Exception as e:
+        pass # Bypass jika terblokir permissions server
 
 # ==========================================
 # INISIALISASI SESSION STATE & NAVIGASI
@@ -353,6 +376,7 @@ if st.session_state.page == "🏠 Hub Menu Utama":
         with c_a1:
             if st.button("🛡️ APPROVAL CENTER\n(Validasi PJB)", use_container_width=True): st.session_state.page = "🛡️ Approval Center"; st.rerun()
             if st.button("📈 LIVE MONITORING\n(Dashboard Analisa)", use_container_width=True): st.session_state.page = "📈 Live Monitoring"; st.rerun()
+            if st.button("👀 REQ & PJB MONITORING\n(Pantau Tim & Warning)", use_container_width=True): st.session_state.page = "👀 Request & PJB Monitoring"; st.rerun()
         with c_a2:
             if st.button("🏦 MANAJEMEN KAS\n(Distribusi Dana)", use_container_width=True): st.session_state.page = "🏦 Manajemen Kas & Distribusi"; st.rerun()
             if st.button("🖨️ REPORT & AUTO PJB\n(Export Laporan)", use_container_width=True): st.session_state.page = "🖨️ Auto PJB Report"; st.rerun()
@@ -521,15 +545,17 @@ elif st.session_state.page == "📝 Form Request Dana":
                 auto_nopol = str(tim_dict[nama_lookup].get("NOPOL", "")).strip()
                 if auto_nopol in ["nan", "0", "None"]: auto_nopol = ""
                 
+            plat_choice_is_manual = False
             if role in ["PM", "MBP", "CME"]:
                 if auto_nopol != "": plat = st.text_input("Plat Nomor Kendaraan (Otomatis)", value=auto_nopol, disabled=True)
                 else: plat = st.text_input("Plat Nomor Kendaraan / ID Genset (Ketik Manual)", value=auto_nopol)
             elif role != "-- Pilih Role --":
                 plat_options = ["-- Pilih NOPOL --"] + list_nopol + ["Lainnya (Ketik Manual)"]
                 plat_choice = st.selectbox("Pilih Plat Nomor Kendaraan", plat_options)
-                # Nopol Ketik Manual
+                # Nopol Ketik Manual Auto-Save Trigger
                 if plat_choice == "Lainnya (Ketik Manual)": 
                     plat = st.text_input("Ketik Plat Nomor Baru (Akan otomatis tersimpan di Dropdown selanjutnya)", value=auto_nopol)
+                    plat_choice_is_manual = True
                 else: plat = "" if plat_choice == "-- Pilih NOPOL --" else plat_choice
             else:
                 plat = st.text_input("Plat Nomor Kendaraan / ID Genset", value=auto_nopol)
@@ -647,6 +673,7 @@ elif st.session_state.page == "📝 Form Request Dana":
                         with st.spinner("Processing..."):
                             data_req = [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), tanggal.strftime("%d/%m/%Y"), nop, tiket, cluster, nama, role, site_id, keperluan, kebutuhan, final_bbm, deskripsi_final, str(km_awal), jarak_final_text, lat_berangkat, long_berangkat, plat_clean, rek_penerima, no_rek, nominal_tf, upload_foto(foto_km), upload_foto(foto_evidance), lat_tujuan, long_tujuan]
                             append_data(SHEET_REQUEST, data_req, target_ss)
+                            if plat_choice_is_manual and plat_clean not in list_nopol: save_new_nopol_to_csv(plat_clean)
                             st.session_state.rev_req = {}; st.balloons(); st.success("🎉 Berhasil Bypass!"); time.sleep(2); st.session_state.page = "🏠 Hub Menu Utama"; st.rerun()
         else:
             if st.button("📤 Kirim Form Request Dana / Revisi", type="primary", use_container_width=True):
@@ -658,11 +685,16 @@ elif st.session_state.page == "📝 Form Request Dana":
                 elif (jns_kendaraan.lower() in ["mobil", "motor", "genset"]) and (km_awal <= 0):
                     st.error(f"❌ PENGIRIMAN DITOLAK: Anda dilarang membiarkan angka {label_indikator} bernilai 0!")
                 elif (jns_kendaraan.lower() in ["mobil", "motor", "genset"]) and (km_awal < last_indikator):
-                    st.error(f"❌ PENGIRIMAN DITOLAK: Angka yang Anda ketik ({km_awal}) tidak boleh lebih kecil dari histori pencatatan terakhir ({last_indikator})!")
+                    st.error(f"❌ PENGIRIMAN DITOLAK: Angka yang Anda ketik ({km_awal}) tidak boleh lebih kecil dari histori pencatatan terakhir pada sistem ({last_indikator})!")
                 else:
                     with st.spinner("Memproses ke Database..."):
                         data_req = [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), tanggal.strftime("%d/%m/%Y"), nop, tiket, cluster, nama, role, site_id, keperluan, kebutuhan, final_bbm, deskripsi_final, str(km_awal), jarak_final_text, lat_berangkat, long_berangkat, plat_clean, rek_penerima, no_rek, nominal_tf, upload_foto(foto_km), upload_foto(foto_evidance), lat_tujuan, long_tujuan]
                         append_data(SHEET_REQUEST, data_req, target_ss)
+                        
+                        # TRIGGER SAVE NOPOL JIKA DIKETIK MANUAL
+                        if plat_choice_is_manual and plat_clean not in list_nopol:
+                            save_new_nopol_to_csv(plat_clean)
+                            
                         st.session_state.rev_req = {}; st.balloons(); st.success("🎉 Data Anda Berhasil Dikirim / Direvisi!"); time.sleep(2.5); st.session_state.page = "🏠 Hub Menu Utama"; st.rerun()
 
 
@@ -1253,7 +1285,6 @@ elif st.session_state.page == "📈 Live Monitoring":
                 st.dataframe(pd.DataFrame(eval_list).style.apply(highlight_markup, subset=['Status Jarak', 'Status Konsumsi']), hide_index=True, use_container_width=True)
             else: st.info("Belum ada data realisasi PJB yang dapat disandingkan dengan Satelit.")
 
-
 # ==========================================
 # PAGE 6: REPORT & AUTO PJB
 # ==========================================
@@ -1453,3 +1484,137 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                     st.info("Tidak ada data Request Dana.")
             else:
                 st.info("⚠️ Data Sheet 'Request Dana' masih kosong.")
+
+# ==========================================
+# PAGE 7: MONITORING REQUEST & PJB
+# ==========================================
+elif st.session_state.page == "👀 Request & PJB Monitoring":
+    st.markdown("<div class='header-card'><h2>📋 REQ & PJB MONITORING</h2><p>Pantau Aktivitas Tim Daily, Warning Tiket Gantung & Cek Sisa Dana</p></div>", unsafe_allow_html=True)
+    
+    nop_mon = st.selectbox("🌐 Pilih Wilayah Database (NOP):", ["-- Pilih NOP --"] + list(MASTER_DATA.keys()))
+    if nop_mon != "-- Pilih NOP --":
+        with st.spinner("Menarik data langsung dari server..."):
+            data_all = fetch_spreadsheet_data(MASTER_DATA[nop_mon]["spreadsheet_id"])
+            req_r, pjb_r = data_all[SHEET_REQUEST], data_all[SHEET_PJB]
+        
+        tab_daily, tab_warning = st.tabs(["📅 1. Daily Realtime (Hari Ini)", "⚠️ 2. Warning List (Gantung & Sisa Dana)"])
+        
+        with tab_daily:
+            st.info("💡 **INFO:** Tab ini menampilkan siapa saja yang hari ini meminta dana, dan siapa saja yang menyetor PJB (beserta nilai dan jaraknya).")
+            col_d1, col_d2 = st.columns([1, 3])
+            with col_d1: filter_date = st.date_input("Pilih Tanggal Pantau", datetime.now().date())
+            
+            filter_date_str = filter_date.strftime("%d/%m/%Y")
+            
+            # --- DAILY REQUEST ---
+            st.markdown(f"#### 💸 Request Dana Masuk ({filter_date_str})")
+            daily_req = []
+            tot_req_daily = 0
+            for r in req_r[1:]:
+                if len(r) > 13 and str(r[1]).strip() == filter_date_str:
+                    nom = clean_nominal(r[9])
+                    tot_req_daily += nom
+                    daily_req.append({
+                        "Waktu": r[0], "Nama": r[5], "Tiket": r[3], "Role": r[6],
+                        "Keperluan": r[8], "Kategori": r[10], 
+                        "Jarak/Info": r[13], "Nominal Request": nom
+                    })
+            
+            if daily_req:
+                df_dreq = pd.DataFrame(daily_req)
+                df_dreq["Nominal Request"] = df_dreq["Nominal Request"].apply(lambda x: f"Rp {x:,.0f}")
+                st.dataframe(df_dreq, hide_index=True, use_container_width=True)
+                st.markdown(f"<div style='text-align:right; font-size:1.2em; color:#0ea5e9; font-weight:bold;'>Total Request: Rp {tot_req_daily:,.0f}</div>", unsafe_allow_html=True)
+            else: st.success("Belum ada request dana hari ini.")
+            
+            st.markdown("<hr>", unsafe_allow_html=True)
+            
+            # --- DAILY PJB ---
+            st.markdown(f"#### ✅ PJB Disubmit ({filter_date_str})")
+            daily_pjb = []
+            tot_pjb_daily = 0
+            for r in pjb_r[1:]:
+                if len(r) > 24 and str(r[1]).strip() == filter_date_str:
+                    nom = clean_nominal(r[11])
+                    tot_pjb_daily += nom
+                    daily_pjb.append({
+                        "Waktu Submit": r[0], "Nama": r[4], "Tiket": r[21], "Role": r[5],
+                        "Kategori": r[8], "Jarak Tempuh": f"{r[24]} KM", "Nominal PJB": nom
+                    })
+            
+            if daily_pjb:
+                df_dpjb = pd.DataFrame(daily_pjb)
+                df_dpjb["Nominal PJB"] = df_dpjb["Nominal PJB"].apply(lambda x: f"Rp {x:,.0f}")
+                st.dataframe(df_dpjb, hide_index=True, use_container_width=True)
+                st.markdown(f"<div style='text-align:right; font-size:1.2em; color:#10B981; font-weight:bold;'>Total PJB: Rp {tot_pjb_daily:,.0f}</div>", unsafe_allow_html=True)
+            else: st.success("Belum ada PJB yang disubmit hari ini.")
+            
+        with tab_warning:
+            st.markdown("### 🚨 Peringatan Otomatis (Data Sejak Agustus 2026)")
+            st.info("Sistem melacak siapa yang belum setor PJB lebih dari 3 hari, dan mencocokkan nilai **Sisa Dana (Request awal vs Laporan PJB)**.")
+            
+            pjb_dict = {}
+            for r in pjb_r[1:]:
+                if len(r) > 21 and str(r[21]).strip() != "":
+                    tk = str(r[21]).strip().upper()
+                    pjb_dict[tk] = clean_nominal(r[11]) if len(r)>11 else 0
+                    
+            list_gantung = []
+            list_sisa = []
+            today_date = datetime.now().date()
+            
+            for r in req_r[1:]:
+                if len(r) > 9:
+                    tgl_req_str = str(r[1]).strip()
+                    req_date = parse_date(tgl_req_str)
+                    
+                    if req_date >= CUTOFF_DATE:
+                        tk = str(r[3]).strip().upper()
+                        if not tk: continue
+                        
+                        nama = str(r[5])
+                        nom_req = clean_nominal(r[9])
+                        
+                        if tk not in pjb_dict:
+                            # Cek Gantung > 3 Hari
+                            aging = (today_date - req_date).days
+                            if aging > 3:
+                                list_gantung.append({
+                                    "Tanggal Request": tgl_req_str,
+                                    "Aging": f"{aging} Hari",
+                                    "Nama Petugas": nama,
+                                    "Tiket": tk,
+                                    "Nominal Request": nom_req
+                                })
+                        else:
+                            # Cek Sisa Dana (Kurang PJB)
+                            nom_pjb = pjb_dict[tk]
+                            sisa = nom_req - nom_pjb
+                            if sisa > 0:
+                                list_sisa.append({
+                                    "Tanggal Request": tgl_req_str,
+                                    "Nama Petugas": nama,
+                                    "Tiket": tk,
+                                    "Nominal Request": nom_req,
+                                    "Nominal PJB": nom_pjb,
+                                    "Sisa Belum Lapor": sisa
+                                })
+                                
+            col_w1, col_w2 = st.columns(2)
+            with col_w1:
+                st.error(f"🔴 **PJB Gantung > 3 Hari ({len(list_gantung)} Tiket)**")
+                if list_gantung:
+                    df_gantung = pd.DataFrame(list_gantung)
+                    df_gantung["Nominal Request"] = df_gantung["Nominal Request"].apply(lambda x: f"Rp {x:,.0f}")
+                    st.dataframe(df_gantung, hide_index=True, use_container_width=True)
+                else: st.success("Aman! Tidak ada tiket gantung >3 hari.")
+                
+            with col_w2:
+                st.warning(f"⚠️ **Sisa Dana PJB ({len(list_sisa)} Tiket)**")
+                if list_sisa:
+                    df_sisa = pd.DataFrame(list_sisa)
+                    df_sisa["Nominal Request"] = df_sisa["Nominal Request"].apply(lambda x: f"Rp {x:,.0f}")
+                    df_sisa["Nominal PJB"] = df_sisa["Nominal PJB"].apply(lambda x: f"Rp {x:,.0f}")
+                    df_sisa["Sisa Belum Lapor"] = df_sisa["Sisa Belum Lapor"].apply(lambda x: f"Rp {x:,.0f}")
+                    st.dataframe(df_sisa, hide_index=True, use_container_width=True)
+                else: st.success("Aman! Semua tiket yang sudah di-PJB nominalnya sesuai (Tidak ada sisa/kekurangan).")
