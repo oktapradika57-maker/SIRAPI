@@ -919,44 +919,168 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                             append_data(SHEET_PJB, [(r+[""]*32)[:32] for r in [data_pjb]][0], target_ss)
                             append_data(SHEET_APP, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), d["Nama"], valid_cari_tiket, "Verifikasi PJB", nominal_pjb, "PENDING", "-"], target_ss)
                             
-                            # FITUR BARU: Generate HTML untuk Auto PDF
+                            # ================= FITUR BARU: GENERATOR FORMAT SURAT IDENTIK =================
+                            # Format Tanggal & Bulan Romawi
+                            bulan_romawi = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"]
+                            romawi = bulan_romawi[tgl_pjb.month] if 1 <= tgl_pjb.month <= 12 else "VIII"
+                            
+                            header_img = "https://storage.googleapis.com/chat-bucket-d43033f982994eb6/4e5a96328bc6e3828cddcd9512351ab6.png"
+                            footer_img = "https://storage.googleapis.com/chat-bucket-d43033f982994eb6/3c05c093a0eb4cb40283bce82e6ef3ba.png"
+
                             html_um = f"""
                             <!DOCTYPE html>
                             <html>
                             <head>
                                 <meta charset="UTF-8">
-                                <title>Laporan Uang Makan & Aktivitas - {valid_cari_tiket}</title>
+                                <title>Surat Tugas & PJB - {valid_cari_tiket}</title>
                                 <style>
-                                    body {{ font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 20px; color: #333; }}
-                                    .header {{ text-align: center; border-bottom: 2px solid #00F2FE; padding-bottom: 10px; margin-bottom: 20px; }}
-                                    .title {{ font-size: 24px; font-weight: bold; color: #0F2027; }}
-                                    table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px; }}
-                                    th, td {{ padding: 10px; border: 1px solid #ddd; text-align: left; }}
-                                    th {{ background-color: #f8fafc; width: 25%; }}
+                                    body {{ font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.5; margin: 0; background: #525659; }}
+                                    .page {{ 
+                                        width: 210mm; min-height: 297mm; background: white; margin: 10mm auto; 
+                                        position: relative; padding: 35mm 20mm; box-sizing: border-box; box-shadow: 0 0 10px rgba(0,0,0,0.5);
+                                        page-break-after: always;
+                                    }}
+                                    .header-img {{ position: absolute; top: 0; left: 0; width: 100%; }}
+                                    .footer-img {{ position: absolute; bottom: 0; left: 0; width: 100%; }}
+                                    .content {{ z-index: 10; position: relative; }}
+                                    h3 {{ text-align: center; font-size: 14pt; text-decoration: underline; margin-bottom: 15px; text-transform: uppercase; font-weight: bold; }}
+                                    table {{ width: 100%; border-collapse: collapse; margin-bottom: 10px; font-size: 11pt; }}
+                                    .tbl-info td {{ padding: 3px 5px; vertical-align: top; }}
+                                    .tbl-data th, .tbl-data td {{ border: 1px solid black; padding: 6px; text-align: center; }}
+                                    .tbl-uang td, .tbl-uang th {{ border: 1px solid black; padding: 6px; }}
+                                    .signature {{ display: flex; justify-content: space-between; margin-top: 30px; text-align: center; }}
+                                    .signature div {{ width: 45%; }}
                                     .photo-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }}
-                                    .photo-item {{ text-align: center; border: 1px solid #e2e8f0; padding: 10px; border-radius: 8px; background-color: #fff; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }}
-                                    .photo-item img {{ width: 100%; max-height: 250px; object-fit: contain; border-radius: 5px; margin-bottom: 8px; }}
-                                    @media print {{ body {{ padding: 0; }} .no-print {{ display: none; }} }}
+                                    .photo-item {{ text-align: center; border: 1px solid #ddd; padding: 10px; border-radius: 5px; }}
+                                    .photo-item img {{ width: 100%; max-height: 250px; object-fit: contain; }}
+                                    @media print {{
+                                        body {{ background: white; margin: 0; }}
+                                        .page {{ margin: 0; box-shadow: none; width: 100%; height: 100%; padding: 35mm 20mm; }}
+                                    }}
                                 </style>
                             </head>
                             <body>
-                                <div class="header">
-                                    <div class="title">SURAT PENGAJUAN UANG MAKAN & EVIDEN AKTIVITAS</div>
-                                    <div style="color: #64748b;">Sistem SiRAPI Enterprise</div>
+                                <!-- PAGE 1: SURAT TUGAS -->
+                                <div class="page">
+                                    <img src="{header_img}" class="header-img">
+                                    <div class="content">
+                                        <h3>SURAT TUGAS</h3>
+                                        <p>Saya yang bertanda tangan di bawah ini:</p>
+                                        <table class="tbl-info" style="width: 70%;">
+                                            <tr><td width="150">Nama</td><td width="10">:</td><td>Okta Pradika</td></tr>
+                                            <tr><td>NIK</td><td>:</td><td>B0924649</td></tr>
+                                            <tr><td>Jabatan</td><td>:</td><td>Koordinator NOP Palangka Raya</td></tr>
+                                        </table>
+                                        <p>Dengan ini menugaskan sebagai berikut :</p>
+                                        <table class="tbl-data">
+                                            <tr><th>No.</th><th>Nama</th><th>NIK</th><th>Jabatan</th><th>Lokasi Kerja</th></tr>
+                                            <tr><td>1</td><td>{d['Nama']}</td><td>-</td><td>{d['Role']}</td><td>{d['Site']}</td></tr>
+                                        </table>
+                                        <table class="tbl-info">
+                                            <tr><td width="150">No Ticket</td><td width="10">:</td><td>{valid_cari_tiket}</td></tr>
+                                            <tr><td>Tujuan</td><td>:</td><td>{d['Site']}</td></tr>
+                                            <tr><td>Estimasi Jarak</td><td>:</td><td>{d.get('Jarak', '-')}</td></tr>
+                                            <tr><td>Lama tugas dinas</td><td>:</td><td>1 Hari</td></tr>
+                                            <tr><td>Tgl. Berangkat</td><td>:</td><td>{tgl_pjb.strftime("%d/%m/%Y")}</td></tr>
+                                            <tr><td>Tgl. Kembali</td><td>:</td><td>{tgl_pjb.strftime("%d/%m/%Y")}</td></tr>
+                                            <tr><td>Keperluan</td><td>:</td><td>{d['Keperluan']}</td></tr>
+                                        </table>
+                                        <p>Demikianlah Surat Penugasan ini dibuat agar dapat dilaksanakan dengan sebaik-baiknya dan melaporkan hasilnya setelah selesai pelaksanaan tugas.</p>
+                                        <div style="text-align: right; margin-top: 30px; margin-bottom: 30px;">
+                                            Palangka Raya, {tgl_pjb.strftime("%d/%m/%Y")}
+                                        </div>
+                                        <div class="signature">
+                                            <div>
+                                                <p>Koordinator NOP Palangka Raya,</p>
+                                                <br><br><br>
+                                                <p><b><u>Okta Pradika</u></b><br>NIK. B0924649</p>
+                                            </div>
+                                            <div>
+                                                <p>POH. SPV Operation,</p>
+                                                <br><br><br>
+                                                <p><b><u>Rian Sharon</u></b><br>NIK. 79058</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <img src="{footer_img}" class="footer-img">
                                 </div>
-                                <table>
-                                    <tr><th>Nomor Tiket</th><td>{valid_cari_tiket}</td><th>Tanggal PJB</th><td>{tgl_pjb.strftime("%d/%m/%Y")}</td></tr>
-                                    <tr><th>Nama Petugas</th><td>{d["Nama"]}</td><th>Role / Jabatan</th><td>{d["Role"]}</td></tr>
-                                    <tr><th>Site / Lokasi</th><td>{d["Site"]}</td><th>Keperluan</th><td>{d["Keperluan"]}</td></tr>
-                                    <tr><th>Nominal PJB</th><td colspan="3" style="color: #10B981; font-weight: bold; font-size: 16px;">Rp {nominal_pjb:,.0f}</td></tr>
-                                </table>
                                 
-                                <h3 style="text-align: center; margin-top: 35px; color: #0F2027;">LAMPIRAN FOTO AKTIVITAS LAPANGAN</h3>
-                                <div class="photo-grid">
-                                    <div class="photo-item"><img src="{url_um1}"><br><b>Foto Aktivitas 1</b></div>
-                                    <div class="photo-item"><img src="{url_um2}"><br><b>Foto Aktivitas 2</b></div>
-                                    <div class="photo-item"><img src="{url_um3}"><br><b>Foto Aktivitas 3</b></div>
-                                    <div class="photo-item"><img src="{url_um4}"><br><b>Foto Aktivitas 4</b></div>
+                                <!-- PAGE 2: PENGAJUAN UANG MAKAN -->
+                                <div class="page">
+                                    <img src="{header_img}" class="header-img">
+                                    <div class="content">
+                                        <h3>SURAT PENGAJUAN UANG MAKAN</h3>
+                                        <div style="text-align: center; margin-top: -15px; margin-bottom: 20px;">
+                                            Nomor : &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; /KUT/{romawi}/{tgl_pjb.year}
+                                        </div>
+                                        <p>Koordinator ENOM NOP Palangka Raya PT. Kinarya Utama Teknik, dengan ini menugaskan kepada :</p>
+                                        <table class="tbl-info" style="width: 70%;">
+                                            <tr><td width="150">Nama</td><td width="10">:</td><td>{d['Nama']}</td></tr>
+                                            <tr><td>NIK</td><td>:</td><td>-</td></tr>
+                                            <tr><td>Jabatan</td><td>:</td><td>{d['Role']}</td></tr>
+                                        </table>
+                                        <br>
+                                        <table class="tbl-data">
+                                            <tr><th>No.</th><th>Tujuan Tugas</th><th>Berangkat</th><th>Kembali</th><th>Uraian Penugasan</th></tr>
+                                            <tr><td>1</td><td>{d['Site']}</td><td>{tgl_pjb.strftime("%d/%m/%Y")}</td><td>{tgl_pjb.strftime("%d/%m/%Y")}</td><td>{d.get('Desc', '-')}</td></tr>
+                                        </table>
+                                        <p>Harap dilaksanakan dan segera memberikan laporan perjalanan dinas setelah kembali.</p>
+                                        
+                                        <table class="tbl-uang">
+                                            <tr style="background: #f0f0f0;"><th colspan="3">Bantuan Perjalanan Dinas</th><th colspan="2">Perhitungan</th><th>Jumlah</th></tr>
+                                            <tr>
+                                                <td colspan="3">Uang Makan ({d['Nama']})</td>
+                                                <td align="center">1 Hari x Rp. {nominal_pjb:,.0f}</td>
+                                                <td width="30" style="border-right: none;">Rp.</td>
+                                                <td align="right" style="border-left: none;">{nominal_pjb:,.0f}</td>
+                                            </tr>
+                                            <tr>
+                                                <td colspan="3">Bantuan Penginapan</td>
+                                                <td align="center">0 Malam x Rp. 0</td>
+                                                <td width="30" style="border-right: none;">Rp.</td>
+                                                <td align="right" style="border-left: none;">0</td>
+                                            </tr>
+                                            <tr>
+                                                <th colspan="5" align="right">Jumlah Total</th>
+                                                <th align="right">Rp. {nominal_pjb:,.0f}</th>
+                                            </tr>
+                                        </table>
+                                        
+                                        <table class="tbl-info" style="width: 300px; float: right; margin-top: 20px;">
+                                            <tr><td width="120">Dikeluarkan di</td><td>: Palangka Raya</td></tr>
+                                            <tr><td>Pada Tanggal</td><td>: {tgl_pjb.strftime("%d/%m/%Y")}</td></tr>
+                                        </table>
+                                        <div style="clear: both;"></div>
+                                        
+                                        <div class="signature">
+                                            <div>
+                                                <p>Koordinator NOP Palangka Raya,</p>
+                                                <br><br><br>
+                                                <p><b><u>Okta Pradika</u></b><br>NIK. B0924649</p>
+                                            </div>
+                                            <div>
+                                                <p>POH. SPV Operation,</p>
+                                                <br><br><br>
+                                                <p><b><u>Rian Sharon</u></b><br>NIK. 79058</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <img src="{footer_img}" class="footer-img">
+                                </div>
+                                
+                                <!-- PAGE 3: LAMPIRAN FOTO EVIDEN -->
+                                <div class="page">
+                                    <img src="{header_img}" class="header-img">
+                                    <div class="content">
+                                        <h3>LAMPIRAN FOTO AKTIVITAS LAPANGAN</h3>
+                                        <div class="photo-grid">
+                                            <div class="photo-item"><img src="{url_um1}"><br><b>Foto Aktivitas 1</b></div>
+                                            <div class="photo-item"><img src="{url_um2}"><br><b>Foto Aktivitas 2</b></div>
+                                            <div class="photo-item"><img src="{url_um3}"><br><b>Foto Aktivitas 3</b></div>
+                                            <div class="photo-item"><img src="{url_um4}"><br><b>Foto Aktivitas 4</b></div>
+                                        </div>
+                                    </div>
+                                    <img src="{footer_img}" class="footer-img">
                                 </div>
                                 
                                 <script>
@@ -969,7 +1093,7 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                             
                             st.session_state.pdf_ready = True
                             st.session_state.pdf_html = b64_html
-                            st.session_state.pdf_filename = f"Laporan_Uang_Makan_{valid_cari_tiket}.html"
+                            st.session_state.pdf_filename = f"Surat_PJB_{valid_cari_tiket}.html"
                             
                             st.balloons()
                             st.success("🎉 PJB Berhasil Dikirim untuk Verifikasi Admin!")
@@ -980,13 +1104,13 @@ elif st.session_state.page == "✅ Form PJB Operasional":
         if st.session_state.get("pdf_ready"):
             st.markdown(f"""
                 <div style="background-color: #ecfdf5; padding: 25px; border-radius: 12px; text-align: center; margin-top: 25px; border: 2px dashed #10B981; box-shadow: 0 10px 15px rgba(16, 185, 129, 0.1);">
-                    <h3 style="color: #065f46; margin-top: 0;">📄 Laporan PDF Uang Makan & Aktivitas Siap!</h3>
-                    <p style="color: #047857;">Sistem telah berhasil menyimpan data PJB Anda ke Database dan men-generate surat otomatis.</p>
+                    <h3 style="color: #065f46; margin-top: 0;">📄 Surat Tugas & PJB (Auto PDF) Siap!</h3>
+                    <p style="color: #047857;">Sistem telah berhasil menyimpan data PJB Anda ke Database dan mencetak Surat Otomatis dalam format standar perusahaan.</p>
                     <a href="data:text/html;base64,{st.session_state.pdf_html}" download="{st.session_state.pdf_filename}" target="_blank"
                        style="display: inline-block; background-color: #10B981; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 1.1em; margin: 15px 0; transition: transform 0.2s;">
-                       📥 Download & Print Laporan PDF Sekarang
+                       📥 Download & Print Dokumen Resmi (3 Halaman)
                     </a>
-                    <p style="font-size: 0.85em; color: #64748b; margin-bottom: 0;">(Data beserta 4 foto eviden sudah tersimpan aman. Admin juga bisa menarik ulang file PDF ini kapan saja melalui Menu Auto PJB Report).</p>
+                    <p style="font-size: 0.85em; color: #64748b; margin-bottom: 0;">(Dokumen ini berisi Surat Tugas, Pengajuan Uang Makan, dan 4 Lampiran Foto Eviden yang sudah terintegrasi).</p>
                 </div>
             """, unsafe_allow_html=True)
             
