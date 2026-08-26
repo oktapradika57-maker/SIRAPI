@@ -213,7 +213,15 @@ def load_excel_data():
                     if pic_name and pic_name not in tim_dict: tim_dict[pic_name] = {'Latitude': 0, 'Longtitude': 0}
                     if pic_name: tim_dict[pic_name]['NOPOL'] = nopol_val
     except Exception: pass
-    return site_dict, site_list, tim_dict, list_nopol_csv
+    
+    # LOAD DATABASE NIK BARU
+    try:
+        df_nik = pd.read_excel("NIK NOP PLK.xlsx").fillna("")
+        nik_dict = dict(zip(df_nik['NAMA'].astype(str).str.strip().str.upper(), df_nik['NIK'].astype(str).str.strip()))
+    except Exception:
+        nik_dict = {}
+        
+    return site_dict, site_list, tim_dict, list_nopol_csv, nik_dict
 
 def get_user_tickets_status(nama, req_rows, pjb_rows, app_rows):
     if nama == "-- Pilih Nama --" or nama == "": return [], [], [], []
@@ -277,7 +285,6 @@ def update_approval_status(spreadsheet_id, row_index, new_status, remark="-"):
     except Exception as e:
         st.error(f"Terjadi kendala saat update ke Google Sheets. (Code: {e})")
 
-# FITUR BARU: AUTO-SAVE NOPOL KE DALAM FILE CSV
 def save_new_nopol_to_csv(new_plat):
     try:
         file_name = "DATA NOPOL MOBIL DAN GENSET NOP PLK.csv"
@@ -297,7 +304,7 @@ def save_new_nopol_to_csv(new_plat):
             with open(file_name, "w") as f:
                 f.write(f"NOPOL,PIC\n{new_plat},")
     except Exception as e:
-        pass # Bypass jika terblokir permissions server
+        pass 
 
 # ==========================================
 # INISIALISASI SESSION STATE & NAVIGASI
@@ -306,7 +313,6 @@ if 'page' not in st.session_state: st.session_state.page = "🏠 Hub Menu Utama"
 if 'admin_logged_in' not in st.session_state: st.session_state.admin_logged_in = False
 if 'pdf_ready' not in st.session_state: st.session_state.pdf_ready = False
 
-# TOMBOL KEMBALI UNIVERSAL (Muncul di semua page kecuali Hub)
 if st.session_state.page != "🏠 Hub Menu Utama":
     if st.button("⬅️ KEMBALI KE MENU UTAMA", use_container_width=True):
         st.session_state.page = "🏠 Hub Menu Utama"
@@ -320,7 +326,6 @@ if st.session_state.page != "🏠 Hub Menu Utama":
 # ==========================================
 if st.session_state.page == "🏠 Hub Menu Utama":
     
-    # MENAMPILKAN LOGO DI TENGAH
     c_logo1, c_logo2, c_logo3 = st.columns([1, 1, 1])
     with c_logo2:
         try: st.image("koperasi-jasa-konstruksi-tower-event-organizer-network-monitoring-telekomunikasi-kisel-group-logo-kut.webp", use_container_width=True)
@@ -402,9 +407,8 @@ elif st.session_state.page == "📝 Form Request Dana":
         req_r, pjb_r, app_r = data_all[SHEET_REQUEST], data_all[SHEET_PJB], data_all[SHEET_APP]
         
         all_requested_tickets = [r[3].strip().upper() for r in req_r[1:] if len(r) > 3]
-        site_dict, site_list, tim_dict, list_nopol_csv = load_excel_data()
+        site_dict, site_list, tim_dict, list_nopol_csv, nik_dict = load_excel_data()
         
-        # FITUR BARU: AUTO-SAVE NOPOL. Gabungkan NOPOL CSV dengan NOPOL yang pernah diketik di riwayat Server (PJB & Request).
         history_nopols = set()
         for r in req_r[1:]:
             if len(r) > 16 and r[16].strip(): history_nopols.add(r[16].strip().upper())
@@ -554,7 +558,6 @@ elif st.session_state.page == "📝 Form Request Dana":
             elif role != "-- Pilih Role --":
                 plat_options = ["-- Pilih NOPOL --"] + list_nopol + ["Lainnya (Ketik Manual)"]
                 plat_choice = st.selectbox("Pilih Plat Nomor Kendaraan", plat_options)
-                # Nopol Ketik Manual Auto-Save Trigger
                 if plat_choice == "Lainnya (Ketik Manual)": 
                     plat = st.text_input("Ketik Plat Nomor Baru (Akan otomatis tersimpan di Dropdown selanjutnya)", value=auto_nopol)
                     plat_choice_is_manual = True
@@ -564,14 +567,13 @@ elif st.session_state.page == "📝 Form Request Dana":
                 
             plat_clean = plat.strip().replace(" ", "").upper()
             
-            # PENARIKAN KM/RH TERAKHIR & PENGUNCIAN ANTI-MALAS TIM
             last_indikator = 0.0
             if plat_clean != "" and jns_kendaraan.lower() in ["mobil", "motor", "genset"]:
                 for r in reversed(pjb_r[1:]): 
                     if len(r) > 12:
                         history_plat = str(r[12]).strip().replace(" ", "").upper()
                         if history_plat == plat_clean:
-                            last_indikator = clean_indicator(r[10]) # Gunakan float
+                            last_indikator = clean_indicator(r[10])
                             break
 
             if jns_kendaraan.lower() == "genset":
@@ -582,8 +584,6 @@ elif st.session_state.page == "📝 Form Request Dana":
                 label_indikator = "Ketik Angka KM Kendaraan AKTUAL SAAT INI (Wajib)"
             else: label_indikator = "Indikator Awal (Biarkan 0 jika tidak relevan)"
             
-            # FITUR ANTI-MALAS: Default Input 0 agar wajib diketik.
-            # Jika merupakan data dari tombol Tarik (Revisi), barulah nilai rev_data dimunculkan.
             if "km_awal" in rev_data and rev_data["km_awal"] > 0:
                 default_km = float(rev_data["km_awal"])
             else: default_km = 0.0
@@ -609,7 +609,6 @@ elif st.session_state.page == "📝 Form Request Dana":
             long_tujuan = st.text_input("Longitude Tujuan (Auto)", value=auto_long_tujuan if is_vehicle else "0", disabled=not is_vehicle)
             no_rek = st.text_input("Nomor Rekening Tujuan", value=default_no_rek)
             
-            # VALIDASI STRICT NOMINAL TRANSFER (Hanya Angka tanpa tanda baca)
             nominal_tf_str = st.text_input("Total Nominal Transfer (TANPA TITIK/KOMA, Cth: 100000)", value="0")
             if not nominal_tf_str.isdigit():
                 st.warning("⚠️ FORMAT SALAH: Nominal Transfer HANYA BOLEH ANGKA murni (Tidak boleh ada titik atau koma).")
@@ -679,7 +678,6 @@ elif st.session_state.page == "📝 Form Request Dana":
                             st.session_state.rev_req = {}; st.balloons(); st.success("🎉 Berhasil Bypass!"); time.sleep(2); st.session_state.page = "🏠 Hub Menu Utama"; st.rerun()
         else:
             if st.button("📤 Kirim Form Request Dana / Revisi", type="primary", use_container_width=True):
-                # Validasi Ekstra untuk blokir submit salah:
                 if form_invalid or not tiket.strip() or invalid_coords: 
                     st.error("Lengkapi form (Semua isian wajib)!")
                 elif nominal_tf <= 0:
@@ -693,7 +691,6 @@ elif st.session_state.page == "📝 Form Request Dana":
                         data_req = [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), tanggal.strftime("%d/%m/%Y"), nop, tiket, cluster, nama, role, site_id, keperluan, kebutuhan, final_bbm, deskripsi_final, str(km_awal), jarak_final_text, lat_berangkat, long_berangkat, plat_clean, rek_penerima, no_rek, nominal_tf, upload_foto(foto_km), upload_foto(foto_evidance), lat_tujuan, long_tujuan]
                         append_data(SHEET_REQUEST, data_req, target_ss)
                         
-                        # TRIGGER SAVE NOPOL JIKA DIKETIK MANUAL
                         if plat_choice_is_manual and plat_clean not in list_nopol:
                             save_new_nopol_to_csv(plat_clean)
                             
@@ -712,6 +709,9 @@ elif st.session_state.page == "✅ Form PJB Operasional":
         target_ss = MASTER_DATA[nop_cari]["spreadsheet_id"]
         data_all = fetch_spreadsheet_data(target_ss)
         req_r, pjb_r, app_r = data_all[SHEET_REQUEST], data_all[SHEET_PJB], data_all[SHEET_APP]
+        
+        # Tarik Database NIK
+        site_dict, site_list, tim_dict, list_nopol_csv, nik_dict = load_excel_data()
         
         pjb_tickets_all = {str(r[21]).strip().upper() for r in pjb_r[1:] if len(r) > 21}
         
@@ -795,6 +795,13 @@ elif st.session_state.page == "✅ Form PJB Operasional":
 
         if st.session_state.get("pjb_data"):
             d = st.session_state.pjb_data
+            
+            # --- MENU PEMISAH JENIS PJB ---
+            st.markdown("<div class='section-title'>⚙️ Kategori Penugasan & Pelaporan</div>", unsafe_allow_html=True)
+            jns_pjb = st.radio("PILIH KATEGORI PELAPORAN PJB:", 
+                ["🛠️ Operational Umum (BBM, Material, Jasa DLL)", "🍽️ Biaya Akomodasi (Surat Tugas & Uang Makan)"],
+                help="Pilih Operational Umum untuk menginput nota BBM/Barang. Pilih Biaya Akomodasi untuk membuat Laporan Khusus Uang Makan & PDF Surat Tugas.")
+            
             st.markdown("<div class='section-title'>💸 Validasi Budget & Bukti Transfer</div>", unsafe_allow_html=True)
             f_transfer = st.file_uploader("Upload Foto Bukti Transfer Dana (WAJIB untuk mengakses Form PJB)", type=["jpg", "png", "jpeg"])
             
@@ -802,87 +809,101 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                 st.warning("⚠️ **AKSES TERKUNCI:** Silakan upload Bukti Transfer dari Admin terlebih dahulu agar form pengisian PJB terbuka.")
             else:
                 st.success("✅ Bukti Transfer terlampir. Akses form PJB terbuka.")
+                
                 st.markdown("<div class='section-title'>🔒 Rincian Terkunci (Sistem)</div>", unsafe_allow_html=True)
-                c_a, c_b = st.columns(2)
+                c_a, c_b, c_c = st.columns([2, 1, 2])
                 with c_a:
                     tgl_pjb = st.date_input("Tanggal PJB")
                     st.text_input("Nama Petugas", d["Nama"], disabled=True)
                     st.text_input("Kategori & Plat", f'{d["BBM"]} - {d["Plat"]}', disabled=True)
                 with c_b:
+                    # Menarik NIK dari Excel yang diupload
+                    nik_petugas = nik_dict.get(d["Nama"].strip().upper(), "-")
+                    st.text_input("NIK Karyawan", nik_petugas, disabled=True)
+                with c_c:
                     st.text_input("Site ID Tujuan", d["Site"], disabled=True)
                     st.text_input("Keperluan", d["Keperluan"], disabled=True)
                     nominal_pjb = st.number_input("Nominal PJB Terpakai (Otomatis Dikunci)", value=int(d["NominalReq"]), disabled=True)
 
-                st.markdown("<div class='section-title'>📝 Realisasi Lapangan & KM/RH</div>", unsafe_allow_html=True)
-                c_c, c_d = st.columns(2)
+                # INISIALISASI SEMUA VARIABEL DEFAULT
+                d_km_awal = float(d["KMAwal"])
+                km_akhir = d_km_awal
+                total_km_tempuh = 0.0
+                tot_liter = "0"
+                harga_satuan = 0
+                tot_nilai_nota = 0
+                f_isi, f_nota_bbm, f_mat, f_notamat, f_inap, f_kerja, f_km = None, None, None, None, None, None, None
+                f_um1, f_um2, f_um3, f_um4 = None, None, None, None
+                
                 is_genset = "genset" in str(d["BBM"]).lower()
                 is_vehicle = "mobil" in str(d["BBM"]).lower() or "motor" in str(d["BBM"]).lower()
                 label_akhir = "RH Genset Akhir" if is_genset else "KM Akhir Kendaraan"
                 info_text = "Total Jam Backup (RH)" if is_genset else "Total Perjalanan (KM)"
                 icon_text = "⏱️" if is_genset else "🛣️"
                 
-                with c_c:
-                    d_km_awal = float(d["KMAwal"])
-                    st.info(f"📍 KM/RH saat Request awal: **{d_km_awal}**")
+                # JIKA MEMILIH OPERATIONAL UMUM
+                if "Operational" in jns_pjb:
+                    st.markdown("<div class='section-title'>📝 Realisasi Lapangan & KM/RH</div>", unsafe_allow_html=True)
+                    c_c1, c_d1 = st.columns(2)
+                    with c_c1:
+                        st.info(f"📍 KM/RH saat Request awal: **{d_km_awal}**")
+                        default_km_akhir = float(d.get("km_akhir_lama", 0.0))
+                        km_akhir = st.number_input(f"Ketik Angka {label_akhir} AKTUAL SAAT INI (Wajib)", min_value=0.0, value=default_km_akhir, step=0.1)
+                        total_km_tempuh = km_akhir - d_km_awal
+                        
+                        if km_akhir > 0 and total_km_tempuh >= 0:
+                            st.info(f"{icon_text} Kalkulasi {info_text}: **{total_km_tempuh:.2f}**")
+                        elif km_akhir > 0 and total_km_tempuh < 0:
+                            st.error(f"⚠️ PERINGATAN: Angka yang diketik lebih kecil dari KM Awal!")
                     
-                    # FITUR ANTI-MALAS: Input default 0 agar user mengetik ulang manual nilai akhir
-                    default_km_akhir = float(d.get("km_akhir_lama", 0.0))
+                    with c_d1:
+                        tot_liter = st.text_input("Total Liter BBM/Material", value=d.get("liter_lama", "0"))
+                        harga_satuan = st.number_input("Harga Satuan (BBM/Material)", min_value=0, step=500, value=d.get("harga_lama", 0))
+                        tot_nilai_nota = st.number_input("Total Fisik Sesuai Nota (Rp)", min_value=0, step=1000, value=d.get("nota_lama", 0))
                     
-                    km_akhir = st.number_input(f"Ketik Angka {label_akhir} AKTUAL SAAT INI (Wajib)", min_value=0.0, value=default_km_akhir, step=0.1)
-                    total_km_tempuh = km_akhir - d_km_awal
+                    st.markdown("<div class='section-title'>📸 Lampiran Bukti Utama (Operational)</div>", unsafe_allow_html=True)
+                    p1, p2, p3 = st.columns(3)
+                    with p1: f_isi = st.file_uploader("Evidance Pengisian", type=["jpg","png"]); f_nota_bbm = st.file_uploader("Nota BBM", type=["jpg","png"])
+                    with p2: f_mat = st.file_uploader("Foto Material", type=["jpg","png"]); f_notamat = st.file_uploader("Nota Material", type=["jpg","png"])
+                    with p3: f_inap = st.file_uploader("Nota Penginapan", type=["jpg","png"]); f_kerja = st.file_uploader("Evidance Pekerjaan", type=["jpg","png"]); f_km = st.file_uploader("Foto KM/RH Akhir", type=["jpg","png"])
                     
-                    # Kalkulasi hanya muncul jika angkanya masuk akal (> 0)
-                    if km_akhir > 0 and total_km_tempuh >= 0:
-                        st.info(f"{icon_text} Kalkulasi {info_text}: **{total_km_tempuh:.2f}**")
-                    elif km_akhir > 0 and total_km_tempuh < 0:
-                        st.error(f"⚠️ PERINGATAN: Angka yang diketik lebih kecil dari KM Awal!")
+                # JIKA MEMILIH BIAYA AKOMODASI (UANG MAKAN)
+                else:
+                    st.markdown("<div class='section-title'>📸 Lampiran Eviden Aktivitas Uang Makan (WAJIB 4 FOTO)</div>", unsafe_allow_html=True)
+                    st.info("Sesuai instruksi KUT, **4 foto eviden aktivitas lapangan** wajib diunggah secara penuh untuk men-generate Dokumen PDF Surat Tugas.")
+                    c_um1, c_um2, c_um3, c_um4 = st.columns(4)
+                    with c_um1: f_um1 = st.file_uploader("Foto Aktivitas 1 (Wajib)", type=["jpg","png","jpeg"], key="um1")
+                    with c_um2: f_um2 = st.file_uploader("Foto Aktivitas 2 (Wajib)", type=["jpg","png","jpeg"], key="um2")
+                    with c_um3: f_um3 = st.file_uploader("Foto Aktivitas 3 (Wajib)", type=["jpg","png","jpeg"], key="um3")
+                    with c_um4: f_um4 = st.file_uploader("Foto Aktivitas 4 (Wajib)", type=["jpg","png","jpeg"], key="um4")
                 
-                with c_d:
-                    tot_liter = st.text_input("Total Liter BBM/Material", value=d.get("liter_lama", "0"))
-                    harga_satuan = st.number_input("Harga Satuan (BBM/Material)", min_value=0, step=500, value=d.get("harga_lama", 0))
-                    tot_nilai_nota = st.number_input("Total Fisik Sesuai Nota (Rp)", min_value=0, step=1000, value=d.get("nota_lama", 0))
-                
-                st.markdown("<div class='section-title'>📸 Lampiran Bukti Utama (Foto)</div>", unsafe_allow_html=True)
-                p1, p2, p3 = st.columns(3)
-                with p1: f_isi = st.file_uploader("Evidance Pengisian", type=["jpg","png"]); f_nota_bbm = st.file_uploader("Nota BBM", type=["jpg","png"])
-                with p2: f_mat = st.file_uploader("Foto Material", type=["jpg","png"]); f_notamat = st.file_uploader("Nota Material", type=["jpg","png"])
-                with p3: f_inap = st.file_uploader("Nota Penginapan", type=["jpg","png"]); f_kerja = st.file_uploader("Evidance Pekerjaan", type=["jpg","png"]); f_km = st.file_uploader("Foto KM/RH Akhir (Disanding)", type=["jpg","png"])
-
-                # ================= FITUR BARU: 4 FOTO UANG MAKAN =================
-                st.markdown("<div class='section-title'>📸 Lampiran Eviden Uang Makan & Aktivitas (WAJIB 4 FOTO)</div>", unsafe_allow_html=True)
-                st.info("Sesuai prosedur baru, **4 foto eviden aktivitas lapangan** wajib diunggah secara penuh pada saat pelaporan PJB agar sistem dapat meng-generate Surat Laporan / PDF dengan sah.")
-                c_um1, c_um2, c_um3, c_um4 = st.columns(4)
-                with c_um1: f_um1 = st.file_uploader("Foto Aktivitas 1 (Wajib)", type=["jpg","png","jpeg"], key="um1")
-                with c_um2: f_um2 = st.file_uploader("Foto Aktivitas 2 (Wajib)", type=["jpg","png","jpeg"], key="um2")
-                with c_um3: f_um3 = st.file_uploader("Foto Aktivitas 3 (Wajib)", type=["jpg","png","jpeg"], key="um3")
-                with c_um4: f_um4 = st.file_uploader("Foto Aktivitas 4 (Wajib)", type=["jpg","png","jpeg"], key="um4")
-                # =================================================================
-                
-                is_bbm_anomali = is_genset and ("dexlite" in str(d["BBM"]).lower() or "bio solar" in str(d["BBM"]).lower()) and (harga_satuan > 28000)
-                if is_bbm_anomali:
-                    st.markdown("<hr>", unsafe_allow_html=True)
-                    st.error("🚨 DETEKSI ANOMALI GENSET: Harga Dexlite/Bio Solar melebihi batas wajar.")
-                    status_approval = "NONE"
-                    for r in reversed(app_r):
-                        if len(r) > 5 and str(r[2]).strip().upper() == valid_cari_tiket and "Genset" in str(r[3]): 
-                            status_approval = str(r[5]).strip()
-                            break
-                    
-                    if status_approval == "PENDING":
-                        st.warning("⏳ Status: **MENUNGGU APPROVAL Harga**. Silakan hubungi atasan.")
-                        st.stop()
-                    elif status_approval == "REJECTED":
-                        st.error("❌ Status: **DITOLAK!** Harga satuan tidak disetujui. Ajukan ulang.")
-                        if st.button("Ajukan Ulang Approval Harga"):
-                            append_data(SHEET_APP, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), d["Nama"], valid_cari_tiket, f"Genset Anomali ({d['BBM']})", harga_satuan, "PENDING", "-"], target_ss)
-                            st.success("Terkirim ulang!"); time.sleep(1.5); st.rerun()
-                        st.stop()
-                    elif status_approval == "APPROVED": st.success("✅ Harga Anomali telah di-APPROVE.")
-                    else:
-                        if st.button("🚨 Ajukan Approval Harga ke Admin", type="primary"):
-                            append_data(SHEET_APP, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), d["Nama"], valid_cari_tiket, f"Genset Anomali ({d['BBM']})", harga_satuan, "PENDING", "-"], target_ss)
-                            st.success("Sistem berhasil mencatat!"); time.sleep(2); st.rerun()
-                        st.stop()
+                # --- Anomali Harga Genset Cek (Khusus Operasional) ---
+                if "Operational" in jns_pjb:
+                    is_bbm_anomali = is_genset and ("dexlite" in str(d["BBM"]).lower() or "bio solar" in str(d["BBM"]).lower()) and (harga_satuan > 28000)
+                    if is_bbm_anomali:
+                        st.markdown("<hr>", unsafe_allow_html=True)
+                        st.error("🚨 DETEKSI ANOMALI GENSET: Harga Dexlite/Bio Solar melebihi batas wajar.")
+                        status_approval = "NONE"
+                        for r in reversed(app_r):
+                            if len(r) > 5 and str(r[2]).strip().upper() == valid_cari_tiket and "Genset" in str(r[3]): 
+                                status_approval = str(r[5]).strip()
+                                break
+                        
+                        if status_approval == "PENDING":
+                            st.warning("⏳ Status: **MENUNGGU APPROVAL Harga**. Silakan hubungi atasan.")
+                            st.stop()
+                        elif status_approval == "REJECTED":
+                            st.error("❌ Status: **DITOLAK!** Harga satuan tidak disetujui. Ajukan ulang.")
+                            if st.button("Ajukan Ulang Approval Harga"):
+                                append_data(SHEET_APP, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), d["Nama"], valid_cari_tiket, f"Genset Anomali ({d['BBM']})", harga_satuan, "PENDING", "-"], target_ss)
+                                st.success("Terkirim ulang!"); time.sleep(1.5); st.rerun()
+                            st.stop()
+                        elif status_approval == "APPROVED": st.success("✅ Harga Anomali telah di-APPROVE.")
+                        else:
+                            if st.button("🚨 Ajukan Approval Harga ke Admin", type="primary"):
+                                append_data(SHEET_APP, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), d["Nama"], valid_cari_tiket, f"Genset Anomali ({d['BBM']})", harga_satuan, "PENDING", "-"], target_ss)
+                                st.success("Sistem berhasil mencatat!"); time.sleep(2); st.rerun()
+                            st.stop()
 
                 st.markdown("<br>", unsafe_allow_html=True)
                 is_double_input = any(len(r)>21 and str(r[21]).strip().upper() == valid_cari_tiket for r in pjb_r[1:])
@@ -898,29 +919,43 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                         st.error(f"❌ PJB Anda sebelumnya DITOLAK Admin! Alasan: **{catatan_v}**")
                         
                 if st.button("🚀 Sahkan Pelaporan PJB / Submit Revisi", type="primary", use_container_width=True):
-                    # Validasi Ekstra FITUR BARU 4 FOTO UANG MAKAN
-                    if not (f_um1 and f_um2 and f_um3 and f_um4):
-                        st.error("❌ PENGIRIMAN DITOLAK: Anda WAJIB mengunggah keempat Foto Eviden Aktivitas / Uang Makan secara lengkap!")
-                    elif (is_vehicle or is_genset) and (km_akhir <= 0):
-                        st.error(f"❌ PENGIRIMAN DITOLAK: Anda belum mengisi {label_akhir} yang aktual. Tidak boleh 0!")
-                    elif (is_vehicle or is_genset) and (km_akhir < d_km_awal):
-                        st.error(f"❌ PENGIRIMAN DITOLAK: Angka yang dimasukkan ({km_akhir}) LEBIH KECIL dari KM/RH Awal Anda saat request ({d_km_awal})!")
+                    
+                    # Validasi Tergantung Tipe Form
+                    if "Operational" in jns_pjb:
+                        if (is_vehicle or is_genset) and (km_akhir <= 0):
+                            st.error(f"❌ PENGIRIMAN DITOLAK: Anda belum mengisi {label_akhir} yang aktual. Tidak boleh 0!")
+                            st.stop()
+                        elif (is_vehicle or is_genset) and (km_akhir < d_km_awal):
+                            st.error(f"❌ PENGIRIMAN DITOLAK: Angka yang dimasukkan ({km_akhir}) LEBIH KECIL dari KM/RH Awal Anda saat request ({d_km_awal})!")
+                            st.stop()
                     else:
-                        with st.spinner("Mengupload foto dan memproses PJB..."):
-                            # Upload semua foto UM ke Cloudinary
-                            url_um1 = upload_foto(f_um1)
-                            url_um2 = upload_foto(f_um2)
-                            url_um3 = upload_foto(f_um3)
-                            url_um4 = upload_foto(f_um4)
+                        if not (f_um1 and f_um2 and f_um3 and f_um4):
+                            st.error("❌ PENGIRIMAN DITOLAK: Anda WAJIB mengunggah keempat Foto Eviden Aktivitas / Uang Makan secara lengkap!")
+                            st.stop()
                             
-                            # Menggunakan indexing 32 agar foto Uang Makan masuk ke kolom AC-AF Google Sheets
-                            data_pjb = [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), tgl_pjb.strftime("%d/%m/%Y"), d["NOP"], d["Cluster"], d["Nama"], d["Role"], d["Site"], d["Keperluan"], d["BBM"], d["Desc"], str(km_akhir), nominal_pjb, d["Plat"], upload_foto(f_isi), upload_foto(f_nota_bbm), upload_foto(f_km), upload_foto(f_mat), upload_foto(f_notamat), upload_foto(f_inap), upload_foto(f_kerja), tot_nilai_nota, valid_cari_tiket, tot_liter, harga_satuan, str(round(total_km_tempuh, 2)), "", "", upload_foto(f_transfer), url_um1, url_um2, url_um3, url_um4]
-                            
-                            append_data(SHEET_PJB, [(r+[""]*32)[:32] for r in [data_pjb]][0], target_ss)
-                            append_data(SHEET_APP, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), d["Nama"], valid_cari_tiket, "Verifikasi PJB", nominal_pjb, "PENDING", "-"], target_ss)
-                            
-                            # ================= FITUR BARU: GENERATOR FORMAT SURAT IDENTIK =================
-                            # Format Tanggal & Bulan Romawi
+                    with st.spinner("Mengupload foto dan memproses PJB..."):
+                        # Upload semua foto menyesuaikan jenis PJB
+                        url_um1 = upload_foto(f_um1) if f_um1 else ""
+                        url_um2 = upload_foto(f_um2) if f_um2 else ""
+                        url_um3 = upload_foto(f_um3) if f_um3 else ""
+                        url_um4 = upload_foto(f_um4) if f_um4 else ""
+                        
+                        url_isi = upload_foto(f_isi) if f_isi else ""
+                        url_notabbm = upload_foto(f_nota_bbm) if f_nota_bbm else ""
+                        url_km = upload_foto(f_km) if f_km else ""
+                        url_mat = upload_foto(f_mat) if f_mat else ""
+                        url_notamat = upload_foto(f_notamat) if f_notamat else ""
+                        url_inap = upload_foto(f_inap) if f_inap else ""
+                        url_kerja = upload_foto(f_kerja) if f_kerja else ""
+                        
+                        # Data dimasukkan pada Index Array yang sama agar Database Rapi (32 Kolom)
+                        data_pjb = [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), tgl_pjb.strftime("%d/%m/%Y"), d["NOP"], d["Cluster"], d["Nama"], d["Role"], d["Site"], d["Keperluan"], d["BBM"], d["Desc"], str(km_akhir), nominal_pjb, d["Plat"], url_isi, url_notabbm, url_km, url_mat, url_notamat, url_inap, url_kerja, tot_nilai_nota, valid_cari_tiket, tot_liter, harga_satuan, str(round(total_km_tempuh, 2)), "", "", upload_foto(f_transfer), url_um1, url_um2, url_um3, url_um4]
+                        
+                        append_data(SHEET_PJB, [(r+[""]*32)[:32] for r in [data_pjb]][0], target_ss)
+                        append_data(SHEET_APP, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), d["Nama"], valid_cari_tiket, "Verifikasi PJB", nominal_pjb, "PENDING", "-"], target_ss)
+                        
+                        # JIKA AKOMODASI -> GENERATE PDF SURAT TUGAS
+                        if "Akomodasi" in jns_pjb:
                             bulan_romawi = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"]
                             romawi = bulan_romawi[tgl_pjb.month] if 1 <= tgl_pjb.month <= 12 else "VIII"
                             
@@ -974,7 +1009,7 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                                         <p>Dengan ini menugaskan sebagai berikut :</p>
                                         <table class="tbl-data">
                                             <tr><th>No.</th><th>Nama</th><th>NIK</th><th>Jabatan</th><th>Lokasi Kerja</th></tr>
-                                            <tr><td>1</td><td>{d['Nama']}</td><td>-</td><td>{d['Role']}</td><td>{d['Site']}</td></tr>
+                                            <tr><td>1</td><td>{d['Nama']}</td><td>{nik_petugas}</td><td>{d['Role']}</td><td>{d['Site']}</td></tr>
                                         </table>
                                         <table class="tbl-info">
                                             <tr><td width="150">No Ticket</td><td width="10">:</td><td>{valid_cari_tiket}</td></tr>
@@ -1016,7 +1051,7 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                                         <p>Koordinator ENOM NOP Palangka Raya PT. Kinarya Utama Teknik, dengan ini menugaskan kepada :</p>
                                         <table class="tbl-info" style="width: 70%;">
                                             <tr><td width="150">Nama</td><td width="10">:</td><td>{d['Nama']}</td></tr>
-                                            <tr><td>NIK</td><td>:</td><td>-</td></tr>
+                                            <tr><td>NIK</td><td>:</td><td>{nik_petugas}</td></tr>
                                             <tr><td>Jabatan</td><td>:</td><td>{d['Role']}</td></tr>
                                         </table>
                                         <br>
@@ -1096,11 +1131,18 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                             st.session_state.pdf_filename = f"Surat_PJB_{valid_cari_tiket}.html"
                             
                             st.balloons()
-                            st.success("🎉 PJB Berhasil Dikirim untuk Verifikasi Admin!")
+                            st.success("🎉 PJB Surat Tugas & UM Berhasil Dikirim untuk Verifikasi Admin!")
                             st.session_state.pjb_data = None
-                            # Tidak di-rerun otomatis agar tombol Download PDF muncul di bawah.
+                        
+                        else:
+                            st.balloons()
+                            st.success("🎉 PJB Operational Umum Berhasil Dikirim untuk Verifikasi Admin!")
+                            st.session_state.pjb_data = None
+                            time.sleep(2.5)
+                            st.session_state.page = "🏠 Hub Menu Utama"
+                            st.rerun()
 
-        # FITUR BARU: Rendering Kotak Download PDF setelah submit berhasil
+        # Kotak Download PDF khusus Akomodasi
         if st.session_state.get("pdf_ready"):
             st.markdown(f"""
                 <div style="background-color: #ecfdf5; padding: 25px; border-radius: 12px; text-align: center; margin-top: 25px; border: 2px dashed #10B981; box-shadow: 0 10px 15px rgba(16, 185, 129, 0.1);">
@@ -1110,7 +1152,7 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                        style="display: inline-block; background-color: #10B981; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 1.1em; margin: 15px 0; transition: transform 0.2s;">
                        📥 Download & Print Dokumen Resmi (3 Halaman)
                     </a>
-                    <p style="font-size: 0.85em; color: #64748b; margin-bottom: 0;">(Dokumen ini berisi Surat Tugas, Pengajuan Uang Makan, dan 4 Lampiran Foto Eviden yang sudah terintegrasi).</p>
+                    <p style="font-size: 0.85em; color: #64748b; margin-bottom: 0;">(Dokumen ini berisi Surat Tugas, Pengajuan Uang Makan, dan 4 Lampiran Foto Eviden yang sudah terintegrasi).<br>PDF juga bisa ditarik kapan saja melalui Report Center Admin.</p>
                 </div>
             """, unsafe_allow_html=True)
             
@@ -1157,13 +1199,30 @@ elif st.session_state.page == "🛡️ Approval Center":
                         
                 if pjb_target:
                     st.markdown("<div style='background:#F8FAFC; padding:15px; border-radius:10px; margin-bottom:15px;'><b>Bukti Terlampir:</b></div>", unsafe_allow_html=True)
-                    cf1, cf2 = st.columns(2)
-                    with cf1:
-                        if len(pjb_target) > 14 and pjb_target[14]: st.image(pjb_target[14], caption="Kolom O: Foto Nota BBM / Material", use_container_width=True)
-                        else: st.info("Tidak ada Foto Nota.")
-                    with cf2:
-                        if len(pjb_target) > 19 and pjb_target[19]: st.image(pjb_target[19], caption="Kolom T: Foto Evidance Pekerjaan", use_container_width=True)
-                        else: st.info("Tidak ada Foto Pekerjaan.")
+                    
+                    # Cek jenis lampiran apa yang ada
+                    is_akomodasi = False
+                    if len(pjb_target) > 28 and str(pjb_target[28]).startswith("http"):
+                        is_akomodasi = True
+                        
+                    if is_akomodasi:
+                        st.info("PJB ini adalah kategori **Biaya Akomodasi**. (4 Foto Uang Makan Dilampirkan)")
+                        c_u1, c_u2 = st.columns(2)
+                        with c_u1:
+                            if pjb_target[28]: st.image(pjb_target[28], caption="Foto Uang Makan 1", use_container_width=True)
+                            if pjb_target[29]: st.image(pjb_target[29], caption="Foto Uang Makan 2", use_container_width=True)
+                        with c_u2:
+                            if pjb_target[30]: st.image(pjb_target[30], caption="Foto Uang Makan 3", use_container_width=True)
+                            if pjb_target[31]: st.image(pjb_target[31], caption="Foto Uang Makan 4", use_container_width=True)
+                    else:
+                        st.info("PJB ini adalah kategori **Operational Umum**.")
+                        cf1, cf2 = st.columns(2)
+                        with cf1:
+                            if len(pjb_target) > 14 and pjb_target[14]: st.image(pjb_target[14], caption="Foto Nota BBM / Material", use_container_width=True)
+                            else: st.info("Tidak ada Foto Nota.")
+                        with cf2:
+                            if len(pjb_target) > 19 and pjb_target[19]: st.image(pjb_target[19], caption="Foto Evidance Pekerjaan", use_container_width=True)
+                            else: st.info("Tidak ada Foto Pekerjaan.")
                 
                 st.markdown("### ⚡ Eksekusi Keputusan")
                 ca1, ca2 = st.columns(2)
@@ -1408,7 +1467,7 @@ elif st.session_state.page == "📈 Live Monitoring":
             m3.markdown(f"<div class='metric-3d'><div class='metric-title'>Sisa Kas (Burn Rate: {burn_rate:.1f}%)</div><div class='metric-value'>Rp {sisa_kas:,.0f}</div></div>", unsafe_allow_html=True)
             
             if len(pjb_r) > 1:
-                df_pjb_all = pd.DataFrame([(r + [""] * 28)[:28] for r in pjb_r[1:]], columns=["Waktu","Tanggal","N","C","Nama","R","S","Keperluan","BBM","D","KMAkhir","Nominal","Pl","u1","u2","u3","u4","u5","u6","u7","NN","NoTiket","Lt","Hs","TKM_RH","u8","u9","BuktiTF"])
+                df_pjb_all = pd.DataFrame([(r + [""] * 32)[:32] for r in pjb_r[1:]], columns=["Waktu","Tanggal","N","C","Nama","R","S","Keperluan","BBM","D","KMAkhir","Nominal","Pl","u1","u2","u3","u4","u5","u6","u7","NN","NoTiket","Lt","Hs","TKM_RH","u8","u9","BuktiTF","UM1","UM2","UM3","UM4"])
                 df_pjb_all['Nominal_Clean'] = df_pjb_all['Nominal'].apply(clean_nominal)
                 df_pjb_all['Tanggal_PJB'] = pd.to_datetime(df_pjb_all['Tanggal'], format='%d/%m/%Y', errors='coerce')
                 df_daily = df_pjb_all.dropna(subset=['Tanggal_PJB']).groupby('Tanggal_PJB')['Nominal_Clean'].sum().reset_index().sort_values('Tanggal_PJB')
@@ -1520,10 +1579,13 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
             req_r = data_all.get(SHEET_REQUEST, [])
             pjb_r = data_all.get(SHEET_PJB, [])
             rekap_r = data_all.get("Rekap PJB", [])
+            
+            # Tarik NIK Dict untuk PDF Surat Tugas
+            _, _, _, _, nik_dict = load_excel_data()
         
-        tab_report1, tab_report2 = st.tabs(["📑 1. Auto PJB (Generator Teks & Foto Laporan)", "📊 2. Rekap Keseluruhan (Request vs PJB)"])
+        tab_report1, tab_report2, tab_report3 = st.tabs(["📑 1. Auto PJB Biasa (List Foto)", "📊 2. Rekap Request vs PJB", "🖨️ 3. Cetak Surat Tugas & UM"])
         
-        # --- TAB 1: GENERATOR AUTO PJB + PDF EXPORT ---
+        # --- TAB 1: GENERATOR AUTO PJB BIASA ---
         with tab_report1:
             if len(rekap_r) > 1 and len(pjb_r) > 1:
                 dict_photos = {}
@@ -1531,7 +1593,6 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                     if len(r) > 21:
                         tk = str(r[21]).strip().upper()
                         if tk and tk not in dict_photos:
-                            # FITUR BARU: Menarik 4 Foto UM dari indeks 28, 29, 30, 31 (Kolom AC - AF)
                             dict_photos[tk] = {
                                 "N (Evidance Pengisian)": r[13] if len(r)>13 else "",
                                 "O (Nota BBM)": r[14] if len(r)>14 else "",
@@ -1558,10 +1619,10 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                 pilihan_foto = st.multiselect(
                     "Pilih kolom foto yang ingin ditarik dari Form PJB:",
                     ["N (Evidance Pengisian)", "O (Nota BBM)", "P (Foto KM/RH)", "Q (Foto Material)", "R (Nota Material)", "S (Nota Penginapan)", "T (Evidance Pekerjaan)", "U (Foto Aktivitas UM 1)", "V (Foto Aktivitas UM 2)", "W (Foto Aktivitas UM 3)", "X (Foto Aktivitas UM 4)"],
-                    default=["O (Nota BBM)", "T (Evidance Pekerjaan)", "U (Foto Aktivitas UM 1)"]
+                    default=["O (Nota BBM)", "T (Evidance Pekerjaan)"]
                 )
                 
-                if st.button("🚀 Generate Laporan & PDF", type="primary", use_container_width=True):
+                if st.button("🚀 Generate Laporan Lumpsum", type="primary", use_container_width=True):
                     html_content = ""
                     count_match = 0
                     
@@ -1581,8 +1642,6 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                             
                             if found_tiket:
                                 count_match += 1
-                                
-                                # Bangun string HTML untuk PDF
                                 html_content += f"""
                                 <div class='ticket-card'>
                                     <div class='ticket-header'>🎫 TIKET: {found_tiket}</div>
@@ -1594,7 +1653,6 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                                     </table>
                                     <div class='photo-container'>
                                 """
-                                
                                 if pilihan_foto:
                                     for p_name in pilihan_foto:
                                         url_foto = dict_photos[found_tiket].get(p_name, "")
@@ -1602,11 +1660,9 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                                             html_content += f"<div class='photo-box'><img src='{url_foto}'><br>{p_name}</div>"
                                         else:
                                             html_content += f"<div class='photo-box'><br><br>🚫 Tidak Ada<br>{p_name}</div>"
-                                            
                                 html_content += "</div></div>"
                     
                     if count_match > 0:
-                        # Final HTML Compilation dengan Trigger Auto-Print PDF
                         full_html = f"""
                         <!DOCTYPE html>
                         <html>
@@ -1637,14 +1693,12 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                         
                         st.success(f"✅ Berhasil merangkum **{count_match}** tiket. Silakan klik tombol di bawah untuk Download File dan Print (Save as PDF).")
                         b64_html = base64.b64encode(full_html.encode("utf-8")).decode()
-                        
                         st.markdown(f"""
                             <a href="data:text/html;base64,{b64_html}" download="Laporan_PJB_{nop_report}.html" 
                             style="display: block; text-align: center; background-color: #0ea5e9; color: white; padding: 15px 20px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 1.1em;">
                             📥 Download Laporan (Buka file lalu Save as PDF)
                             </a>
                         """, unsafe_allow_html=True)
-                        
                         st.markdown("<hr>", unsafe_allow_html=True)
                         st.components.v1.html(full_html, height=800, scrolling=True)
                     else:
@@ -1656,9 +1710,8 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
         with tab_report2:
             st.markdown("### 📊 Status Tracking All Data (Request Dana vs Penyelesaian PJB)")
             if len(req_r) > 1:
-                # Buat Kamus Data PJB untuk membandingkan dengan Request
                 pjb_map = {}
-                for r in reversed(pjb_r[1:]):  # Reversed agar ambil data revisi terbaru
+                for r in reversed(pjb_r[1:]):  
                     if len(r) > 21 and str(r[21]).strip() != "":
                         tk = str(r[21]).strip().upper()
                         pjb_map[tk] = {
@@ -1672,7 +1725,6 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                         tk = str(r[3]).strip().upper()
                         nom_req = clean_nominal(r[9]) if len(r)>9 else 0
                         has_pjb = tk in pjb_map
-                        
                         nom_pjb = pjb_map[tk]["Nominal PJB"] if has_pjb else 0
                         selisih = nom_req - nom_pjb
                         
@@ -1691,8 +1743,6 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                 
                 if rekap_all:
                     df_rekap_all = pd.DataFrame(rekap_all)
-                    
-                    # Formatting Rupiah & Warna Khusus untuk Tabel
                     df_view = df_rekap_all.copy()
                     df_view['Nominal Request'] = df_view['Nominal Request'].apply(lambda x: f"Rp {x:,.0f}")
                     df_view['Nominal PJB'] = df_view['Nominal PJB'].apply(lambda x: f"Rp {x:,.0f}" if x > 0 else "-")
@@ -1703,13 +1753,196 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                         return f'color: {color}; font-weight: bold;'
                         
                     st.dataframe(df_view.style.map(highlight_status, subset=['Status Laporan']), hide_index=True, use_container_width=True)
-                    
                     csv_rekap = df_rekap_all.to_csv(index=False).encode('utf-8')
                     st.download_button(label="📥 Export Tabel Rekap ke CSV/Excel", data=csv_rekap, file_name=f"Rekap_All_Data_{nop_report}.csv", mime='text/csv', use_container_width=True)
-                else:
-                    st.info("Tidak ada data Request Dana.")
+                else: st.info("Tidak ada data Request Dana.")
+            else: st.info("⚠️ Data Sheet 'Request Dana' masih kosong.")
+
+        # --- TAB 3 (BARU): CETAK SURAT TUGAS & UANG MAKAN ADMIN ---
+        with tab_report3:
+            st.markdown("<div class='section-title'>🖨️ Cetak Ulang Dokumen Surat Tugas & Uang Makan</div>", unsafe_allow_html=True)
+            st.info("Fitur khusus untuk Admin menarik dan mencetak ulang dokumen resmi PDF Surat Tugas & Uang Makan (3 Halaman) yang disubmit oleh Tim.")
+            
+            # Filter tiket yang memiliki foto Uang Makan
+            tiket_um_list = []
+            pjb_um_dict = {}
+            for r in reversed(pjb_r[1:]):
+                if len(r) > 31 and str(r[21]).strip() != "":
+                    tk = str(r[21]).strip().upper()
+                    # Indeks 28 adalah kolom Foto Uang Makan 1 (U)
+                    if str(r[28]).startswith("http"):
+                        tiket_um_list.append(tk)
+                        pjb_um_dict[tk] = r
+            
+            tiket_um_list = sorted(list(set(tiket_um_list)))
+            
+            if not tiket_um_list:
+                st.warning("Belum ada tiket PJB kategori Biaya Akomodasi / Uang Makan di database NOP ini.")
             else:
-                st.info("⚠️ Data Sheet 'Request Dana' masih kosong.")
+                c_p1, c_p2 = st.columns([3, 1])
+                with c_p1:
+                    pilih_tk_cetak = st.selectbox("🎫 Pilih Nomor Tiket Akomodasi:", ["-- Pilih Tiket --"] + tiket_um_list)
+                
+                if pilih_tk_cetak != "-- Pilih Tiket --":
+                    req_match = next((x for x in reversed(req_r[1:]) if len(x) > 3 and str(x[3]).strip().upper() == pilih_tk_cetak), None)
+                    pjb_match = pjb_um_dict[pilih_tk_cetak]
+                    
+                    if req_match:
+                        nama_petugas_cetak = str(req_match[5]).strip()
+                        role_cetak = str(req_match[6]).strip()
+                        site_cetak = str(req_match[7]).strip()
+                        kep_cetak = str(req_match[8]).strip()
+                        desc_cetak = str(req_match[11]).strip() if len(req_match) > 11 else "-"
+                        jarak_cetak = str(req_match[13]).strip() if len(req_match) > 13 else "-"
+                        
+                        nik_cetak = nik_dict.get(nama_petugas_cetak.upper(), "-")
+                        tgl_pjb_cetak = parse_date(pjb_match[1]) if len(pjb_match) > 1 else datetime.now().date()
+                        nom_pjb_cetak = clean_nominal(pjb_match[11]) if len(pjb_match) > 11 else 0
+                        
+                        url_um1 = pjb_match[28] if len(pjb_match) > 28 else ""
+                        url_um2 = pjb_match[29] if len(pjb_match) > 29 else ""
+                        url_um3 = pjb_match[30] if len(pjb_match) > 30 else ""
+                        url_um4 = pjb_match[31] if len(pjb_match) > 31 else ""
+                        
+                        with c_p2:
+                            st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+                            if st.button("🖨️ Tarik & Generate PDF", type="primary", use_container_width=True):
+                                # GENERATOR HTML PDF IDENTIK
+                                bulan_romawi = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"]
+                                romawi = bulan_romawi[tgl_pjb_cetak.month] if 1 <= tgl_pjb_cetak.month <= 12 else "VIII"
+                                
+                                header_img = "https://storage.googleapis.com/chat-bucket-d43033f982994eb6/4e5a96328bc6e3828cddcd9512351ab6.png"
+                                footer_img = "https://storage.googleapis.com/chat-bucket-d43033f982994eb6/3c05c093a0eb4cb40283bce82e6ef3ba.png"
+
+                                html_admin_um = f"""
+                                <!DOCTYPE html>
+                                <html>
+                                <head>
+                                    <meta charset="UTF-8">
+                                    <title>Surat Tugas & PJB - {pilih_tk_cetak}</title>
+                                    <style>
+                                        body {{ font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.5; margin: 0; background: #525659; }}
+                                        .page {{ width: 210mm; min-height: 297mm; background: white; margin: 10mm auto; position: relative; padding: 35mm 20mm; box-sizing: border-box; box-shadow: 0 0 10px rgba(0,0,0,0.5); page-break-after: always; }}
+                                        .header-img {{ position: absolute; top: 0; left: 0; width: 100%; }}
+                                        .footer-img {{ position: absolute; bottom: 0; left: 0; width: 100%; }}
+                                        .content {{ z-index: 10; position: relative; }}
+                                        h3 {{ text-align: center; font-size: 14pt; text-decoration: underline; margin-bottom: 15px; text-transform: uppercase; font-weight: bold; }}
+                                        table {{ width: 100%; border-collapse: collapse; margin-bottom: 10px; font-size: 11pt; }}
+                                        .tbl-info td {{ padding: 3px 5px; vertical-align: top; }}
+                                        .tbl-data th, .tbl-data td {{ border: 1px solid black; padding: 6px; text-align: center; }}
+                                        .tbl-uang td, .tbl-uang th {{ border: 1px solid black; padding: 6px; }}
+                                        .signature {{ display: flex; justify-content: space-between; margin-top: 30px; text-align: center; }}
+                                        .signature div {{ width: 45%; }}
+                                        .photo-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }}
+                                        .photo-item {{ text-align: center; border: 1px solid #ddd; padding: 10px; border-radius: 5px; }}
+                                        .photo-item img {{ width: 100%; max-height: 250px; object-fit: contain; }}
+                                        @media print {{ body {{ background: white; margin: 0; }} .page {{ margin: 0; box-shadow: none; width: 100%; height: 100%; padding: 35mm 20mm; }} }}
+                                    </style>
+                                </head>
+                                <body>
+                                    <!-- PAGE 1: SURAT TUGAS -->
+                                    <div class="page">
+                                        <img src="{header_img}" class="header-img">
+                                        <div class="content">
+                                            <h3>SURAT TUGAS</h3>
+                                            <p>Saya yang bertanda tangan di bawah ini:</p>
+                                            <table class="tbl-info" style="width: 70%;">
+                                                <tr><td width="150">Nama</td><td width="10">:</td><td>Okta Pradika</td></tr>
+                                                <tr><td>NIK</td><td>:</td><td>B0924649</td></tr>
+                                                <tr><td>Jabatan</td><td>:</td><td>Koordinator NOP Palangka Raya</td></tr>
+                                            </table>
+                                            <p>Dengan ini menugaskan sebagai berikut :</p>
+                                            <table class="tbl-data">
+                                                <tr><th>No.</th><th>Nama</th><th>NIK</th><th>Jabatan</th><th>Lokasi Kerja</th></tr>
+                                                <tr><td>1</td><td>{nama_petugas_cetak}</td><td>{nik_cetak}</td><td>{role_cetak}</td><td>{site_cetak}</td></tr>
+                                            </table>
+                                            <table class="tbl-info">
+                                                <tr><td width="150">No Ticket</td><td width="10">:</td><td>{pilih_tk_cetak}</td></tr>
+                                                <tr><td>Tujuan</td><td>:</td><td>{site_cetak}</td></tr>
+                                                <tr><td>Estimasi Jarak</td><td>:</td><td>{jarak_cetak}</td></tr>
+                                                <tr><td>Lama tugas dinas</td><td>:</td><td>1 Hari</td></tr>
+                                                <tr><td>Tgl. Berangkat</td><td>:</td><td>{tgl_pjb_cetak.strftime("%d/%m/%Y")}</td></tr>
+                                                <tr><td>Tgl. Kembali</td><td>:</td><td>{tgl_pjb_cetak.strftime("%d/%m/%Y")}</td></tr>
+                                                <tr><td>Keperluan</td><td>:</td><td>{kep_cetak}</td></tr>
+                                            </table>
+                                            <p>Demikianlah Surat Penugasan ini dibuat agar dapat dilaksanakan dengan sebaik-baiknya dan melaporkan hasilnya setelah selesai pelaksanaan tugas.</p>
+                                            <div style="text-align: right; margin-top: 30px; margin-bottom: 30px;">Palangka Raya, {tgl_pjb_cetak.strftime("%d/%m/%Y")}</div>
+                                            <div class="signature">
+                                                <div><p>Koordinator NOP Palangka Raya,</p><br><br><br><p><b><u>Okta Pradika</u></b><br>NIK. B0924649</p></div>
+                                                <div><p>POH. SPV Operation,</p><br><br><br><p><b><u>Rian Sharon</u></b><br>NIK. 79058</p></div>
+                                            </div>
+                                        </div>
+                                        <img src="{footer_img}" class="footer-img">
+                                    </div>
+                                    <!-- PAGE 2: PENGAJUAN UANG MAKAN -->
+                                    <div class="page">
+                                        <img src="{header_img}" class="header-img">
+                                        <div class="content">
+                                            <h3>SURAT PENGAJUAN UANG MAKAN</h3>
+                                            <div style="text-align: center; margin-top: -15px; margin-bottom: 20px;">
+                                                Nomor : &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; /KUT/{romawi}/{tgl_pjb_cetak.year}
+                                            </div>
+                                            <p>Koordinator ENOM NOP Palangka Raya PT. Kinarya Utama Teknik, dengan ini menugaskan kepada :</p>
+                                            <table class="tbl-info" style="width: 70%;">
+                                                <tr><td width="150">Nama</td><td width="10">:</td><td>{nama_petugas_cetak}</td></tr>
+                                                <tr><td>NIK</td><td>:</td><td>{nik_cetak}</td></tr>
+                                                <tr><td>Jabatan</td><td>:</td><td>{role_cetak}</td></tr>
+                                            </table>
+                                            <br>
+                                            <table class="tbl-data">
+                                                <tr><th>No.</th><th>Tujuan Tugas</th><th>Berangkat</th><th>Kembali</th><th>Uraian Penugasan</th></tr>
+                                                <tr><td>1</td><td>{site_cetak}</td><td>{tgl_pjb_cetak.strftime("%d/%m/%Y")}</td><td>{tgl_pjb_cetak.strftime("%d/%m/%Y")}</td><td>{desc_cetak}</td></tr>
+                                            </table>
+                                            <p>Harap dilaksanakan dan segera memberikan laporan perjalanan dinas setelah kembali.</p>
+                                            <table class="tbl-uang">
+                                                <tr style="background: #f0f0f0;"><th colspan="3">Bantuan Perjalanan Dinas</th><th colspan="2">Perhitungan</th><th>Jumlah</th></tr>
+                                                <tr><td colspan="3">Uang Makan ({nama_petugas_cetak})</td><td align="center">1 Hari x Rp. {nom_pjb_cetak:,.0f}</td><td width="30" style="border-right: none;">Rp.</td><td align="right" style="border-left: none;">{nom_pjb_cetak:,.0f}</td></tr>
+                                                <tr><td colspan="3">Bantuan Penginapan</td><td align="center">0 Malam x Rp. 0</td><td width="30" style="border-right: none;">Rp.</td><td align="right" style="border-left: none;">0</td></tr>
+                                                <tr><th colspan="5" align="right">Jumlah Total</th><th align="right">Rp. {nom_pjb_cetak:,.0f}</th></tr>
+                                            </table>
+                                            <table class="tbl-info" style="width: 300px; float: right; margin-top: 20px;">
+                                                <tr><td width="120">Dikeluarkan di</td><td>: Palangka Raya</td></tr>
+                                                <tr><td>Pada Tanggal</td><td>: {tgl_pjb_cetak.strftime("%d/%m/%Y")}</td></tr>
+                                            </table>
+                                            <div style="clear: both;"></div>
+                                            <div class="signature">
+                                                <div><p>Koordinator NOP Palangka Raya,</p><br><br><br><p><b><u>Okta Pradika</u></b><br>NIK. B0924649</p></div>
+                                                <div><p>POH. SPV Operation,</p><br><br><br><p><b><u>Rian Sharon</u></b><br>NIK. 79058</p></div>
+                                            </div>
+                                        </div>
+                                        <img src="{footer_img}" class="footer-img">
+                                    </div>
+                                    <!-- PAGE 3: LAMPIRAN FOTO EVIDEN -->
+                                    <div class="page">
+                                        <img src="{header_img}" class="header-img">
+                                        <div class="content">
+                                            <h3>LAMPIRAN FOTO AKTIVITAS LAPANGAN</h3>
+                                            <div class="photo-grid">
+                                                <div class="photo-item"><img src="{url_um1}"><br><b>Foto Aktivitas 1</b></div>
+                                                <div class="photo-item"><img src="{url_um2}"><br><b>Foto Aktivitas 2</b></div>
+                                                <div class="photo-item"><img src="{url_um3}"><br><b>Foto Aktivitas 3</b></div>
+                                                <div class="photo-item"><img src="{url_um4}"><br><b>Foto Aktivitas 4</b></div>
+                                            </div>
+                                        </div>
+                                        <img src="{footer_img}" class="footer-img">
+                                    </div>
+                                    <script> window.onload = function() {{ window.print(); }} </script>
+                                </body>
+                                </html>
+                                """
+                                b64_html_admin = base64.b64encode(html_admin_um.encode("utf-8")).decode()
+                                
+                                st.markdown(f"""
+                                    <div style="background-color: #ecfdf5; padding: 25px; border-radius: 12px; text-align: center; margin-top: 25px; border: 2px dashed #10B981;">
+                                        <h3 style="color: #065f46; margin-top: 0;">📄 Laporan PDF Siap Diunduh!</h3>
+                                        <a href="data:text/html;base64,{b64_html_admin}" download="Admin_Surat_Tugas_{pilih_tk_cetak}.html" target="_blank"
+                                           style="display: inline-block; background-color: #10B981; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 1.1em; margin: 15px 0;">
+                                           📥 Download PDF Surat Tugas
+                                        </a>
+                                        <p style="font-size: 0.85em; color: #64748b; margin-bottom: 0;">Buka file yang didownload dan Save as PDF / Print.</p>
+                                    </div>
+                                """, unsafe_allow_html=True)
+
 
 # ==========================================
 # PAGE 7: MONITORING REQUEST & PJB
