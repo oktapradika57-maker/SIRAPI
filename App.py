@@ -477,7 +477,7 @@ elif st.session_state.page == "📝 Form Request Dana":
             
         with col2:
             keperluan = st.selectbox("Klasifikasi Keperluan Dana", LIST_KEPERLUAN)
-            jns_kendaraan = st.selectbox("Jenis Kendaraan / Peralatan", ["", "Mobil", "Motor", "Genset", "Lainnya"])
+            jns_kendaraan = st.selectbox("Jenis Kendaraan / Peralatan", ["", "Mobil", "Motor", "Genset", "Lainnya", "Kapal/Klotok"])
             
             tim_bareng = []
             tim_terkunci = []
