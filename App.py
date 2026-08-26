@@ -384,7 +384,7 @@ if st.session_state.page == "🏠 Hub Menu Utama":
             if st.button("🖨️ REPORT & AUTO PJB\n(Export Laporan)", use_container_width=True): st.session_state.page = "🖨️ Auto PJB Report"; st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown("<div style='text-align: center; color: #94a3b8; font-size: 0.8rem; margin-top:50px;'>Created by Okta Pradika<br>KUT SYSTEM - v5.0 Enterprise Mobile Edition</div>", unsafe_allow_html=True)
+    st.markdown("<div style='text-align: center; color: #94a3b8; font-size: 0.8rem; margin-top:50px;'>Created by Okta Pradika<br>KUT SYSTEM - v5.1 Enterprise Mobile Edition</div>", unsafe_allow_html=True)
 
 
 # ==========================================
