@@ -165,6 +165,14 @@ def get_route_and_distance(lon1, lat1, lon2, lat2):
     dist_km = haversine(lat1, lon1, lat2, lon2) * 1.3 
     return dist_km, [[lon1, lat1], [lon2, lat2]]
 
+def get_local_img_base64(filepath):
+    try:
+        if not os.path.exists(filepath): return ""
+        with open(filepath, "rb") as f:
+            encoded = base64.b64encode(f.read()).decode('utf-8')
+        return f"data:image/png;base64,{encoded}"
+    except: return ""
+
 @st.cache_resource
 def get_credentials():
     with open("credentials.json", "w") as f: f.write(st.secrets["gcp_json"])
@@ -999,8 +1007,8 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                             bulan_romawi = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"]
                             romawi = bulan_romawi[tgl_pjb.month] if 1 <= tgl_pjb.month <= 12 else "VIII"
                             
-                            header_img = "https://storage.googleapis.com/chat-bucket-d43033f982994eb6/4e5a96328bc6e3828cddcd9512351ab6.png"
-                            footer_img = "https://storage.googleapis.com/chat-bucket-d43033f982994eb6/3c05c093a0eb4cb40283bce82e6ef3ba.png"
+                            # Tarik file lokal menjadi Base64 agar tidak diblokir browser saat Print PDF
+                            logo_base64 = get_local_img_base64("koperasi-jasa-konstruksi-tower-event-organizer-network-monitoring-telekomunikasi-kisel-group-logo-kut.webp")
 
                             html_um = f"""
                             <!DOCTYPE html>
@@ -1012,13 +1020,10 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                                     body {{ font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.5; margin: 0; background: #525659; }}
                                     .page {{ 
                                         width: 210mm; min-height: 297mm; background: white; margin: 10mm auto; 
-                                        position: relative; padding: 35mm 20mm; box-sizing: border-box; box-shadow: 0 0 10px rgba(0,0,0,0.5);
-                                        page-break-after: always;
+                                        padding: 15mm 20mm; box-sizing: border-box; box-shadow: 0 0 10px rgba(0,0,0,0.5);
+                                        page-break-after: always; position: relative;
                                     }}
-                                    .header-img {{ position: absolute; top: 0; left: 0; width: 100%; }}
-                                    .footer-img {{ position: absolute; bottom: 0; left: 0; width: 100%; }}
-                                    .content {{ z-index: 10; position: relative; }}
-                                    h3 {{ text-align: center; font-size: 14pt; text-decoration: underline; margin-bottom: 15px; text-transform: uppercase; font-weight: bold; }}
+                                    h3 {{ text-align: center; font-size: 14pt; margin-bottom: 15px; font-weight: bold; }}
                                     table {{ width: 100%; border-collapse: collapse; margin-bottom: 10px; font-size: 11pt; }}
                                     .tbl-info td {{ padding: 3px 5px; vertical-align: top; }}
                                     .tbl-data th, .tbl-data td {{ border: 1px solid black; padding: 6px; text-align: center; }}
@@ -1028,18 +1033,22 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                                     .photo-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }}
                                     .photo-item {{ text-align: center; border: 1px solid #ddd; padding: 10px; border-radius: 5px; }}
                                     .photo-item img {{ width: 100%; max-height: 250px; object-fit: contain; }}
+                                    .logo-header {{ text-align: right; margin-bottom: 10px; padding-right: 5px; }}
+                                    .logo-header img {{ width: 220px; height: auto; object-fit: contain; }}
                                     @media print {{
                                         body {{ background: white; margin: 0; }}
-                                        .page {{ margin: 0; box-shadow: none; width: 100%; height: 100%; padding: 35mm 20mm; }}
+                                        .page {{ margin: 0; box-shadow: none; width: 100%; height: 100%; padding: 15mm 20mm; }}
                                     }}
                                 </style>
                             </head>
                             <body>
                                 <!-- PAGE 1: SURAT TUGAS -->
                                 <div class="page">
-                                    <img src="{header_img}" class="header-img">
+                                    <div class="logo-header">
+                                        <img src="{logo_base64}" alt="Logo KUT">
+                                    </div>
                                     <div class="content">
-                                        <h3>SURAT TUGAS</h3>
+                                        <h3 style="letter-spacing: 5px;"><u>SURAT TUGAS</u></h3>
                                         <p>Saya yang bertanda tangan di bawah ini:</p>
                                         <table class="tbl-info" style="width: 70%;">
                                             <tr><td width="150">Nama</td><td width="10">:</td><td>Okta Pradika</td></tr>
@@ -1077,14 +1086,15 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                                             </div>
                                         </div>
                                     </div>
-                                    <img src="{footer_img}" class="footer-img">
                                 </div>
                                 
                                 <!-- PAGE 2: PENGAJUAN UANG MAKAN -->
                                 <div class="page">
-                                    <img src="{header_img}" class="header-img">
+                                    <div class="logo-header">
+                                        <img src="{logo_base64}" alt="Logo KUT">
+                                    </div>
                                     <div class="content">
-                                        <h3>SURAT PENGAJUAN UANG MAKAN</h3>
+                                        <h3><u>SURAT PENGAJUAN UANG MAKAN</u></h3>
                                         <div style="text-align: center; margin-top: -15px; margin-bottom: 20px;">
                                             Nomor : &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; /KUT/{romawi}/{tgl_pjb.year}
                                         </div>
@@ -1140,14 +1150,15 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                                             </div>
                                         </div>
                                     </div>
-                                    <img src="{footer_img}" class="footer-img">
                                 </div>
                                 
                                 <!-- PAGE 3: LAMPIRAN FOTO EVIDEN -->
                                 <div class="page">
-                                    <img src="{header_img}" class="header-img">
+                                    <div class="logo-header">
+                                        <img src="{logo_base64}" alt="Logo KUT">
+                                    </div>
                                     <div class="content">
-                                        <h3>LAMPIRAN FOTO AKTIVITAS LAPANGAN</h3>
+                                        <h3><u>LAMPIRAN FOTO AKTIVITAS LAPANGAN</u></h3>
                                         <div class="photo-grid">
                                             <div class="photo-item"><img src="{url_um1}"><br><b>Foto Aktivitas 1</b></div>
                                             <div class="photo-item"><img src="{url_um2}"><br><b>Foto Aktivitas 2</b></div>
@@ -1155,7 +1166,6 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                                             <div class="photo-item"><img src="{url_um4}"><br><b>Foto Aktivitas 4</b></div>
                                         </div>
                                     </div>
-                                    <img src="{footer_img}" class="footer-img">
                                 </div>
                                 
                                 <script>
@@ -1855,9 +1865,8 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                                 bulan_romawi = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"]
                                 romawi = bulan_romawi[tgl_pjb_cetak.month] if 1 <= tgl_pjb_cetak.month <= 12 else "VIII"
                                 
-                                header_img = "https://storage.googleapis.com/chat-bucket-d43033f982994eb6/4e5a96328bc6e3828cddcd9512351ab6.png"
-                                footer_img = "https://storage.googleapis.com/chat-bucket-d43033f982994eb6/3c05c093a0eb4cb40283bce82e6ef3ba.png"
-
+                                logo_base64 = get_local_img_base64("koperasi-jasa-konstruksi-tower-event-organizer-network-monitoring-telekomunikasi-kisel-group-logo-kut.webp")
+                                
                                 html_admin_um = f"""
                                 <!DOCTYPE html>
                                 <html>
@@ -1866,11 +1875,8 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                                     <title>Surat Tugas & PJB - {pilih_tk_cetak}</title>
                                     <style>
                                         body {{ font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.5; margin: 0; background: #525659; }}
-                                        .page {{ width: 210mm; min-height: 297mm; background: white; margin: 10mm auto; position: relative; padding: 35mm 20mm; box-sizing: border-box; box-shadow: 0 0 10px rgba(0,0,0,0.5); page-break-after: always; }}
-                                        .header-img {{ position: absolute; top: 0; left: 0; width: 100%; }}
-                                        .footer-img {{ position: absolute; bottom: 0; left: 0; width: 100%; }}
-                                        .content {{ z-index: 10; position: relative; }}
-                                        h3 {{ text-align: center; font-size: 14pt; text-decoration: underline; margin-bottom: 15px; text-transform: uppercase; font-weight: bold; }}
+                                        .page {{ width: 210mm; min-height: 297mm; background: white; margin: 10mm auto; position: relative; padding: 15mm 20mm; box-sizing: border-box; box-shadow: 0 0 10px rgba(0,0,0,0.5); page-break-after: always; }}
+                                        h3 {{ text-align: center; font-size: 14pt; margin-bottom: 15px; font-weight: bold; }}
                                         table {{ width: 100%; border-collapse: collapse; margin-bottom: 10px; font-size: 11pt; }}
                                         .tbl-info td {{ padding: 3px 5px; vertical-align: top; }}
                                         .tbl-data th, .tbl-data td {{ border: 1px solid black; padding: 6px; text-align: center; }}
@@ -1880,15 +1886,19 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                                         .photo-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }}
                                         .photo-item {{ text-align: center; border: 1px solid #ddd; padding: 10px; border-radius: 5px; }}
                                         .photo-item img {{ width: 100%; max-height: 250px; object-fit: contain; }}
-                                        @media print {{ body {{ background: white; margin: 0; }} .page {{ margin: 0; box-shadow: none; width: 100%; height: 100%; padding: 35mm 20mm; }} }}
+                                        .logo-header {{ text-align: right; margin-bottom: 10px; padding-right: 5px; }}
+                                        .logo-header img {{ width: 220px; height: auto; object-fit: contain; }}
+                                        @media print {{ body {{ background: white; margin: 0; }} .page {{ margin: 0; box-shadow: none; width: 100%; height: 100%; padding: 15mm 20mm; }} }}
                                     </style>
                                 </head>
                                 <body>
                                     <!-- PAGE 1: SURAT TUGAS -->
                                     <div class="page">
-                                        <img src="{header_img}" class="header-img">
+                                        <div class="logo-header">
+                                            <img src="{logo_base64}" alt="Logo KUT">
+                                        </div>
                                         <div class="content">
-                                            <h3>SURAT TUGAS</h3>
+                                            <h3 style="letter-spacing: 5px;"><u>SURAT TUGAS</u></h3>
                                             <p>Saya yang bertanda tangan di bawah ini:</p>
                                             <table class="tbl-info" style="width: 70%;">
                                                 <tr><td width="150">Nama</td><td width="10">:</td><td>Okta Pradika</td></tr>
@@ -1916,13 +1926,15 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                                                 <div><p>POH. SPV Operation,</p><br><br><br><p><b><u>Rian Sharon</u></b><br>NIK. 79058</p></div>
                                             </div>
                                         </div>
-                                        <img src="{footer_img}" class="footer-img">
                                     </div>
+                                    
                                     <!-- PAGE 2: PENGAJUAN UANG MAKAN -->
                                     <div class="page">
-                                        <img src="{header_img}" class="header-img">
+                                        <div class="logo-header">
+                                            <img src="{logo_base64}" alt="Logo KUT">
+                                        </div>
                                         <div class="content">
-                                            <h3>SURAT PENGAJUAN UANG MAKAN</h3>
+                                            <h3><u>SURAT PENGAJUAN UANG MAKAN</u></h3>
                                             <div style="text-align: center; margin-top: -15px; margin-bottom: 20px;">
                                                 Nomor : &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; /KUT/{romawi}/{tgl_pjb_cetak.year}
                                             </div>
@@ -1954,13 +1966,15 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                                                 <div><p>POH. SPV Operation,</p><br><br><br><p><b><u>Rian Sharon</u></b><br>NIK. 79058</p></div>
                                             </div>
                                         </div>
-                                        <img src="{footer_img}" class="footer-img">
                                     </div>
+                                    
                                     <!-- PAGE 3: LAMPIRAN FOTO EVIDEN -->
                                     <div class="page">
-                                        <img src="{header_img}" class="header-img">
+                                        <div class="logo-header">
+                                            <img src="{logo_base64}" alt="Logo KUT">
+                                        </div>
                                         <div class="content">
-                                            <h3>LAMPIRAN FOTO AKTIVITAS LAPANGAN</h3>
+                                            <h3><u>LAMPIRAN FOTO AKTIVITAS LAPANGAN</u></h3>
                                             <div class="photo-grid">
                                                 <div class="photo-item"><img src="{url_um1}"><br><b>Foto Aktivitas 1</b></div>
                                                 <div class="photo-item"><img src="{url_um2}"><br><b>Foto Aktivitas 2</b></div>
@@ -1968,7 +1982,6 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                                                 <div class="photo-item"><img src="{url_um4}"><br><b>Foto Aktivitas 4</b></div>
                                             </div>
                                         </div>
-                                        <img src="{footer_img}" class="footer-img">
                                     </div>
                                     <script> window.onload = function() {{ window.print(); }} </script>
                                 </body>
