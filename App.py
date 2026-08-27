@@ -8,7 +8,7 @@ import requests
 import math
 import os
 from google.oauth2.service_account import Credentials
-from datetime import datetime
+from datetime import datetime, timedelta
 import time
 import re
 
@@ -214,7 +214,7 @@ def load_excel_data():
                     if pic_name: tim_dict[pic_name]['NOPOL'] = nopol_val
     except Exception: pass
     
-    # LOAD DATABASE NIK BARU
+    # LOAD DATABASE NIK
     try:
         df_nik = pd.read_excel("NIK NOP PLK.xlsx").fillna("")
         nik_dict = dict(zip(df_nik['NAMA'].astype(str).str.strip().str.upper(), df_nik['NIK'].astype(str).str.strip()))
@@ -389,7 +389,7 @@ if st.session_state.page == "🏠 Hub Menu Utama":
             if st.button("🖨️ REPORT & AUTO PJB\n(Export Laporan)", use_container_width=True): st.session_state.page = "🖨️ Auto PJB Report"; st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown("<div style='text-align: center; color: #94a3b8; font-size: 0.8rem; margin-top:50px;'>Created by Okta Pradika<br>KUT SYSTEM - v5.2 Enterprise Mobile Edition</div>", unsafe_allow_html=True)
+    st.markdown("<div style='text-align: center; color: #94a3b8; font-size: 0.8rem; margin-top:50px;'>Created by Okta Pradika<br>KUT SYSTEM - v5.0 Enterprise Mobile Edition</div>", unsafe_allow_html=True)
 
 
 # ==========================================
@@ -481,7 +481,7 @@ elif st.session_state.page == "📝 Form Request Dana":
             
         with col2:
             keperluan = st.selectbox("Klasifikasi Keperluan Dana", LIST_KEPERLUAN)
-            jns_kendaraan = st.selectbox("Jenis Kendaraan / Peralatan", ["", "Mobil", "Motor", "Genset", "Klotok Carter", "Fery Reguler", "Lainnya"])
+            jns_kendaraan = st.selectbox("Jenis Kendaraan / Peralatan", ["", "Mobil", "Motor", "Genset", "Lainnya"])
             
             tim_bareng = []
             tim_terkunci = []
@@ -591,8 +591,25 @@ elif st.session_state.page == "📝 Form Request Dana":
             km_awal = st.number_input(label_indikator, min_value=0.0, value=default_km, step=0.1)
             
             deskripsi = st.text_area("Deskripsi Pekerjaan / Justifikasi", value=rev_data.get("desc", ""))
-            if tim_bareng: deskripsi_final = deskripsi + f"\n\n[Berangkat bersama tim: {', '.join(tim_bareng)}]"
-            else: deskripsi_final = deskripsi
+            
+            # --- FITUR BARU: SMART CALCULATOR UANG MAKAN REQUEST ---
+            st.markdown("<div class='section-title'>🍽️ Request Akomodasi / Uang Makan (Opsional)</div>", unsafe_allow_html=True)
+            is_um_req = st.checkbox("Tambahkan Request Uang Makan untuk tiket ini?")
+            tambahan_desc = ""
+            if is_um_req:
+                c_req_u1, c_req_u2 = st.columns(2)
+                with c_req_u1:
+                    hari_req = st.number_input("Rencana Berapa Hari?", min_value=1, step=1, value=1)
+                with c_req_u2:
+                    nom_req_um = st.number_input("Nominal Uang Makan per Hari (Rp)", min_value=0, step=10000, value=150000)
+                
+                subtot_req_um = hari_req * nom_req_um
+                st.info(f"💡 Estimasi Tambahan Uang Makan: **Rp {subtot_req_um:,.0f}**. (Mohon pastikan nilai ini sudah Anda masukkan/jumlahkan ke dalam *Total Nominal Transfer* di bawah).")
+                tambahan_desc = f"\n\n[REQ AKOMODASI: {hari_req} Hari @ Rp {nom_req_um:,.0f}/hari = Rp {subtot_req_um:,.0f}]"
+                
+            if tim_bareng: deskripsi_final = deskripsi + f"\n\n[Berangkat bersama tim: {', '.join(tim_bareng)}]" + tambahan_desc
+            else: deskripsi_final = deskripsi + tambahan_desc
+            # ---------------------------------------------------------
 
         is_vehicle = jns_kendaraan.lower() in ['mobil', 'motor']
         st.markdown("<div class='section-title'>📍 3. Rute Peta (Satelit) & Keuangan</div>", unsafe_allow_html=True)
@@ -817,15 +834,18 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                     st.text_input("Nama Petugas", d["Nama"], disabled=True)
                     st.text_input("Kategori & Plat", f'{d["BBM"]} - {d["Plat"]}', disabled=True)
                 with c_b:
-                    # Menarik NIK dari Excel yang diupload
                     nik_petugas = nik_dict.get(d["Nama"].strip().upper(), "-")
                     st.text_input("NIK Karyawan", nik_petugas, disabled=True)
                 with c_c:
                     st.text_input("Site ID Tujuan", d["Site"], disabled=True)
                     st.text_input("Keperluan", d["Keperluan"], disabled=True)
-                    nominal_pjb = st.number_input("Nominal PJB Terpakai (Otomatis Dikunci)", value=int(d["NominalReq"]), disabled=True)
+                    
+                    if "Operational" in jns_pjb:
+                        nominal_pjb = st.number_input("Nominal PJB Terpakai", value=int(d["NominalReq"]), disabled=True)
+                    else:
+                        st.info("Nominal PJB akan disesuaikan dengan Kalkulator Uang Makan di bawah.")
 
-                # INISIALISASI SEMUA VARIABEL DEFAULT
+                # INISIALISASI VARIABEL
                 d_km_awal = float(d["KMAwal"])
                 km_akhir = d_km_awal
                 total_km_tempuh = 0.0
@@ -869,6 +889,21 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                     
                 # JIKA MEMILIH BIAYA AKOMODASI (UANG MAKAN)
                 else:
+                    # --- SMART KALKULATOR UANG MAKAN PJB ---
+                    st.markdown("<div class='section-title'>🗓️ Rincian Keberangkatan & Nominal Support (Editable)</div>", unsafe_allow_html=True)
+                    st.info("Tim dapat mengedit nominal dan lama hari secara mandiri. Sistem PDF akan otomatis menyesuaikan hitungannya.")
+                    c_um_a, c_um_b, c_um_c = st.columns(3)
+                    with c_um_a:
+                        tgl_berangkat = st.date_input("Tanggal Keberangkatan", value=tgl_pjb)
+                    with c_um_b:
+                        lama_hari = st.number_input("Lama Hari (Durasi Kerja)", min_value=1, step=1, value=1)
+                    with c_um_c:
+                        nom_um_harian = st.number_input("Nominal Uang Makan Harian", min_value=0, step=5000, value=150000)
+                    
+                    tgl_kembali = tgl_berangkat + timedelta(days=lama_hari - 1)
+                    total_um_calc = lama_hari * nom_um_harian
+                    st.success(f"📅 Tanggal Kembali (Auto): **{tgl_kembali.strftime('%d/%m/%Y')}** | 💰 Total Uang Makan: **Rp {total_um_calc:,.0f}**")
+                    
                     st.markdown("<div class='section-title'>📸 Lampiran Eviden Aktivitas Uang Makan (WAJIB 4 FOTO)</div>", unsafe_allow_html=True)
                     st.info("Sesuai instruksi KUT, **4 foto eviden aktivitas lapangan** wajib diunggah secara penuh untuk men-generate Dokumen PDF Surat Tugas.")
                     c_um1, c_um2, c_um3, c_um4 = st.columns(4)
@@ -920,7 +955,6 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                         
                 if st.button("🚀 Sahkan Pelaporan PJB / Submit Revisi", type="primary", use_container_width=True):
                     
-                    # Validasi Tergantung Tipe Form
                     if "Operational" in jns_pjb:
                         if (is_vehicle or is_genset) and (km_akhir <= 0):
                             st.error(f"❌ PENGIRIMAN DITOLAK: Anda belum mengisi {label_akhir} yang aktual. Tidak boleh 0!")
@@ -934,7 +968,9 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                             st.stop()
                             
                     with st.spinner("Mengupload foto dan memproses PJB..."):
-                        # Upload semua foto menyesuaikan jenis PJB
+                        if "Akomodasi" in jns_pjb:
+                            nominal_pjb = total_um_calc 
+                            
                         url_um1 = upload_foto(f_um1) if f_um1 else ""
                         url_um2 = upload_foto(f_um2) if f_um2 else ""
                         url_um3 = upload_foto(f_um3) if f_um3 else ""
@@ -948,10 +984,14 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                         url_inap = upload_foto(f_inap) if f_inap else ""
                         url_kerja = upload_foto(f_kerja) if f_kerja else ""
                         
-                        # Data dimasukkan pada Index Array yang sama agar Database Rapi (32 Kolom)
-                        data_pjb = [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), tgl_pjb.strftime("%d/%m/%Y"), d["NOP"], d["Cluster"], d["Nama"], d["Role"], d["Site"], d["Keperluan"], d["BBM"], d["Desc"], str(km_akhir), nominal_pjb, d["Plat"], url_isi, url_notabbm, url_km, url_mat, url_notamat, url_inap, url_kerja, tot_nilai_nota, valid_cari_tiket, tot_liter, harga_satuan, str(round(total_km_tempuh, 2)), "", "", upload_foto(f_transfer), url_um1, url_um2, url_um3, url_um4]
+                        tgl_berangkat_str = tgl_berangkat.strftime("%d/%m/%Y") if "Akomodasi" in jns_pjb else ""
+                        lama_hari_str = str(lama_hari) if "Akomodasi" in jns_pjb else ""
+                        nom_um_harian_str = str(nom_um_harian) if "Akomodasi" in jns_pjb else ""
                         
-                        append_data(SHEET_PJB, [(r+[""]*32)[:32] for r in [data_pjb]][0], target_ss)
+                        # Data dimasukkan pada Index Array diperluas ke 35 Kolom untuk menampung Data Akomodasi
+                        data_pjb = [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), tgl_pjb.strftime("%d/%m/%Y"), d["NOP"], d["Cluster"], d["Nama"], d["Role"], d["Site"], d["Keperluan"], d["BBM"], d["Desc"], str(km_akhir), nominal_pjb, d["Plat"], url_isi, url_notabbm, url_km, url_mat, url_notamat, url_inap, url_kerja, tot_nilai_nota, valid_cari_tiket, tot_liter, harga_satuan, str(round(total_km_tempuh, 2)), "", "", upload_foto(f_transfer), url_um1, url_um2, url_um3, url_um4, tgl_berangkat_str, lama_hari_str, nom_um_harian_str]
+                        
+                        append_data(SHEET_PJB, [(r+[""]*35)[:35] for r in [data_pjb]][0], target_ss)
                         append_data(SHEET_APP, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), d["Nama"], valid_cari_tiket, "Verifikasi PJB", nominal_pjb, "PENDING", "-"], target_ss)
                         
                         # JIKA AKOMODASI -> GENERATE PDF SURAT TUGAS
@@ -1015,9 +1055,9 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                                             <tr><td width="150">No Ticket</td><td width="10">:</td><td>{valid_cari_tiket}</td></tr>
                                             <tr><td>Tujuan</td><td>:</td><td>{d['Site']}</td></tr>
                                             <tr><td>Estimasi Jarak</td><td>:</td><td>{d.get('Jarak', '-')}</td></tr>
-                                            <tr><td>Lama tugas dinas</td><td>:</td><td>1 Hari</td></tr>
-                                            <tr><td>Tgl. Berangkat</td><td>:</td><td>{tgl_pjb.strftime("%d/%m/%Y")}</td></tr>
-                                            <tr><td>Tgl. Kembali</td><td>:</td><td>{tgl_pjb.strftime("%d/%m/%Y")}</td></tr>
+                                            <tr><td>Lama tugas dinas</td><td>:</td><td>{lama_hari} Hari</td></tr>
+                                            <tr><td>Tgl. Berangkat</td><td>:</td><td>{tgl_berangkat.strftime("%d/%m/%Y")}</td></tr>
+                                            <tr><td>Tgl. Kembali</td><td>:</td><td>{tgl_kembali.strftime("%d/%m/%Y")}</td></tr>
                                             <tr><td>Keperluan</td><td>:</td><td>{d['Keperluan']}</td></tr>
                                         </table>
                                         <p>Demikianlah Surat Penugasan ini dibuat agar dapat dilaksanakan dengan sebaik-baiknya dan melaporkan hasilnya setelah selesai pelaksanaan tugas.</p>
@@ -1057,7 +1097,7 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                                         <br>
                                         <table class="tbl-data">
                                             <tr><th>No.</th><th>Tujuan Tugas</th><th>Berangkat</th><th>Kembali</th><th>Uraian Penugasan</th></tr>
-                                            <tr><td>1</td><td>{d['Site']}</td><td>{tgl_pjb.strftime("%d/%m/%Y")}</td><td>{tgl_pjb.strftime("%d/%m/%Y")}</td><td>{d.get('Desc', '-')}</td></tr>
+                                            <tr><td>1</td><td>{d['Site']}</td><td>{tgl_berangkat.strftime("%d/%m/%Y")}</td><td>{tgl_kembali.strftime("%d/%m/%Y")}</td><td>{d.get('Desc', '-')}</td></tr>
                                         </table>
                                         <p>Harap dilaksanakan dan segera memberikan laporan perjalanan dinas setelah kembali.</p>
                                         
@@ -1065,9 +1105,9 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                                             <tr style="background: #f0f0f0;"><th colspan="3">Bantuan Perjalanan Dinas</th><th colspan="2">Perhitungan</th><th>Jumlah</th></tr>
                                             <tr>
                                                 <td colspan="3">Uang Makan ({d['Nama']})</td>
-                                                <td align="center">1 Hari x Rp. {nominal_pjb:,.0f}</td>
+                                                <td align="center">{lama_hari} Hari x Rp. {nom_um_harian:,.0f}</td>
                                                 <td width="30" style="border-right: none;">Rp.</td>
-                                                <td align="right" style="border-left: none;">{nominal_pjb:,.0f}</td>
+                                                <td align="right" style="border-left: none;">{total_um_calc:,.0f}</td>
                                             </tr>
                                             <tr>
                                                 <td colspan="3">Bantuan Penginapan</td>
@@ -1077,7 +1117,7 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                                             </tr>
                                             <tr>
                                                 <th colspan="5" align="right">Jumlah Total</th>
-                                                <th align="right">Rp. {nominal_pjb:,.0f}</th>
+                                                <th align="right">Rp. {total_um_calc:,.0f}</th>
                                             </tr>
                                         </table>
                                         
@@ -1142,7 +1182,6 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                             st.session_state.page = "🏠 Hub Menu Utama"
                             st.rerun()
 
-        # Kotak Download PDF khusus Akomodasi
         if st.session_state.get("pdf_ready"):
             st.markdown(f"""
                 <div style="background-color: #ecfdf5; padding: 25px; border-radius: 12px; text-align: center; margin-top: 25px; border: 2px dashed #10B981; box-shadow: 0 10px 15px rgba(16, 185, 129, 0.1);">
@@ -1200,7 +1239,6 @@ elif st.session_state.page == "🛡️ Approval Center":
                 if pjb_target:
                     st.markdown("<div style='background:#F8FAFC; padding:15px; border-radius:10px; margin-bottom:15px;'><b>Bukti Terlampir:</b></div>", unsafe_allow_html=True)
                     
-                    # Cek jenis lampiran apa yang ada
                     is_akomodasi = False
                     if len(pjb_target) > 28 and str(pjb_target[28]).startswith("http"):
                         is_akomodasi = True
@@ -1277,7 +1315,6 @@ elif st.session_state.page == "🏦 Manajemen Kas & Distribusi":
         
         tab_in, tab_out, tab_report, tab_pjb = st.tabs(["📥 1. Dana Masuk (Debit)", "📤 2. Distribusi Tim (Kredit)", "📊 3. Buku Besar Saldo Batch", "📋 4. List PJB & Dana Ops"])
         
-        # --- TAB 1: DANA MASUK (DEBIT) ---
         with tab_in:
             st.markdown("<div class='section-title'>📥 Tambah Kas Masuk Baru</div>", unsafe_allow_html=True)
             st.info("💡 **INFO:** Gunakan form ini saat Anda menerima dropping dana (misal dari Pusat).")
@@ -1300,7 +1337,6 @@ elif st.session_state.page == "🏦 Manajemen Kas & Distribusi":
                 df_um_view["Nominal"] = df_um_view["Nominal"].apply(lambda x: f"Rp {clean_nominal(x):,.0f}")
                 st.dataframe(df_um_view, hide_index=True, use_container_width=True)
 
-        # --- TAB 2: DISTRIBUSI TIM (KREDIT) ---
         with tab_out:
             valid_batches = sorted(list(set([r[2].strip() for r in um_r[1:] if len(r) > 2 and r[2].strip() != ""])))
             
@@ -1336,7 +1372,6 @@ elif st.session_state.page == "🏦 Manajemen Kas & Distribusi":
                 df_dist_view["Nominal"] = df_dist_view["Nominal"].apply(lambda x: f"Rp {clean_nominal(x):,.0f}")
                 st.dataframe(df_dist_view.drop(columns=["Timestamp", "Link Bukti"]), hide_index=True, use_container_width=True)
 
-        # --- TAB 3: BUKU BESAR SALDO BATCH ---
         with tab_report:
             st.markdown("<div class='section-title'>📊 Buku Besar Saldo per Batch Dana</div>", unsafe_allow_html=True)
             
@@ -1391,7 +1426,6 @@ elif st.session_state.page == "🏦 Manajemen Kas & Distribusi":
             else:
                 st.info("Belum ada perputaran dana pada NOP ini.")
 
-        # --- TAB 4: REKAP PJB & DANA OPS ---
         with tab_pjb:
             st.markdown("<div class='section-title'>📋 Rekap PJB (Cek Target per Dana Ops & Periode)</div>", unsafe_allow_html=True)
             
@@ -1467,7 +1501,7 @@ elif st.session_state.page == "📈 Live Monitoring":
             m3.markdown(f"<div class='metric-3d'><div class='metric-title'>Sisa Kas (Burn Rate: {burn_rate:.1f}%)</div><div class='metric-value'>Rp {sisa_kas:,.0f}</div></div>", unsafe_allow_html=True)
             
             if len(pjb_r) > 1:
-                df_pjb_all = pd.DataFrame([(r + [""] * 32)[:32] for r in pjb_r[1:]], columns=["Waktu","Tanggal","N","C","Nama","R","S","Keperluan","BBM","D","KMAkhir","Nominal","Pl","u1","u2","u3","u4","u5","u6","u7","NN","NoTiket","Lt","Hs","TKM_RH","u8","u9","BuktiTF","UM1","UM2","UM3","UM4"])
+                df_pjb_all = pd.DataFrame([(r + [""] * 35)[:35] for r in pjb_r[1:]], columns=["Waktu","Tanggal","N","C","Nama","R","S","Keperluan","BBM","D","KMAkhir","Nominal","Pl","u1","u2","u3","u4","u5","u6","u7","NN","NoTiket","Lt","Hs","TKM_RH","u8","u9","BuktiTF","UM1","UM2","UM3","UM4", "TglB", "LmHr", "NomH"])
                 df_pjb_all['Nominal_Clean'] = df_pjb_all['Nominal'].apply(clean_nominal)
                 df_pjb_all['Tanggal_PJB'] = pd.to_datetime(df_pjb_all['Tanggal'], format='%d/%m/%Y', errors='coerce')
                 df_daily = df_pjb_all.dropna(subset=['Tanggal_PJB']).groupby('Tanggal_PJB')['Nominal_Clean'].sum().reset_index().sort_values('Tanggal_PJB')
@@ -1580,12 +1614,10 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
             pjb_r = data_all.get(SHEET_PJB, [])
             rekap_r = data_all.get("Rekap PJB", [])
             
-            # Tarik NIK Dict untuk PDF Surat Tugas
             _, _, _, _, nik_dict = load_excel_data()
         
         tab_report1, tab_report2, tab_report3 = st.tabs(["📑 1. Auto PJB Biasa (List Foto)", "📊 2. Rekap Request vs PJB", "🖨️ 3. Cetak Surat Tugas & UM"])
         
-        # --- TAB 1: GENERATOR AUTO PJB BIASA ---
         with tab_report1:
             if len(rekap_r) > 1 and len(pjb_r) > 1:
                 dict_photos = {}
@@ -1706,7 +1738,6 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
             else:
                 st.info("⚠️ Data Sheet 'Rekap PJB' atau 'Form PJB' belum tersedia/masih kosong.")
         
-        # --- TAB 2: REKAP KESELURUHAN (REQUEST VS PJB) ---
         with tab_report2:
             st.markdown("### 📊 Status Tracking All Data (Request Dana vs Penyelesaian PJB)")
             if len(req_r) > 1:
@@ -1758,12 +1789,11 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                 else: st.info("Tidak ada data Request Dana.")
             else: st.info("⚠️ Data Sheet 'Request Dana' masih kosong.")
 
-        # --- TAB 3 (BARU): CETAK SURAT TUGAS & UANG MAKAN ADMIN ---
+        # --- TAB 3: CETAK SURAT TUGAS & UANG MAKAN ADMIN ---
         with tab_report3:
             st.markdown("<div class='section-title'>🖨️ Cetak Ulang Dokumen Surat Tugas & Uang Makan</div>", unsafe_allow_html=True)
-            st.info("Fitur khusus untuk Admin menarik dan mencetak ulang dokumen resmi PDF Surat Tugas & Uang Makan (3 Halaman) yang disubmit oleh Tim.")
+            st.info("Fitur khusus untuk Admin menarik dan mencetak ulang dokumen resmi PDF Surat Tugas & Uang Makan (3 Halaman) yang disubmit oleh Tim secara Real-time berdasarkan hitungan terbaru mereka.")
             
-            # Filter tiket yang memiliki foto Uang Makan
             tiket_um_list = []
             pjb_um_dict = {}
             for r in reversed(pjb_r[1:]):
@@ -1796,8 +1826,22 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                         jarak_cetak = str(req_match[13]).strip() if len(req_match) > 13 else "-"
                         
                         nik_cetak = nik_dict.get(nama_petugas_cetak.upper(), "-")
+                        
+                        # Parsing Tanggal PJB asli sebagai fallback
                         tgl_pjb_cetak = parse_date(pjb_match[1]) if len(pjb_match) > 1 else datetime.now().date()
                         nom_pjb_cetak = clean_nominal(pjb_match[11]) if len(pjb_match) > 11 else 0
+                        
+                        # FITUR BARU: Menarik Data Dinamis Lama Hari & Nominal Harian jika tersedia (indeks 32, 33, 34)
+                        tgl_berangkat_cetak_str = pjb_match[32] if len(pjb_match) > 32 and pjb_match[32] else tgl_pjb_cetak.strftime("%d/%m/%Y")
+                        
+                        try: lama_hari_cetak = int(pjb_match[33]) if len(pjb_match) > 33 and pjb_match[33] else 1
+                        except: lama_hari_cetak = 1
+                            
+                        try: nom_um_harian_cetak = int(pjb_match[34]) if len(pjb_match) > 34 and pjb_match[34] else nom_pjb_cetak
+                        except: nom_um_harian_cetak = nom_pjb_cetak
+                        
+                        tgl_berangkat_cetak_date = parse_date(tgl_berangkat_cetak_str)
+                        tgl_kembali_cetak_date = tgl_berangkat_cetak_date + timedelta(days=lama_hari_cetak - 1)
                         
                         url_um1 = pjb_match[28] if len(pjb_match) > 28 else ""
                         url_um2 = pjb_match[29] if len(pjb_match) > 29 else ""
@@ -1807,7 +1851,7 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                         with c_p2:
                             st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
                             if st.button("🖨️ Tarik & Generate PDF", type="primary", use_container_width=True):
-                                # GENERATOR HTML PDF IDENTIK
+                                
                                 bulan_romawi = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"]
                                 romawi = bulan_romawi[tgl_pjb_cetak.month] if 1 <= tgl_pjb_cetak.month <= 12 else "VIII"
                                 
@@ -1860,9 +1904,9 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                                                 <tr><td width="150">No Ticket</td><td width="10">:</td><td>{pilih_tk_cetak}</td></tr>
                                                 <tr><td>Tujuan</td><td>:</td><td>{site_cetak}</td></tr>
                                                 <tr><td>Estimasi Jarak</td><td>:</td><td>{jarak_cetak}</td></tr>
-                                                <tr><td>Lama tugas dinas</td><td>:</td><td>1 Hari</td></tr>
-                                                <tr><td>Tgl. Berangkat</td><td>:</td><td>{tgl_pjb_cetak.strftime("%d/%m/%Y")}</td></tr>
-                                                <tr><td>Tgl. Kembali</td><td>:</td><td>{tgl_pjb_cetak.strftime("%d/%m/%Y")}</td></tr>
+                                                <tr><td>Lama tugas dinas</td><td>:</td><td>{lama_hari_cetak} Hari</td></tr>
+                                                <tr><td>Tgl. Berangkat</td><td>:</td><td>{tgl_berangkat_cetak_date.strftime("%d/%m/%Y")}</td></tr>
+                                                <tr><td>Tgl. Kembali</td><td>:</td><td>{tgl_kembali_cetak_date.strftime("%d/%m/%Y")}</td></tr>
                                                 <tr><td>Keperluan</td><td>:</td><td>{kep_cetak}</td></tr>
                                             </table>
                                             <p>Demikianlah Surat Penugasan ini dibuat agar dapat dilaksanakan dengan sebaik-baiknya dan melaporkan hasilnya setelah selesai pelaksanaan tugas.</p>
@@ -1891,12 +1935,12 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                                             <br>
                                             <table class="tbl-data">
                                                 <tr><th>No.</th><th>Tujuan Tugas</th><th>Berangkat</th><th>Kembali</th><th>Uraian Penugasan</th></tr>
-                                                <tr><td>1</td><td>{site_cetak}</td><td>{tgl_pjb_cetak.strftime("%d/%m/%Y")}</td><td>{tgl_pjb_cetak.strftime("%d/%m/%Y")}</td><td>{desc_cetak}</td></tr>
+                                                <tr><td>1</td><td>{site_cetak}</td><td>{tgl_berangkat_cetak_date.strftime("%d/%m/%Y")}</td><td>{tgl_kembali_cetak_date.strftime("%d/%m/%Y")}</td><td>{desc_cetak}</td></tr>
                                             </table>
                                             <p>Harap dilaksanakan dan segera memberikan laporan perjalanan dinas setelah kembali.</p>
                                             <table class="tbl-uang">
                                                 <tr style="background: #f0f0f0;"><th colspan="3">Bantuan Perjalanan Dinas</th><th colspan="2">Perhitungan</th><th>Jumlah</th></tr>
-                                                <tr><td colspan="3">Uang Makan ({nama_petugas_cetak})</td><td align="center">1 Hari x Rp. {nom_pjb_cetak:,.0f}</td><td width="30" style="border-right: none;">Rp.</td><td align="right" style="border-left: none;">{nom_pjb_cetak:,.0f}</td></tr>
+                                                <tr><td colspan="3">Uang Makan ({nama_petugas_cetak})</td><td align="center">{lama_hari_cetak} Hari x Rp. {nom_um_harian_cetak:,.0f}</td><td width="30" style="border-right: none;">Rp.</td><td align="right" style="border-left: none;">{nom_pjb_cetak:,.0f}</td></tr>
                                                 <tr><td colspan="3">Bantuan Penginapan</td><td align="center">0 Malam x Rp. 0</td><td width="30" style="border-right: none;">Rp.</td><td align="right" style="border-left: none;">0</td></tr>
                                                 <tr><th colspan="5" align="right">Jumlah Total</th><th align="right">Rp. {nom_pjb_cetak:,.0f}</th></tr>
                                             </table>
@@ -2035,7 +2079,6 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
                         nom_req = clean_nominal(r[9])
                         
                         if tk not in pjb_dict:
-                            # Cek Gantung > 3 Hari
                             aging = (today_date - req_date).days
                             if aging > 3:
                                 list_gantung.append({
@@ -2046,7 +2089,6 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
                                     "Nominal Request": nom_req
                                 })
                         else:
-                            # Cek Sisa Dana (Kurang PJB)
                             nom_pjb = pjb_dict[tk]
                             sisa = nom_req - nom_pjb
                             if sisa > 0:
