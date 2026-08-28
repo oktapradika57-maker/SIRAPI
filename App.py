@@ -7,6 +7,7 @@ import cloudinary.uploader
 import requests
 import math
 import os
+import tempfile
 from google.oauth2.service_account import Credentials
 from datetime import datetime, timedelta
 import time
@@ -91,6 +92,7 @@ SHEET_PJB = "Form PJB"
 SHEET_UM = "Data UM"
 SHEET_DISTRIBUSI = "Distribusi UM"
 SHEET_APP = "Approval BBM"
+SHEET_TIKET_PM = "Tiket PM"
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 MASTER_DATA = {
@@ -181,12 +183,24 @@ def get_credentials():
 @st.cache_data(ttl=600)
 def fetch_spreadsheet_data(spreadsheet_id):
     client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
-    ws_names = [SHEET_REQUEST, SHEET_PJB, SHEET_UM, SHEET_DISTRIBUSI, SHEET_APP, "Rekap PJB"]
+    ws_names = [SHEET_REQUEST, SHEET_PJB, SHEET_UM, SHEET_DISTRIBUSI, SHEET_APP, "Rekap PJB", SHEET_TIKET_PM]
     data = {}
     for name in ws_names:
         try: data[name] = client.worksheet(name).get_all_values()
         except: data[name] = []
     return data
+
+def update_pm_ticket_status(spreadsheet_id, tickets_to_update, new_status):
+    try:
+        client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
+        ws = client.worksheet(SHEET_TIKET_PM)
+        rows = ws.get_all_values()
+        for i, r in enumerate(rows):
+            if i == 0: continue
+            if len(r) > 3 and r[3] in tickets_to_update:
+                ws.update_cell(i + 1, 6, new_status)
+        fetch_spreadsheet_data.clear()
+    except Exception: pass
 
 @st.cache_data(ttl=600)
 def load_excel_data():
@@ -239,9 +253,14 @@ def get_user_tickets_status(nama, req_rows, pjb_rows, app_rows):
             tk_raw = r[3].strip().upper()
             if tk_raw != "": req_tickets[tk_raw] = r[1]
                 
-    pjb_tickets = {r[21].strip().upper() for r in pjb_rows[1:] if len(r) > 21 and r[4].strip().upper() == nama.strip().upper() and r[21].strip() != ""}
+    pjb_tickets_all_set = set()
+    for r in pjb_rows[1:]:
+        if len(r) > 21 and r[4].strip().upper() == nama.strip().upper() and r[21].strip() != "":
+            # Index 36 is the new "Specific PM Tickets" array, Index 21 is Request ID fallback
+            tk_str = r[36].strip() if (len(r) > 36 and r[36].strip()) else r[21].strip()
+            pjb_tickets_all_set.update([t.strip().upper() for t in tk_str.split(",")])
+            
     pjb_app_status = {}
-    
     for r in app_rows[1:]:
         if len(r) > 5 and r[3] == "Verifikasi PJB":
             tiket_app = r[2].strip().upper()
@@ -250,25 +269,29 @@ def get_user_tickets_status(nama, req_rows, pjb_rows, app_rows):
     outstanding_all, outstanding_lock, aging_august, history = [], [], [], []
     today = datetime.now().date()
     
-    for tkt, tgl in req_tickets.items():
-        if tkt not in pjb_tickets:
-            outstanding_all.append(tkt)
+    for req_tk_raw, tgl in req_tickets.items():
+        req_tk_list = [t.strip() for t in req_tk_raw.split(",") if t.strip()]
+        req_set = set(req_tk_list)
+        
+        # Jika belum semua tiket dalam request ini di-PJB-kan
+        if not req_set.issubset(pjb_tickets_all_set):
+            outstanding_all.append(req_tk_raw)
             req_date = parse_date(tgl)
-            if req_date >= CUTOFF_DATE: outstanding_lock.append(tkt)
+            if req_date >= CUTOFF_DATE: outstanding_lock.append(req_tk_raw)
             aging_days = (today - req_date).days
             if req_date.month == 8 and aging_days > 3:
-                aging_august.append(tkt)
-                history.append({"Tiket": tkt, "Tanggal": tgl, "Status": f"🚨 Telat {aging_days} Hari"})
-            else: history.append({"Tiket": tkt, "Tanggal": tgl, "Status": "🔴 Menunggu PJB (Belum Input)"})
+                aging_august.append(req_tk_raw)
+                history.append({"Tiket": req_tk_raw, "Tanggal": tgl, "Status": f"🚨 Telat {aging_days} Hari"})
+            else: history.append({"Tiket": req_tk_raw, "Tanggal": tgl, "Status": "🔴 Menunggu PJB (Belum Selesai)"})
         else:
-            app_data = pjb_app_status.get(tkt, {"status": "APPROVED", "catatan": ""})
+            app_data = pjb_app_status.get(req_tk_raw, {"status": "APPROVED", "catatan": ""})
             if app_data["status"] == "PENDING":
-                outstanding_all.append(tkt); outstanding_lock.append(tkt)
-                history.append({"Tiket": tkt, "Tanggal": tgl, "Status": "⏳ PJB Menunggu Verifikasi Admin"})
+                outstanding_all.append(req_tk_raw); outstanding_lock.append(req_tk_raw)
+                history.append({"Tiket": req_tk_raw, "Tanggal": tgl, "Status": "⏳ PJB Menunggu Verifikasi Admin"})
             elif app_data["status"] == "REJECTED":
-                outstanding_all.append(tkt); outstanding_lock.append(tkt)
-                history.append({"Tiket": tkt, "Tanggal": tgl, "Status": f"❌ PJB DITOLAK: {app_data['catatan']}"})
-            else: history.append({"Tiket": tkt, "Tanggal": tgl, "Status": "🟢 PJB Selesai & Approved"})
+                outstanding_all.append(req_tk_raw); outstanding_lock.append(req_tk_raw)
+                history.append({"Tiket": req_tk_raw, "Tanggal": tgl, "Status": f"❌ PJB DITOLAK: {app_data['catatan']}"})
+            else: history.append({"Tiket": req_tk_raw, "Tanggal": tgl, "Status": "🟢 PJB Selesai & Approved"})
             
     return outstanding_all, outstanding_lock, aging_august, sorted(history, key=lambda x: x["Status"], reverse=True)
 
@@ -366,8 +389,8 @@ if st.session_state.page == "🏠 Hub Menu Utama":
                     
                     if hist_tkt:
                         st.dataframe(pd.DataFrame(hist_tkt), hide_index=True, use_container_width=True)
-                        if aging_august: st.warning(f"🔔 Ada {len(aging_august)} tiket tertunda >3 Hari. Tolong di-PJB!")
-                        if out_all: st.error(f"⚠️ {len(out_all)} Tiket memblokir status Anda (Belum PJB / Pending Verifikasi).")
+                        if aging_august: st.warning(f"🔔 Ada {len(aging_august)} request tertunda >3 Hari. Tolong segera di-PJB!")
+                        if out_all: st.error(f"⚠️ {len(out_all)} Request memblokir status Anda (Belum PJB / Pending Verifikasi).")
                         else: st.success("✅ Seluruh tiket aman dan Approved!")
                     else: st.info("Tidak ada data / belum pernah request.")
 
@@ -387,6 +410,10 @@ if st.session_state.page == "🏠 Hub Menu Utama":
             st.rerun()
             
         st.markdown("<div class='btn-admin'>", unsafe_allow_html=True)
+        
+        # New Admin Buttons including PM Tickets
+        if st.button("🎫 MASTER TIKET PM (Input Data PM Bulanan)", use_container_width=True): st.session_state.page = "🎫 Master Tiket PM"; st.rerun()
+        
         c_a1, c_a2 = st.columns(2)
         with c_a1:
             if st.button("🛡️ APPROVAL CENTER\n(Validasi PJB)", use_container_width=True): st.session_state.page = "🛡️ Approval Center"; st.rerun()
@@ -397,7 +424,60 @@ if st.session_state.page == "🏠 Hub Menu Utama":
             if st.button("🖨️ REPORT & AUTO PJB\n(Export Laporan)", use_container_width=True): st.session_state.page = "🖨️ Auto PJB Report"; st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown("<div style='text-align: center; color: #94a3b8; font-size: 0.8rem; margin-top:50px;'>Created by Okta Pradika<br>KUT SYSTEM - v5.3 Enterprise Mobile Edition</div>", unsafe_allow_html=True)
+    st.markdown("<div style='text-align: center; color: #94a3b8; font-size: 0.8rem; margin-top:50px;'>Created by Okta Pradika<br>KUT SYSTEM - v6.0 Enterprise Mobile Edition</div>", unsafe_allow_html=True)
+
+
+# ==========================================
+# PAGE ADMIN: MASTER TIKET PM
+# ==========================================
+elif st.session_state.page == "🎫 Master Tiket PM":
+    st.markdown("<div class='header-card'><h2>🎫 MASTER DATA TIKET PM</h2><p>Push/Upload Daftar Tiket Preventative Maintenance Bulanan ke Database</p></div>", unsafe_allow_html=True)
+    
+    nop_pm = st.selectbox("📂 Pilih Database Regional (NOP):", ["-- Pilih NOP --"] + list(MASTER_DATA.keys()))
+    if nop_pm != "-- Pilih NOP --":
+        target_ss = MASTER_DATA[nop_pm]["spreadsheet_id"]
+        data_all = fetch_spreadsheet_data(target_ss)
+        pm_r = data_all.get(SHEET_TIKET_PM, [])
+        
+        c_pm1, c_pm2 = st.columns([1, 2])
+        with c_pm1:
+            st.markdown("### 📥 Input Tiket Baru")
+            with st.form("form_tiket_pm"):
+                bulan_pm = st.selectbox("Bulan / Periode", [f"{m} {datetime.now().year}" for m in ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"]])
+                site_pm = st.selectbox("Cluster / Site Target", MASTER_DATA[nop_pm]["clusters"])
+                raw_tickets = st.text_area("Masukkan Nomor Tiket (Pisahkan dengan koma atau baris baru)", height=150)
+                
+                if st.form_submit_button("💾 Push ke Database (AVAILABLE)"):
+                    if not raw_tickets.strip(): st.error("Daftar tiket kosong!")
+                    else:
+                        # Parsing commas and newlines
+                        parsed = [t.strip().upper() for t in re.split(r'[,\n]+', raw_tickets) if t.strip()]
+                        if parsed:
+                            with st.spinner("Memasukkan tiket ke server..."):
+                                client = gspread.authorize(get_credentials()).open_by_key(target_ss)
+                                ws = client.worksheet(SHEET_TIKET_PM)
+                                
+                                new_rows = []
+                                ts = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+                                for t in parsed:
+                                    new_rows.append([ts, nop_pm, bulan_pm, t, site_pm, "AVAILABLE"])
+                                
+                                ws.append_rows(new_rows)
+                                fetch_spreadsheet_data.clear()
+                                st.success(f"✅ Berhasil menambahkan {len(parsed)} Tiket PM Baru ke sistem!")
+                                time.sleep(1.5); st.rerun()
+        
+        with c_pm2:
+            st.markdown("### 📋 Daftar Tiket PM (Tersedia / AVAILABLE)")
+            avail_pm = []
+            for r in pm_r[1:]:
+                if len(r) >= 6 and r[1] == nop_pm and r[5] == "AVAILABLE":
+                    avail_pm.append({"Periode": r[2], "No Tiket": r[3], "Site/Cluster": r[4], "Status": r[5]})
+            
+            if avail_pm:
+                st.dataframe(pd.DataFrame(avail_pm), hide_index=True, use_container_width=True)
+            else:
+                st.info("Tidak ada tiket PM yang tersedia di NOP ini. Silakan input di form sebelah kiri.")
 
 
 # ==========================================
@@ -443,7 +523,7 @@ elif st.session_state.page == "📝 Form Request Dana":
             
             out_all, out_lock, aging_august, hist_cek = get_user_tickets_status(nama, req_r, pjb_r, app_r)
             if aging_august:
-                st.warning(f"🔔 PENGINGAT: Sdr/i {nama}, Anda memiliki **{len(aging_august)}** tiket bulan Agustus yang sudah lewat >3 Hari belum di-PJB. Jadikan ini prioritas!")
+                st.warning(f"🔔 PENGINGAT: Sdr/i {nama}, Anda memiliki **{len(aging_august)}** pengajuan bulan Agustus yang sudah lewat >3 Hari belum di-PJB. Jadikan ini prioritas!")
             
             for hc in hist_cek:
                 if "DITOLAK" in hc["Status"]: st.error(f"⚠️ {hc['Tiket']} {hc['Status']} -> HARAP REVISI PJB!")
@@ -459,26 +539,6 @@ elif st.session_state.page == "📝 Form Request Dana":
                             
             is_locked_user = len(out_lock) > 0
             
-            col_t1, col_t2 = st.columns([3, 1])
-            with col_t1: tiket = st.text_input("Nomor Tiket SWFM (WAJIB)")
-            with col_t2: 
-                st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
-                if st.button("🔍 Tarik (Revisi)", use_container_width=True):
-                    found = False
-                    for r in reversed(req_r[1:]):
-                        if len(r)>16 and str(r[3]).strip().upper() == tiket.strip().upper():
-                            st.session_state.rev_req = {
-                                "kebutuhan": clean_nominal(r[9]),
-                                "desc": r[11],
-                                "km_awal": clean_indicator(r[12]),
-                                "plat": r[16]
-                            }
-                            found = True
-                            break
-                    if found: st.success("Data Ditemukan! Nilai terisi otomatis."); time.sleep(1); st.rerun()
-                    else: st.error("Tiket Tidak Ditemukan!")
-            
-            is_duplicate = (tiket.strip().upper() in all_requested_tickets) and tiket.strip() != ""
             role = st.selectbox("Role Jabatan", ["-- Pilih Role --", "PM", "TE", "MBP", "CME"])
             
             if nop == "Palangkaraya" and len(site_list) > 0:
@@ -486,9 +546,46 @@ elif st.session_state.page == "📝 Form Request Dana":
                 if site_id != "-- Pilih Site ID --" and site_id in site_dict:
                     auto_lat_tujuan, auto_long_tujuan = str(site_dict[site_id].get("Latitude Tujuan", "0")), str(site_dict[site_id].get("Longtitude Tujuan", "0"))
             else: site_id = st.text_input("ID Site / Lokasi")
-            
+
         with col2:
             keperluan = st.selectbox("Klasifikasi Keperluan Dana", LIST_KEPERLUAN)
+            
+            # --- TIKET INPUT LOGIC BASED ON KEPERLUAN ---
+            pm_selected_list = []
+            if keperluan == "PM":
+                st.markdown("<div style='background-color:#F0F9FF; padding:15px; border-radius:10px; border-left: 5px solid #0EA5E9; margin-bottom: 15px;'><b>🎫 Fitur Multi-Select Tiket PM</b><br><small>Silakan pilih sebanyak mungkin tiket yang akan dikerjakan dalam 1x pencairan dana ini.</small></div>", unsafe_allow_html=True)
+                pm_r = data_all.get(SHEET_TIKET_PM, [])
+                avail_pm = [r[3] for r in pm_r[1:] if len(r) >= 6 and r[1] == nop and r[5] == "AVAILABLE"]
+                
+                pm_selected_list = st.multiselect("Pilih Tiket PM yang akan digarap (Multi-Select):", avail_pm)
+                tiket_string = ", ".join(pm_selected_list)
+                
+                if not tiket_string:
+                    tiket = st.text_input("Atau ketik Manual Tiket PM (Untuk Revisi / Jika tidak ada di dropdown):")
+                else:
+                    tiket = st.text_input("Tiket yang akan diajukan (Auto-Fill):", value=tiket_string, disabled=True)
+            else:
+                col_t1, col_t2 = st.columns([3, 1])
+                with col_t1: tiket = st.text_input("Nomor Tiket SWFM (WAJIB)")
+                with col_t2: 
+                    st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+                    if st.button("🔍 Tarik (Revisi)", use_container_width=True):
+                        found = False
+                        for r in reversed(req_r[1:]):
+                            if len(r)>16 and str(r[3]).strip().upper() == tiket.strip().upper():
+                                st.session_state.rev_req = {
+                                    "kebutuhan": clean_nominal(r[9]),
+                                    "desc": r[11],
+                                    "km_awal": clean_indicator(r[12]),
+                                    "plat": r[16]
+                                }
+                                found = True
+                                break
+                        if found: st.success("Data Ditemukan! Nilai terisi otomatis."); time.sleep(1); st.rerun()
+                        else: st.error("Tiket Tidak Ditemukan!")
+            
+            is_duplicate = (tiket.strip().upper() in all_requested_tickets) and tiket.strip() != ""
+            
             jns_kendaraan = st.selectbox("Jenis Kendaraan / Peralatan", ["", "Mobil", "Motor", "Genset", "Lainnya"])
             
             tim_bareng = []
@@ -700,6 +797,8 @@ elif st.session_state.page == "📝 Form Request Dana":
                             data_req = [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), tanggal.strftime("%d/%m/%Y"), nop, tiket, cluster, nama, role, site_id, keperluan, kebutuhan, final_bbm, deskripsi_final, str(km_awal), jarak_final_text, lat_berangkat, long_berangkat, plat_clean, rek_penerima, no_rek, nominal_tf, upload_foto(foto_km), upload_foto(foto_evidance), lat_tujuan, long_tujuan]
                             append_data(SHEET_REQUEST, data_req, target_ss)
                             if plat_choice_is_manual and plat_clean not in list_nopol: save_new_nopol_to_csv(plat_clean)
+                            if pm_selected_list: update_pm_ticket_status(target_ss, pm_selected_list, "REQUESTED")
+                            
                             st.session_state.rev_req = {}; st.balloons(); st.success("🎉 Berhasil Bypass!"); time.sleep(2); st.session_state.page = "🏠 Hub Menu Utama"; st.rerun()
         else:
             if st.button("📤 Kirim Form Request Dana / Revisi", type="primary", use_container_width=True):
@@ -718,6 +817,10 @@ elif st.session_state.page == "📝 Form Request Dana":
                         
                         if plat_choice_is_manual and plat_clean not in list_nopol:
                             save_new_nopol_to_csv(plat_clean)
+                            
+                        # Update status PM master to REQUESTED
+                        if pm_selected_list:
+                            update_pm_ticket_status(target_ss, pm_selected_list, "REQUESTED")
                             
                         st.session_state.rev_req = {}; st.balloons(); st.success("🎉 Data Anda Berhasil Dikirim / Direvisi!"); time.sleep(2.5); st.session_state.page = "🏠 Hub Menu Utama"; st.rerun()
 
@@ -738,7 +841,12 @@ elif st.session_state.page == "✅ Form PJB Operasional":
         # Tarik Database NIK
         site_dict, site_list, tim_dict, list_nopol_csv, nik_dict = load_excel_data()
         
-        pjb_tickets_all = {str(r[21]).strip().upper() for r in pjb_r[1:] if len(r) > 21}
+        pjb_tickets_all_set = set()
+        for r in pjb_r[1:]:
+            if len(r) > 21 and r[21].strip() != "":
+                # Fallback to index 21 if 36 is empty
+                tk_str = r[36].strip() if (len(r) > 36 and r[36].strip()) else r[21].strip()
+                pjb_tickets_all_set.update([t.strip().upper() for t in tk_str.split(",")])
         
         status_verif_dict = {}
         catatan_verif_dict = {}
@@ -755,7 +863,7 @@ elif st.session_state.page == "✅ Form PJB Operasional":
         
         if nama_pjb != "-- Pilih Nama --":
             out_all, out_lock, aging_august, hist_cek = get_user_tickets_status(nama_pjb, req_r, pjb_r, app_r)
-            if aging_august: st.warning(f"🔔 NOTIFIKASI: Anda memiliki **{len(aging_august)}** tiket bulan Agustus yang tertunda lebih dari 3 hari. Segera diselesaikan!")
+            if aging_august: st.warning(f"🔔 NOTIFIKASI: Anda memiliki **{len(aging_august)}** request bulan Agustus yang tertunda lebih dari 3 hari. Segera diselesaikan!")
             for hc in hist_cek:
                 if "DITOLAK" in hc["Status"]: st.error(f"⚠️ HARAP REVISI PJB: {hc['Tiket']} {hc['Status']}")
                 elif "Review Admin" in hc["Status"]: st.warning(f"⏳ PENDING VERIFIKASI: {hc['Tiket']}")
@@ -765,27 +873,39 @@ elif st.session_state.page == "✅ Form PJB Operasional":
         pending_list, pending_options = [], []
         for r in req_r[1:]:
             if len(r)>5 and str(r[3]).strip() != "":
-                tk = str(r[3]).strip().upper()
+                req_tk_raw = str(r[3]).strip().upper()
+                req_tk_list = [t.strip() for t in req_tk_raw.split(",") if t.strip()]
                 nm = str(r[5]).strip().upper()
                 
+                req_set = set(req_tk_list)
                 is_ready_to_pjb = False
-                if tk not in pjb_tickets_all: is_ready_to_pjb = True
-                elif status_verif_dict.get(tk) == "REJECTED": is_ready_to_pjb = True 
+                
+                # Check if all tickets in this request bundle are in PJB
+                if not req_set.issubset(pjb_tickets_all_set):
+                    is_ready_to_pjb = True
+                elif status_verif_dict.get(req_tk_raw) == "REJECTED":
+                    is_ready_to_pjb = True 
                     
                 if is_ready_to_pjb:
-                    item = {"Tanggal": r[1], "Nama": r[5], "No Tiket": tk, "Kategori": r[10] if len(r)>10 else "", "Keperluan": r[8] if len(r)>8 else ""}
+                    item = {"Tanggal": r[1], "Nama": r[5], "No Request": req_tk_raw, "Kategori": r[10] if len(r)>10 else "", "Keperluan": r[8] if len(r)>8 else ""}
                     if pass_nominal == "B0924649": item["Nominal Request"] = f"Rp {clean_nominal(r[9]):,.0f}" if len(r)>9 else "Rp 0"
+                    
+                    # Also calculate remaining to show in list if PM
+                    if "PM" in (r[8] if len(r)>8 else ""):
+                        rem = [t for t in req_tk_list if t not in pjb_tickets_all_set]
+                        item["Sisa Tiket PM"] = ", ".join(rem) if rem else "Semua (Ditolak)"
+                    
                     if nama_pjb != "-- Pilih Nama --":
-                        if nm == nama_pjb.strip().upper(): pending_list.append(item); pending_options.append(tk)
+                        if nm == nama_pjb.strip().upper(): pending_list.append(item); pending_options.append(req_tk_raw)
                     else: pending_list.append(item)
         
         if pending_list: st.dataframe(pd.DataFrame(pending_list), hide_index=True, use_container_width=True)
-        else: st.success("💎 Seluruh tiket baru clear! (Jika ingin Revisi, ketik manual tiket di bawah)")
+        else: st.success("💎 Seluruh request dana sudah di-PJB! (Jika ingin Revisi, ketik manual tiket di bawah)")
         
         col_s2, col_s3 = st.columns([3, 1])
         with col_s2: 
-            pilihan_tiket = st.selectbox("🎫 Pilih Nomor Tiket Pending:", ["-- Pilih Tiket --"] + pending_options + ["-- Ketik Manual --"]) if pending_options else "-- Ketik Manual --"
-            cari_tiket = st.text_input("Ketik Manual (Termasuk Tiket Lama untuk Revisi):") if pilihan_tiket == "-- Ketik Manual --" else ("" if pilihan_tiket == "-- Pilih Tiket --" else pilihan_tiket)
+            pilihan_tiket = st.selectbox("🎫 Pilih Data Request Dana (Pending):", ["-- Pilih Tiket --"] + pending_options + ["-- Ketik Manual --"]) if pending_options else "-- Ketik Manual --"
+            cari_tiket = st.text_input("Ketik Manual (Termasuk Request Lama untuk Revisi):") if pilihan_tiket == "-- Ketik Manual --" else ("" if pilihan_tiket == "-- Pilih Tiket --" else pilihan_tiket)
         
         valid_cari_tiket = str(cari_tiket).strip().upper()
 
@@ -797,10 +917,21 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                 
                 for r in reversed(req_r[1:]):
                     if len(r) > 3 and str(r[3]).strip().upper() == valid_cari_tiket:
-                        ditemukan_req = {"NOP": r[2], "Cluster": r[4], "Nama": r[5], "Role": r[6], "Site": r[7], "Keperluan": r[8], "BBM": r[10] if len(r)>10 else "", "Desc": r[11] if len(r)>11 else "", "KMAwal": clean_indicator(r[12]) if len(r)>12 else 0.0, "NominalReq": clean_nominal(r[9]) if len(r)>9 else 0, "Jarak": r[13] if len(r)>13 else "", "Plat": r[16] if len(r)>16 else ""}
+                        ditemukan_req = {
+                            "NOP": r[2], "Cluster": r[4], "Nama": r[5], "Role": r[6], "Site": r[7], "Keperluan": r[8], 
+                            "BBM": r[10] if len(r)>10 else "", "Desc": r[11] if len(r)>11 else "", 
+                            "KMAwal": clean_indicator(r[12]) if len(r)>12 else 0.0, 
+                            "NominalReq": clean_nominal(r[9]) if len(r)>9 else 0, 
+                            "Jarak": r[13] if len(r)>13 else "", "Plat": r[16] if len(r)>16 else "",
+                            "LatBerangkat": r[14] if len(r)>14 else "0",
+                            "LongBerangkat": r[15] if len(r)>15 else "0",
+                            "LatTujuan": r[22] if len(r)>22 else "0",
+                            "LongTujuan": r[23] if len(r)>23 else "0",
+                        }
                         break
                         
                 for r in reversed(pjb_r[1:]):
+                    # We match via index 21 (Request Ticket string)
                     if len(r) > 21 and str(r[21]).strip().upper() == valid_cari_tiket:
                         ditemukan_pjb = r
                         break
@@ -816,11 +947,26 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                     st.success("🎉 Data Ditarik (Nilai lama disalin jika ini revisi)!")
                 else:
                     st.session_state.pjb_data = None
-                    st.error("❌ Tiket Tidak ditemukan di Database Request.")
+                    st.error("❌ Data Pengajuan (Request) Tidak ditemukan di Database.")
 
         if st.session_state.get("pjb_data"):
             d = st.session_state.pjb_data
             
+            # --- PJB PARSIAL LOGIC UNTUK PM ---
+            is_pm = ("PM" in str(d["Keperluan"]).upper())
+            specific_pm_tickets = valid_cari_tiket
+            
+            if is_pm:
+                st.markdown("<div style='background-color:#F0F9FF; padding:15px; border-radius:10px; border-left: 5px solid #0EA5E9; margin-bottom: 15px;'><b>🎫 PJB Parsial (Khusus PM)</b><br><small>Anda mengajukan multi-tiket pada request ini. Pilih tiket spesifik mana saja yang selesai dan di-PJB-kan saat ini.</small></div>", unsafe_allow_html=True)
+                
+                req_tk_list = [t.strip() for t in valid_cari_tiket.split(",") if t.strip()]
+                remaining = [t for t in req_tk_list if t not in pjb_tickets_all_set]
+                
+                if not remaining: remaining = req_tk_list # Fallback kalau semua sudah PJB tapi di-revisi
+                
+                selected_pm = st.multiselect("Pilih Tiket PM yang ingin dilaporkan/diselesaikan saat ini:", remaining, default=remaining)
+                specific_pm_tickets = ", ".join(selected_pm)
+
             # --- MENU PEMISAH JENIS PJB ---
             st.markdown("<div class='section-title'>⚙️ Kategori Penugasan & Pelaporan</div>", unsafe_allow_html=True)
             jns_pjb = st.radio("PILIH KATEGORI PELAPORAN PJB:", 
@@ -849,7 +995,7 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                     st.text_input("Keperluan", d["Keperluan"], disabled=True)
                     
                     if "Operational" in jns_pjb:
-                        nominal_pjb = st.number_input("Nominal PJB Terpakai", value=int(d["NominalReq"]), disabled=True)
+                        nominal_pjb = st.number_input("Nominal PJB Terpakai", value=int(d["NominalReq"]))
                     else:
                         st.info("Nominal PJB akan disesuaikan dengan Kalkulator Uang Makan di bawah.")
 
@@ -957,7 +1103,7 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                     st.warning("⏳ PJB tiket ini sedang dalam proses review Admin. Anda tetap bisa merevisinya kembali (Submit Ulang), dan statusnya akan menimpa / mengantri sebagai pengajuan terbaru.")
                 
                 if is_double_input:
-                    st.info(f"💡 **INFO REVISI:** PJB Tiket ini sudah pernah dilaporkan. Menyimpan form ini akan merekamnya sebagai **REVISI PJB** dan data lama tetap tersimpan (Aman).")
+                    st.info(f"💡 **INFO REVISI:** PJB (atau salah satu tiket di request ini) sudah pernah dilaporkan. Menyimpan form ini akan merekamnya sebagai **REVISI PJB** dan data lama tetap tersimpan (Aman).")
                     if status_v == "REJECTED":
                         st.error(f"❌ PJB Anda sebelumnya DITOLAK Admin! Alasan: **{catatan_v}**")
                         
@@ -975,7 +1121,7 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                             st.error("❌ PENGIRIMAN DITOLAK: Anda WAJIB mengunggah keempat Foto Eviden Aktivitas / Uang Makan secara lengkap!")
                             st.stop()
                             
-                    with st.spinner("Mengupload foto dan memproses PJB..."):
+                    with st.spinner("Mengupload foto dan men-generate laporan ke sistem..."):
                         if "Akomodasi" in jns_pjb:
                             nominal_pjb = total_um_calc 
                             
@@ -996,18 +1142,14 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                         lama_hari_str = str(lama_hari) if "Akomodasi" in jns_pjb else ""
                         nom_um_harian_str = str(nom_um_harian) if "Akomodasi" in jns_pjb else ""
                         
-                        # Data dimasukkan pada Index Array diperluas ke 35 Kolom untuk menampung Data Akomodasi
-                        data_pjb = [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), tgl_pjb.strftime("%d/%m/%Y"), d["NOP"], d["Cluster"], d["Nama"], d["Role"], d["Site"], d["Keperluan"], d["BBM"], d["Desc"], str(km_akhir), nominal_pjb, d["Plat"], url_isi, url_notabbm, url_km, url_mat, url_notamat, url_inap, url_kerja, tot_nilai_nota, valid_cari_tiket, tot_liter, harga_satuan, str(round(total_km_tempuh, 2)), "", "", upload_foto(f_transfer), url_um1, url_um2, url_um3, url_um4, tgl_berangkat_str, lama_hari_str, nom_um_harian_str]
+                        pdf_link_cloud = ""
+                        b64_html = ""
                         
-                        append_data(SHEET_PJB, [(r+[""]*35)[:35] for r in [data_pjb]][0], target_ss)
-                        append_data(SHEET_APP, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), d["Nama"], valid_cari_tiket, "Verifikasi PJB", nominal_pjb, "PENDING", "-"], target_ss)
-                        
-                        # JIKA AKOMODASI -> GENERATE PDF SURAT TUGAS
+                        # JIKA AKOMODASI -> GENERATE PDF & UPLOAD CLOUD
                         if "Akomodasi" in jns_pjb:
                             bulan_romawi = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"]
                             romawi = bulan_romawi[tgl_pjb.month] if 1 <= tgl_pjb.month <= 12 else "VIII"
                             
-                            # Tarik file lokal menjadi Base64 agar tidak diblokir browser saat Print PDF
                             logo_base64 = get_local_img_base64("koperasi-jasa-konstruksi-tower-event-organizer-network-monitoring-telekomunikasi-kisel-group-logo-kut.webp")
 
                             html_um = f"""
@@ -1016,8 +1158,11 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                             <head>
                                 <meta charset="UTF-8">
                                 <title>Surat Tugas & PJB - {valid_cari_tiket}</title>
+                                <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+                                <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
                                 <style>
                                     body {{ font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.5; margin: 0; background: #525659; }}
+                                    @page {{ size: A4; margin: 0; }}
                                     .page {{ 
                                         width: 210mm; min-height: 297mm; background: white; margin: 10mm auto; 
                                         padding: 15mm 20mm; box-sizing: border-box; box-shadow: 0 0 10px rgba(0,0,0,0.5);
@@ -1037,7 +1182,7 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                                     .logo-header img {{ width: 220px; height: auto; object-fit: contain; }}
                                     @media print {{
                                         body {{ background: white; margin: 0; }}
-                                        .page {{ margin: 0; box-shadow: none; width: 100%; height: 100%; padding: 15mm 20mm; }}
+                                        .page {{ margin: 0; box-shadow: none; width: 100%; height: 100%; padding: 15mm 20mm; page-break-after: always; }}
                                     }}
                                 </style>
                             </head>
@@ -1061,7 +1206,7 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                                             <tr><td>1</td><td>{d['Nama']}</td><td>{nik_petugas}</td><td>{d['Role']}</td><td>{d['Site']}</td></tr>
                                         </table>
                                         <table class="tbl-info">
-                                            <tr><td width="150">No Ticket</td><td width="10">:</td><td>{valid_cari_tiket}</td></tr>
+                                            <tr><td width="150">No Ticket</td><td width="10">:</td><td>{specific_pm_tickets}</td></tr>
                                             <tr><td>Tujuan</td><td>:</td><td>{d['Site']}</td></tr>
                                             <tr><td>Estimasi Jarak</td><td>:</td><td>{d.get('Jarak', '-')}</td></tr>
                                             <tr><td>Lama tugas dinas</td><td>:</td><td>{lama_hari} Hari</td></tr>
@@ -1088,7 +1233,7 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                                     </div>
                                 </div>
                                 
-                                <!-- PAGE 2: PENGAJUAN UANG MAKAN -->
+                                <!-- PAGE 2: PENGAJUAN UANG MAKAN & PETA -->
                                 <div class="page">
                                     <div class="logo-header">
                                         <img src="{logo_base64}" alt="Logo KUT">
@@ -1109,9 +1254,13 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                                             <tr><th>No.</th><th>Tujuan Tugas</th><th>Berangkat</th><th>Kembali</th><th>Uraian Penugasan</th></tr>
                                             <tr><td>1</td><td>{d['Site']}</td><td>{tgl_berangkat.strftime("%d/%m/%Y")}</td><td>{tgl_kembali.strftime("%d/%m/%Y")}</td><td>{d.get('Desc', '-')}</td></tr>
                                         </table>
-                                        <p>Harap dilaksanakan dan segera memberikan laporan perjalanan dinas setelah kembali.</p>
                                         
-                                        <table class="tbl-uang">
+                                        <div style="margin-top: 15px; page-break-inside: avoid;">
+                                            <b>Peta Satelit Rute Perjalanan:</b>
+                                            <div id="map" style="height: 250px; width: 100%; border: 1px solid #475569; border-radius: 8px; margin-top: 5px;"></div>
+                                        </div>
+                                        
+                                        <table class="tbl-uang" style="margin-top:15px;">
                                             <tr style="background: #f0f0f0;"><th colspan="3">Bantuan Perjalanan Dinas</th><th colspan="2">Perhitungan</th><th>Jumlah</th></tr>
                                             <tr>
                                                 <td colspan="3">Uang Makan ({d['Nama']})</td>
@@ -1169,21 +1318,65 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                                 </div>
                                 
                                 <script>
-                                    window.onload = function() {{ window.print(); }}
+                                    window.onload = function() {{
+                                        var lat1 = parseFloat("{d.get('LatBerangkat', '0')}");
+                                        var lon1 = parseFloat("{d.get('LongBerangkat', '0')}");
+                                        var lat2 = parseFloat("{d.get('LatTujuan', '0')}");
+                                        var lon2 = parseFloat("{d.get('LongTujuan', '0')}");
+                                        
+                                        if (lat1 !== 0 && lat2 !== 0 && !isNaN(lat1) && !isNaN(lat2)) {{
+                                            var map = L.map('map');
+                                            L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
+                                                attribution: '© OpenStreetMap'
+                                            }}).addTo(map);
+                                            
+                                            var latlngs = [ [lat1, lon1], [lat2, lon2] ];
+                                            var polyline = L.polyline(latlngs, {{color: 'red', weight: 4}}).addTo(map);
+                                            
+                                            L.marker([lat1, lon1]).addTo(map).bindPopup("Berangkat");
+                                            L.marker([lat2, lon2]).addTo(map).bindPopup("Tujuan");
+                                            
+                                            map.fitBounds(polyline.getBounds(), {{padding: [30,30]}});
+                                            
+                                            // Trigger print with slight delay for map rendering
+                                            setTimeout(function(){{ window.print(); }}, 1500);
+                                        }} else {{
+                                            document.getElementById('map').innerHTML = "<div style='text-align:center; padding-top:100px; color:#94a3b8;'>Peta Koordinat Tidak Tersedia</div>";
+                                            setTimeout(function(){{ window.print(); }}, 500);
+                                        }}
+                                    }};
                                 </script>
                             </body>
                             </html>
                             """
                             b64_html = base64.b64encode(html_um.encode("utf-8")).decode()
                             
+                            # Upload file HTML ke Cloudinary sebagai raw link agar masuk Spreadsheet
+                            try:
+                                with tempfile.NamedTemporaryFile(delete=False, suffix=".html") as tmp:
+                                    tmp.write(html_um.encode('utf-8'))
+                                    tmp_path = tmp.name
+                                res_cloud = cloudinary.uploader.upload(tmp_path, resource_type="raw")
+                                pdf_link_cloud = res_cloud.get("secure_url", "")
+                                os.remove(tmp_path)
+                            except Exception: pass
+                            
                             st.session_state.pdf_ready = True
                             st.session_state.pdf_html = b64_html
-                            st.session_state.pdf_filename = f"Surat_PJB_{valid_cari_tiket}.html"
+                            st.session_state.pdf_filename = f"Surat_PJB_{valid_cari_tiket[:10]}.html"
                             
+                        # Data dimasukkan pada Index Array diperluas ke 37 Kolom
+                        # Index 35: Link PDF Surat Tugas Cloud
+                        # Index 36: Tiket PM Spesifik
+                        data_pjb = [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), tgl_pjb.strftime("%d/%m/%Y"), d["NOP"], d["Cluster"], d["Nama"], d["Role"], d["Site"], d["Keperluan"], d["BBM"], d["Desc"], str(km_akhir), nominal_pjb, d["Plat"], url_isi, url_notabbm, url_km, url_mat, url_notamat, url_inap, url_kerja, tot_nilai_nota, valid_cari_tiket, tot_liter, harga_satuan, str(round(total_km_tempuh, 2)), "", "", upload_foto(f_transfer), url_um1, url_um2, url_um3, url_um4, tgl_berangkat_str, lama_hari_str, nom_um_harian_str, pdf_link_cloud, specific_pm_tickets]
+                        
+                        append_data(SHEET_PJB, [(r+[""]*37)[:37] for r in [data_pjb]][0], target_ss)
+                        append_data(SHEET_APP, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), d["Nama"], valid_cari_tiket, "Verifikasi PJB", nominal_pjb, "PENDING", "-"], target_ss)
+                        
+                        if "Akomodasi" in jns_pjb:
                             st.balloons()
                             st.success("🎉 PJB Surat Tugas & UM Berhasil Dikirim untuk Verifikasi Admin!")
                             st.session_state.pjb_data = None
-                        
                         else:
                             st.balloons()
                             st.success("🎉 PJB Operational Umum Berhasil Dikirim untuk Verifikasi Admin!")
@@ -1199,9 +1392,9 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                     <p style="color: #047857;">Sistem telah berhasil menyimpan data PJB Anda ke Database dan mencetak Surat Otomatis dalam format standar perusahaan.</p>
                     <a href="data:text/html;base64,{st.session_state.pdf_html}" download="{st.session_state.pdf_filename}" target="_blank"
                        style="display: inline-block; background-color: #10B981; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 1.1em; margin: 15px 0; transition: transform 0.2s;">
-                       📥 Download & Print Dokumen Resmi (3 Halaman)
+                       📥 Download & Print Dokumen Resmi (Format A4 + Maps)
                     </a>
-                    <p style="font-size: 0.85em; color: #64748b; margin-bottom: 0;">(Dokumen ini berisi Surat Tugas, Pengajuan Uang Makan, dan 4 Lampiran Foto Eviden yang sudah terintegrasi).<br>PDF juga bisa ditarik kapan saja melalui Report Center Admin.</p>
+                    <p style="font-size: 0.85em; color: #64748b; margin-bottom: 0;">(Dokumen ini berisi Surat Tugas, Pengajuan Uang Makan beserta Peta Jarak Tempuh, dan 4 Lampiran Foto).<br>Admin juga bisa mengakses Link PDF ini secara permanen dari dalam Spreadsheet Google.</p>
                 </div>
             """, unsafe_allow_html=True)
             
@@ -1228,7 +1421,7 @@ elif st.session_state.page == "🛡️ Approval Center":
             for idx, r in enumerate(app_r):
                 if len(r) > 5 and str(r[5]).strip() == "PENDING":
                     item = {
-                        "Row Index": idx, "Waktu": str(r[0]), "Nama": str(r[1]), "No Tiket": str(r[2]), 
+                        "Row Index": idx, "Waktu": str(r[0]), "Nama": str(r[1]), "Request Ref / Tiket": str(r[2]), 
                         "Jenis Pengajuan": str(r[3]), "Nominal": f"Rp {clean_nominal(r[4]):,.0f}", 
                         "Status": str(r[5]).strip(), "Keterangan": str(r[6]) if len(r) > 6 else "-"
                     }
@@ -1240,13 +1433,16 @@ elif st.session_state.page == "🛡️ Approval Center":
             st.markdown("### 🔍 Daftar Tunggu Verifikasi PJB")
             if pending_pjb:
                 st.dataframe(pd.DataFrame(pending_pjb).drop(columns=["Row Index"]), hide_index=True, use_container_width=True)
-                target_tiket_pjb = st.selectbox("Pilih Tiket PJB untuk divalidasi:", [p["No Tiket"] for p in pending_pjb], key="sel_pjb")
+                target_tiket_pjb = st.selectbox("Pilih Request/Tiket PJB untuk divalidasi:", [p["Request Ref / Tiket"] for p in pending_pjb], key="sel_pjb")
                 
                 pjb_target = None
                 for r in reversed(pjb_r[1:]):
                     if len(r) > 21 and str(r[21]).strip().upper() == target_tiket_pjb.strip().upper(): pjb_target = r; break
                         
                 if pjb_target:
+                    if len(pjb_target) > 36 and pjb_target[36].strip():
+                        st.info(f"💡 **INFO PJB MULTI-TIKET (PM):** Tiket spesifik yang diselesaikan pada PJB ini adalah: **{pjb_target[36]}**")
+                        
                     st.markdown("<div style='background:#F8FAFC; padding:15px; border-radius:10px; margin-bottom:15px;'><b>Bukti Terlampir:</b></div>", unsafe_allow_html=True)
                     
                     is_akomodasi = False
@@ -1281,7 +1477,7 @@ elif st.session_state.page == "🛡️ Approval Center":
                     if "REJECT" in action_pjb and not remark_pjb.strip():
                         st.error("⚠️ Mohon berikan Alasan / Catatan Penolakan agar tim tahu bagian yang harus direvisi.")
                     else:
-                        target_indices = [p["Row Index"] for p in pending_pjb if p["No Tiket"] == target_tiket_pjb]
+                        target_indices = [p["Row Index"] for p in pending_pjb if p["Request Ref / Tiket"] == target_tiket_pjb]
                         new_status = "APPROVED" if "APPROVE" in action_pjb else "REJECTED"
                         with st.spinner("Memperbarui database..."):
                             for idx in target_indices:
@@ -1295,11 +1491,11 @@ elif st.session_state.page == "🛡️ Approval Center":
             if pending_anomali:
                 st.dataframe(pd.DataFrame(pending_anomali).drop(columns=["Row Index"]), hide_index=True, use_container_width=True)
                 ce1, ce2 = st.columns(2)
-                with ce1: target_tiket_anm = st.selectbox("Pilih Tiket / Pengajuan:", [p["No Tiket"] for p in pending_anomali], key="sel_anm")
+                with ce1: target_tiket_anm = st.selectbox("Pilih Tiket / Pengajuan:", [p["Request Ref / Tiket"] for p in pending_anomali], key="sel_anm")
                 with ce2: action_anm = st.radio("Keputusan Admin:", ["Setujui (APPROVE)", "Tolak (REJECT)"], key="rad_anm")
                 
                 if st.button("Proses Keputusan Harga/Limit", type="primary"):
-                    target_indices = [p["Row Index"] for p in pending_anomali if p["No Tiket"] == target_tiket_anm]
+                    target_indices = [p["Row Index"] for p in pending_anomali if p["Request Ref / Tiket"] == target_tiket_anm]
                     new_status = "APPROVED" if "APPROVE" in action_anm else "REJECTED"
                     with st.spinner("Memperbarui database..."):
                         for idx in target_indices:
@@ -1511,7 +1707,7 @@ elif st.session_state.page == "📈 Live Monitoring":
             m3.markdown(f"<div class='metric-3d'><div class='metric-title'>Sisa Kas (Burn Rate: {burn_rate:.1f}%)</div><div class='metric-value'>Rp {sisa_kas:,.0f}</div></div>", unsafe_allow_html=True)
             
             if len(pjb_r) > 1:
-                df_pjb_all = pd.DataFrame([(r + [""] * 35)[:35] for r in pjb_r[1:]], columns=["Waktu","Tanggal","N","C","Nama","R","S","Keperluan","BBM","D","KMAkhir","Nominal","Pl","u1","u2","u3","u4","u5","u6","u7","NN","NoTiket","Lt","Hs","TKM_RH","u8","u9","BuktiTF","UM1","UM2","UM3","UM4", "TglB", "LmHr", "NomH"])
+                df_pjb_all = pd.DataFrame([(r + [""] * 37)[:37] for r in pjb_r[1:]], columns=["Waktu","Tanggal","N","C","Nama","R","S","Keperluan","BBM","D","KMAkhir","Nominal","Pl","u1","u2","u3","u4","u5","u6","u7","NN","NoTiket","Lt","Hs","TKM_RH","u8","u9","BuktiTF","UM1","UM2","UM3","UM4", "TglB", "LmHr", "NomH", "PDFLink", "PMMulti"])
                 df_pjb_all['Nominal_Clean'] = df_pjb_all['Nominal'].apply(clean_nominal)
                 df_pjb_all['Tanggal_PJB'] = pd.to_datetime(df_pjb_all['Tanggal'], format='%d/%m/%Y', errors='coerce')
                 df_daily = df_pjb_all.dropna(subset=['Tanggal_PJB']).groupby('Tanggal_PJB')['Nominal_Clean'].sum().reset_index().sort_values('Tanggal_PJB')
@@ -1646,7 +1842,8 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                                 "U (Foto Aktivitas UM 1)": r[28] if len(r)>28 else "",
                                 "V (Foto Aktivitas UM 2)": r[29] if len(r)>29 else "",
                                 "W (Foto Aktivitas UM 3)": r[30] if len(r)>30 else "",
-                                "X (Foto Aktivitas UM 4)": r[31] if len(r)>31 else ""
+                                "X (Foto Aktivitas UM 4)": r[31] if len(r)>31 else "",
+                                "Y (Link PDF Akomodasi)": r[35] if len(r)>35 else ""
                             }
                 
                 list_periode = sorted(list(set([r[16].strip() for r in rekap_r[1:] if len(r) > 16 and r[16].strip() != ""])))
@@ -1660,8 +1857,8 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                 st.markdown("<div class='section-title'>📸 Pilih Lampiran Foto (Multi-Select)</div>", unsafe_allow_html=True)
                 pilihan_foto = st.multiselect(
                     "Pilih kolom foto yang ingin ditarik dari Form PJB:",
-                    ["N (Evidance Pengisian)", "O (Nota BBM)", "P (Foto KM/RH)", "Q (Foto Material)", "R (Nota Material)", "S (Nota Penginapan)", "T (Evidance Pekerjaan)", "U (Foto Aktivitas UM 1)", "V (Foto Aktivitas UM 2)", "W (Foto Aktivitas UM 3)", "X (Foto Aktivitas UM 4)"],
-                    default=["O (Nota BBM)", "T (Evidance Pekerjaan)"]
+                    ["N (Evidance Pengisian)", "O (Nota BBM)", "P (Foto KM/RH)", "Q (Foto Material)", "R (Nota Material)", "S (Nota Penginapan)", "T (Evidance Pekerjaan)", "U (Foto Aktivitas UM 1)", "V (Foto Aktivitas UM 2)", "W (Foto Aktivitas UM 3)", "X (Foto Aktivitas UM 4)", "Y (Link PDF Akomodasi)"],
+                    default=["O (Nota BBM)", "T (Evidance Pekerjaan)", "Y (Link PDF Akomodasi)"]
                 )
                 
                 if st.button("🚀 Generate Laporan Lumpsum", type="primary", use_container_width=True):
@@ -1698,10 +1895,14 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                                 if pilihan_foto:
                                     for p_name in pilihan_foto:
                                         url_foto = dict_photos[found_tiket].get(p_name, "")
-                                        if url_foto and url_foto.startswith("http"):
-                                            html_content += f"<div class='photo-box'><img src='{url_foto}'><br>{p_name}</div>"
+                                        if p_name == "Y (Link PDF Akomodasi)":
+                                            if url_foto and url_foto.startswith("http"):
+                                                html_content += f"<div class='photo-box' style='padding:20px;'><br><a href='{url_foto}' target='_blank' style='background:#0ea5e9; color:white; padding:8px 15px; text-decoration:none; border-radius:5px;'>📥 Download PDF Surat Tugas</a><br><br></div>"
                                         else:
-                                            html_content += f"<div class='photo-box'><br><br>🚫 Tidak Ada<br>{p_name}</div>"
+                                            if url_foto and url_foto.startswith("http"):
+                                                html_content += f"<div class='photo-box'><img src='{url_foto}'><br>{p_name}</div>"
+                                            else:
+                                                html_content += f"<div class='photo-box'><br><br>🚫 Tidak Ada<br>{p_name}</div>"
                                 html_content += "</div></div>"
                     
                     if count_match > 0:
@@ -1728,7 +1929,6 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                             <h1>Laporan Lumpsum & PJB - {nop_report}</h1>
                             <p style="text-align:center; color:#64748b; font-size:0.9em; margin-bottom:30px;">Filter Periode: {filter_periode} | Total: {count_match} Tiket</p>
                             {html_content}
-                            <script> window.onload = function() {{ window.print(); }} </script>
                         </body>
                         </html>
                         """
@@ -1755,10 +1955,14 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                 for r in reversed(pjb_r[1:]):  
                     if len(r) > 21 and str(r[21]).strip() != "":
                         tk = str(r[21]).strip().upper()
-                        pjb_map[tk] = {
-                            "Tgl PJB": r[1] if len(r)>1 else "",
-                            "Nominal PJB": clean_nominal(r[11]) if len(r)>11 else 0
-                        }
+                        
+                        # Accumulate nominal if PM partial
+                        if tk not in pjb_map:
+                            pjb_map[tk] = {"Tgl PJB": r[1] if len(r)>1 else "", "Nominal PJB": 0, "Specific PM": ""}
+                            
+                        pjb_map[tk]["Nominal PJB"] += clean_nominal(r[11]) if len(r)>11 else 0
+                        if len(r)>36 and r[36].strip():
+                            pjb_map[tk]["Specific PM"] += f", {r[36].strip()}" if pjb_map[tk]["Specific PM"] else r[36].strip()
                 
                 rekap_all = []
                 for r in req_r[1:]:
@@ -1769,28 +1973,34 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                         nom_pjb = pjb_map[tk]["Nominal PJB"] if has_pjb else 0
                         selisih = nom_req - nom_pjb
                         
+                        status_lap = "✅ Selesai PJB" if has_pjb else "⏳ Menunggu PJB"
+                        if has_pjb and selisih > 0 and "PM" in (r[8] if len(r)>8 else ""):
+                            status_lap = "🔄 PJB Sebagian / Sisa"
+                            
                         rekap_all.append({
-                            "No Tiket": tk,
+                            "No Request/Tiket": tk,
                             "Tgl Request": r[1] if len(r)>1 else "",
                             "Nama": r[5] if len(r)>5 else "",
-                            "Role Jabatan": r[6] if len(r)>6 else "",
                             "Keperluan": r[8] if len(r)>8 else "",
                             "Nominal Request": nom_req,
-                            "Status Laporan": "✅ Selesai PJB" if has_pjb else "⏳ Menunggu PJB",
+                            "Status Laporan": status_lap,
                             "Tgl PJB": pjb_map[tk]["Tgl PJB"] if has_pjb else "-",
-                            "Nominal PJB": nom_pjb,
-                            "Selisih (Req - PJB)": selisih
+                            "Tiket Spesifik Ter-PJB": pjb_map[tk]["Specific PM"] if has_pjb else "-",
+                            "Nominal PJB Total": nom_pjb,
+                            "Sisa / Selisih Dana": selisih
                         })
                 
                 if rekap_all:
                     df_rekap_all = pd.DataFrame(rekap_all)
                     df_view = df_rekap_all.copy()
                     df_view['Nominal Request'] = df_view['Nominal Request'].apply(lambda x: f"Rp {x:,.0f}")
-                    df_view['Nominal PJB'] = df_view['Nominal PJB'].apply(lambda x: f"Rp {x:,.0f}" if x > 0 else "-")
-                    df_view['Selisih (Req - PJB)'] = df_view['Selisih (Req - PJB)'].apply(lambda x: f"Rp {x:,.0f}")
+                    df_view['Nominal PJB Total'] = df_view['Nominal PJB Total'].apply(lambda x: f"Rp {x:,.0f}" if x > 0 else "-")
+                    df_view['Sisa / Selisih Dana'] = df_view['Sisa / Selisih Dana'].apply(lambda x: f"Rp {x:,.0f}")
                     
                     def highlight_status(val):
-                        color = '#10B981' if '✅' in str(val) else '#F59E0B'
+                        if '✅' in str(val): color = '#10B981'
+                        elif '🔄' in str(val): color = '#3B82F6'
+                        else: color = '#F59E0B'
                         return f'color: {color}; font-weight: bold;'
                         
                     st.dataframe(df_view.style.map(highlight_status, subset=['Status Laporan']), hide_index=True, use_container_width=True)
@@ -1802,7 +2012,7 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
         # --- TAB 3: CETAK SURAT TUGAS & UANG MAKAN ADMIN ---
         with tab_report3:
             st.markdown("<div class='section-title'>🖨️ Cetak Ulang Dokumen Surat Tugas & Uang Makan</div>", unsafe_allow_html=True)
-            st.info("Fitur khusus untuk Admin menarik dan mencetak ulang dokumen resmi PDF Surat Tugas & Uang Makan (3 Halaman) yang disubmit oleh Tim secara Real-time berdasarkan hitungan terbaru mereka.")
+            st.info("Fitur khusus untuk Admin menarik dan mencetak ulang dokumen resmi PDF Surat Tugas & Uang Makan (3 Halaman) yang disubmit oleh Tim secara Real-time.")
             
             tiket_um_list = []
             pjb_um_dict = {}
@@ -1817,11 +2027,11 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
             tiket_um_list = sorted(list(set(tiket_um_list)))
             
             if not tiket_um_list:
-                st.warning("Belum ada tiket PJB kategori Biaya Akomodasi / Uang Makan di database NOP ini.")
+                st.warning("Belum ada request PJB kategori Biaya Akomodasi / Uang Makan di database NOP ini.")
             else:
                 c_p1, c_p2 = st.columns([3, 1])
                 with c_p1:
-                    pilih_tk_cetak = st.selectbox("🎫 Pilih Nomor Tiket Akomodasi:", ["-- Pilih Tiket --"] + tiket_um_list)
+                    pilih_tk_cetak = st.selectbox("🎫 Pilih Nomor Request PJB (Akomodasi):", ["-- Pilih Tiket --"] + tiket_um_list)
                 
                 if pilih_tk_cetak != "-- Pilih Tiket --":
                     req_match = next((x for x in reversed(req_r[1:]) if len(x) > 3 and str(x[3]).strip().upper() == pilih_tk_cetak), None)
@@ -1835,13 +2045,16 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                         desc_cetak = str(req_match[11]).strip() if len(req_match) > 11 else "-"
                         jarak_cetak = str(req_match[13]).strip() if len(req_match) > 13 else "-"
                         
+                        lat1_cetak = str(req_match[14]).strip() if len(req_match) > 14 else "0"
+                        lon1_cetak = str(req_match[15]).strip() if len(req_match) > 15 else "0"
+                        lat2_cetak = str(req_match[22]).strip() if len(req_match) > 22 else "0"
+                        lon2_cetak = str(req_match[23]).strip() if len(req_match) > 23 else "0"
+                        
                         nik_cetak = nik_dict.get(nama_petugas_cetak.upper(), "-")
                         
-                        # Parsing Tanggal PJB asli sebagai fallback
                         tgl_pjb_cetak = parse_date(pjb_match[1]) if len(pjb_match) > 1 else datetime.now().date()
                         nom_pjb_cetak = clean_nominal(pjb_match[11]) if len(pjb_match) > 11 else 0
                         
-                        # FITUR BARU: Menarik Data Dinamis Lama Hari & Nominal Harian jika tersedia (indeks 32, 33, 34)
                         tgl_berangkat_cetak_str = pjb_match[32] if len(pjb_match) > 32 and pjb_match[32] else tgl_pjb_cetak.strftime("%d/%m/%Y")
                         
                         try: lama_hari_cetak = int(pjb_match[33]) if len(pjb_match) > 33 and pjb_match[33] else 1
@@ -1849,6 +2062,8 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                             
                         try: nom_um_harian_cetak = int(pjb_match[34]) if len(pjb_match) > 34 and pjb_match[34] else nom_pjb_cetak
                         except: nom_um_harian_cetak = nom_pjb_cetak
+                        
+                        specific_pm_cetak = pjb_match[36] if len(pjb_match) > 36 and pjb_match[36].strip() else pilih_tk_cetak
                         
                         tgl_berangkat_cetak_date = parse_date(tgl_berangkat_cetak_str)
                         tgl_kembali_cetak_date = tgl_berangkat_cetak_date + timedelta(days=lama_hari_cetak - 1)
@@ -1860,7 +2075,7 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                         
                         with c_p2:
                             st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
-                            if st.button("🖨️ Tarik & Generate PDF", type="primary", use_container_width=True):
+                            if st.button("🖨️ Tarik & Generate PDF A4", type="primary", use_container_width=True):
                                 
                                 bulan_romawi = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"]
                                 romawi = bulan_romawi[tgl_pjb_cetak.month] if 1 <= tgl_pjb_cetak.month <= 12 else "VIII"
@@ -1873,8 +2088,11 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                                 <head>
                                     <meta charset="UTF-8">
                                     <title>Surat Tugas & PJB - {pilih_tk_cetak}</title>
+                                    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+                                    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
                                     <style>
                                         body {{ font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.5; margin: 0; background: #525659; }}
+                                        @page {{ size: A4; margin: 0; }}
                                         .page {{ width: 210mm; min-height: 297mm; background: white; margin: 10mm auto; position: relative; padding: 15mm 20mm; box-sizing: border-box; box-shadow: 0 0 10px rgba(0,0,0,0.5); page-break-after: always; }}
                                         h3 {{ text-align: center; font-size: 14pt; margin-bottom: 15px; font-weight: bold; }}
                                         table {{ width: 100%; border-collapse: collapse; margin-bottom: 10px; font-size: 11pt; }}
@@ -1888,7 +2106,7 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                                         .photo-item img {{ width: 100%; max-height: 250px; object-fit: contain; }}
                                         .logo-header {{ text-align: right; margin-bottom: 10px; padding-right: 5px; }}
                                         .logo-header img {{ width: 220px; height: auto; object-fit: contain; }}
-                                        @media print {{ body {{ background: white; margin: 0; }} .page {{ margin: 0; box-shadow: none; width: 100%; height: 100%; padding: 15mm 20mm; }} }}
+                                        @media print {{ body {{ background: white; margin: 0; }} .page {{ margin: 0; box-shadow: none; width: 100%; height: 100%; padding: 15mm 20mm; page-break-after: always; }} }}
                                     </style>
                                 </head>
                                 <body>
@@ -1911,7 +2129,7 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                                                 <tr><td>1</td><td>{nama_petugas_cetak}</td><td>{nik_cetak}</td><td>{role_cetak}</td><td>{site_cetak}</td></tr>
                                             </table>
                                             <table class="tbl-info">
-                                                <tr><td width="150">No Ticket</td><td width="10">:</td><td>{pilih_tk_cetak}</td></tr>
+                                                <tr><td width="150">No Ticket</td><td width="10">:</td><td>{specific_pm_cetak}</td></tr>
                                                 <tr><td>Tujuan</td><td>:</td><td>{site_cetak}</td></tr>
                                                 <tr><td>Estimasi Jarak</td><td>:</td><td>{jarak_cetak}</td></tr>
                                                 <tr><td>Lama tugas dinas</td><td>:</td><td>{lama_hari_cetak} Hari</td></tr>
@@ -1928,7 +2146,7 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                                         </div>
                                     </div>
                                     
-                                    <!-- PAGE 2: PENGAJUAN UANG MAKAN -->
+                                    <!-- PAGE 2: PENGAJUAN UANG MAKAN & PETA -->
                                     <div class="page">
                                         <div class="logo-header">
                                             <img src="{logo_base64}" alt="Logo KUT">
@@ -1949,8 +2167,13 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                                                 <tr><th>No.</th><th>Tujuan Tugas</th><th>Berangkat</th><th>Kembali</th><th>Uraian Penugasan</th></tr>
                                                 <tr><td>1</td><td>{site_cetak}</td><td>{tgl_berangkat_cetak_date.strftime("%d/%m/%Y")}</td><td>{tgl_kembali_cetak_date.strftime("%d/%m/%Y")}</td><td>{desc_cetak}</td></tr>
                                             </table>
-                                            <p>Harap dilaksanakan dan segera memberikan laporan perjalanan dinas setelah kembali.</p>
-                                            <table class="tbl-uang">
+                                            
+                                            <div style="margin-top: 15px; page-break-inside: avoid;">
+                                                <b>Peta Satelit Rute Perjalanan:</b>
+                                                <div id="map" style="height: 250px; width: 100%; border: 1px solid #475569; border-radius: 8px; margin-top: 5px;"></div>
+                                            </div>
+                                            
+                                            <table class="tbl-uang" style="margin-top:15px;">
                                                 <tr style="background: #f0f0f0;"><th colspan="3">Bantuan Perjalanan Dinas</th><th colspan="2">Perhitungan</th><th>Jumlah</th></tr>
                                                 <tr><td colspan="3">Uang Makan ({nama_petugas_cetak})</td><td align="center">{lama_hari_cetak} Hari x Rp. {nom_um_harian_cetak:,.0f}</td><td width="30" style="border-right: none;">Rp.</td><td align="right" style="border-left: none;">{nom_pjb_cetak:,.0f}</td></tr>
                                                 <tr><td colspan="3">Bantuan Penginapan</td><td align="center">0 Malam x Rp. 0</td><td width="30" style="border-right: none;">Rp.</td><td align="right" style="border-left: none;">0</td></tr>
@@ -1983,7 +2206,35 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                                             </div>
                                         </div>
                                     </div>
-                                    <script> window.onload = function() {{ window.print(); }} </script>
+                                    <script> 
+                                        window.onload = function() {{
+                                            var lat1 = parseFloat("{lat1_cetak}");
+                                            var lon1 = parseFloat("{lon1_cetak}");
+                                            var lat2 = parseFloat("{lat2_cetak}");
+                                            var lon2 = parseFloat("{lon2_cetak}");
+                                            
+                                            if (lat1 !== 0 && lat2 !== 0 && !isNaN(lat1) && !isNaN(lat2)) {{
+                                                var map = L.map('map');
+                                                L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
+                                                    attribution: '© OpenStreetMap'
+                                                }}).addTo(map);
+                                                
+                                                var latlngs = [ [lat1, lon1], [lat2, lon2] ];
+                                                var polyline = L.polyline(latlngs, {{color: 'red', weight: 4}}).addTo(map);
+                                                
+                                                L.marker([lat1, lon1]).addTo(map).bindPopup("Berangkat");
+                                                L.marker([lat2, lon2]).addTo(map).bindPopup("Tujuan");
+                                                
+                                                map.fitBounds(polyline.getBounds(), {{padding: [30,30]}});
+                                                
+                                                // Trigger print with slight delay for map rendering
+                                                setTimeout(function(){{ window.print(); }}, 1500);
+                                            }} else {{
+                                                document.getElementById('map').innerHTML = "<div style='text-align:center; padding-top:100px; color:#94a3b8;'>Peta Koordinat Tidak Tersedia</div>";
+                                                setTimeout(function(){{ window.print(); }}, 500);
+                                            }}
+                                        }};
+                                    </script>
                                 </body>
                                 </html>
                                 """
@@ -1992,7 +2243,7 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                                 st.markdown(f"""
                                     <div style="background-color: #ecfdf5; padding: 25px; border-radius: 12px; text-align: center; margin-top: 25px; border: 2px dashed #10B981;">
                                         <h3 style="color: #065f46; margin-top: 0;">📄 Laporan PDF Siap Diunduh!</h3>
-                                        <a href="data:text/html;base64,{b64_html_admin}" download="Admin_Surat_Tugas_{pilih_tk_cetak}.html" target="_blank"
+                                        <a href="data:text/html;base64,{b64_html_admin}" download="Admin_Surat_Tugas_{pilih_tk_cetak[:10]}.html" target="_blank"
                                            style="display: inline-block; background-color: #10B981; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 1.1em; margin: 15px 0;">
                                            📥 Download PDF Surat Tugas
                                         </a>
@@ -2031,7 +2282,7 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
                     nom = clean_nominal(r[9])
                     tot_req_daily += nom
                     daily_req.append({
-                        "Waktu": r[0], "Nama": r[5], "Tiket": r[3], "Role": r[6],
+                        "Waktu": r[0], "Nama": r[5], "Tiket / List PM": r[3], "Role": r[6],
                         "Keperluan": r[8], "Kategori": r[10], 
                         "Jarak/Info": r[13], "Nominal Request": nom
                     })
@@ -2053,8 +2304,9 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
                 if len(r) > 24 and str(r[1]).strip() == filter_date_str:
                     nom = clean_nominal(r[11])
                     tot_pjb_daily += nom
+                    tk_info = r[36] if len(r) > 36 and r[36].strip() else r[21]
                     daily_pjb.append({
-                        "Waktu Submit": r[0], "Nama": r[4], "Tiket": r[21], "Role": r[5],
+                        "Waktu Submit": r[0], "Nama": r[4], "Tiket Specific": tk_info, "Role": r[5],
                         "Kategori": r[8], "Jarak Tempuh": f"{r[24]} KM", "Nominal PJB": nom
                     })
             
@@ -2070,10 +2322,15 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
             st.info("Sistem melacak siapa yang belum setor PJB lebih dari 3 hari, dan mencocokkan nilai **Sisa Dana (Request awal vs Laporan PJB)**.")
             
             pjb_dict = {}
+            pjb_tickets_all_set = set()
             for r in pjb_r[1:]:
                 if len(r) > 21 and str(r[21]).strip() != "":
                     tk = str(r[21]).strip().upper()
-                    pjb_dict[tk] = clean_nominal(r[11]) if len(r)>11 else 0
+                    if tk not in pjb_dict: pjb_dict[tk] = 0
+                    pjb_dict[tk] += clean_nominal(r[11]) if len(r)>11 else 0
+                    
+                    tk_str = r[36].strip() if (len(r) > 36 and r[36].strip()) else r[21].strip()
+                    pjb_tickets_all_set.update([t.strip().upper() for t in tk_str.split(",")])
                     
             list_gantung = []
             list_sisa = []
@@ -2085,33 +2342,38 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
                     req_date = parse_date(tgl_req_str)
                     
                     if req_date >= CUTOFF_DATE:
-                        tk = str(r[3]).strip().upper()
-                        if not tk: continue
+                        req_tk_raw = str(r[3]).strip().upper()
+                        if not req_tk_raw: continue
+                        
+                        req_tk_list = [t.strip() for t in req_tk_raw.split(",") if t.strip()]
+                        req_set = set(req_tk_list)
                         
                         nama = str(r[5])
                         nom_req = clean_nominal(r[9])
                         
-                        if tk not in pjb_dict:
+                        # Jika belum semua tiket dalam request ini di PJB
+                        if not req_set.issubset(pjb_tickets_all_set):
                             aging = (today_date - req_date).days
                             if aging > 3:
                                 list_gantung.append({
                                     "Tanggal Request": tgl_req_str,
                                     "Aging": f"{aging} Hari",
                                     "Nama Petugas": nama,
-                                    "Tiket": tk,
+                                    "Request Tiket": req_tk_raw,
                                     "Nominal Request": nom_req
                                 })
                         else:
-                            nom_pjb = pjb_dict[tk]
+                            # Sudah di-PJB semua, cek apakah nominal cocok
+                            nom_pjb = pjb_dict.get(req_tk_raw, 0)
                             sisa = nom_req - nom_pjb
                             if sisa > 0:
                                 list_sisa.append({
                                     "Tanggal Request": tgl_req_str,
                                     "Nama Petugas": nama,
-                                    "Tiket": tk,
+                                    "Request Tiket": req_tk_raw,
                                     "Nominal Request": nom_req,
-                                    "Nominal PJB": nom_pjb,
-                                    "Sisa Belum Lapor": sisa
+                                    "Nominal PJB Total": nom_pjb,
+                                    "Sisa Dana (Tarik)": sisa
                                 })
                                 
             col_w1, col_w2 = st.columns(2)
@@ -2128,7 +2390,7 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
                 if list_sisa:
                     df_sisa = pd.DataFrame(list_sisa)
                     df_sisa["Nominal Request"] = df_sisa["Nominal Request"].apply(lambda x: f"Rp {x:,.0f}")
-                    df_sisa["Nominal PJB"] = df_sisa["Nominal PJB"].apply(lambda x: f"Rp {x:,.0f}")
-                    df_sisa["Sisa Belum Lapor"] = df_sisa["Sisa Belum Lapor"].apply(lambda x: f"Rp {x:,.0f}")
+                    df_sisa["Nominal PJB Total"] = df_sisa["Nominal PJB Total"].apply(lambda x: f"Rp {x:,.0f}")
+                    df_sisa["Sisa Dana (Tarik)"] = df_sisa["Sisa Dana (Tarik)"].apply(lambda x: f"Rp {x:,.0f}")
                     st.dataframe(df_sisa, hide_index=True, use_container_width=True)
-                else: st.success("Aman! Semua tiket yang sudah di-PJB nominalnya sesuai (Tidak ada sisa/kekurangan).")
+                else: st.success("Aman! Semua pengajuan PM/Reguler nominalnya sesuai (Tidak ada sisa dana di tim).")
