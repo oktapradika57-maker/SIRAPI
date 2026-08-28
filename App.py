@@ -300,9 +300,22 @@ def upload_foto(file):
         return cloudinary.uploader.upload(f"data:{file.type};base64,{encoded}", resource_type="auto").get("secure_url") 
     except Exception: return ""
 
+# PERBAIKAN APPEND_DATA (ANTI-GAGAL)
 def append_data(sheet_name, data, spreadsheet_id):
-    gspread.authorize(get_credentials()).open_by_key(spreadsheet_id).worksheet(sheet_name).append_row(data)
-    fetch_spreadsheet_data.clear()
+    try:
+        client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
+        ws = client.worksheet(sheet_name)
+        
+        # Proteksi Tipe Data: Ubah semua isi array menjadi string aman sebelum dikirim
+        safe_data = [str(x) if x is not None else "" for x in data]
+        
+        # table_range="A1" memaksa Google Sheet mendeteksi baris dengan data valid (mengabaikan border/warna)
+        ws.append_row(safe_data, value_input_option="USER_ENTERED", table_range="A1")
+        fetch_spreadsheet_data.clear()
+        return True
+    except Exception as e:
+        st.error(f"⚠️ Gagal menyimpan ke Spreadsheet ({sheet_name}). Error: {e}")
+        return False
 
 def update_approval_status(spreadsheet_id, row_index, new_status, remark="-"):
     try:
@@ -374,12 +387,16 @@ if st.session_state.page == "🏠 Hub Menu Utama":
     with c2:
         if st.button("✅\nPJB OPERASIONAL\n(Nota Realisasi)", use_container_width=True): st.session_state.page = "✅ Form PJB Operasional"; st.rerun()
 
-    st.markdown("<div class='section-title'>🔍 CEK STATUS TIKET PRIBADI</div>", unsafe_allow_html=True)
-    with st.expander("Buka untuk Cek Status Tiket Anda", expanded=False):
-        cek_nop = st.selectbox("Pilih Area Wilayah", ["-- Pilih Area --"] + list(MASTER_DATA.keys()), key="cek_area_hub")
-        if cek_nop != "-- Pilih Area --":
+    # --- PERBAIKAN CEK STATUS TIKET PRIBADI & TIM ---
+    st.markdown("<div class='section-title'>🔍 CEK STATUS TIKET (PRIBADI & TIM)</div>", unsafe_allow_html=True)
+    cek_nop = st.selectbox("Pilih Area Wilayah", ["-- Pilih Area --"] + list(MASTER_DATA.keys()), key="cek_area_hub")
+    
+    if cek_nop != "-- Pilih Area --":
+        tab_pribadi, tab_tim_agustus = st.tabs(["👤 Status Pribadi Anda", "🚨 Tim Belum PJB (Agustus)"])
+        
+        with tab_pribadi:
             cek_nama = st.selectbox("Nama Petugas", ["-- Pilih Nama --"] + MASTER_DATA[cek_nop]["names"], key="cek_nama_hub")
-            if st.button("Cari Status", use_container_width=True):
+            if st.button("Cari Status Saya", use_container_width=True):
                 if cek_nama != "-- Pilih Nama --" and cek_nama != "":
                     with st.spinner("Menarik data server..."):
                         data_cek = fetch_spreadsheet_data(MASTER_DATA[cek_nop]["spreadsheet_id"])
@@ -391,6 +408,36 @@ if st.session_state.page == "🏠 Hub Menu Utama":
                         if out_all: st.error(f"⚠️ {len(out_all)} Request memblokir status Anda (Belum PJB / Pending Verifikasi).")
                         else: st.success("✅ Seluruh tiket aman dan Approved!")
                     else: st.info("Tidak ada data / belum pernah request.")
+                    
+        with tab_tim_agustus:
+            st.info("Fitur ini menampilkan daftar tiket tim yang masih gantung (belum disubmit) khusus untuk pengajuan di bulan Agustus 2026.")
+            if st.button("🔍 Tarik Data Tim Belum PJB", use_container_width=True, type="primary"):
+                with st.spinner("Memindai seluruh data tim wilayah ini..."):
+                    data_cek = fetch_spreadsheet_data(MASTER_DATA[cek_nop]["spreadsheet_id"])
+                    req_r, pjb_r, app_r = data_cek[SHEET_REQUEST], data_cek[SHEET_PJB], data_cek[SHEET_APP]
+                    
+                    list_blm_pjb = []
+                    for nm in MASTER_DATA[cek_nop]["names"]:
+                        if not nm.strip(): continue
+                        _, _, _, hist_tkt = get_user_tickets_status(nm, req_r, pjb_r, app_r)
+                        
+                        for h in hist_tkt:
+                            tgl_req = parse_date(h["Tanggal"])
+                            # Filter khusus bulan Agustus 2026
+                            if tgl_req.month == 8 and tgl_req.year == 2026:
+                                if "Menunggu PJB" in h["Status"] or "Telat" in h["Status"]:
+                                    list_blm_pjb.append({
+                                        "Nama Petugas": nm,
+                                        "No Tiket / Request": h["Tiket"],
+                                        "Tanggal Request": h["Tanggal"],
+                                        "Status Terkini": "🔴 Belum Submit PJB"
+                                    })
+                    
+                    if list_blm_pjb:
+                        st.error(f"⚠️ Ditemukan {len(list_blm_pjb)} tiket bulan Agustus yang belum dilaporkan!")
+                        st.dataframe(pd.DataFrame(list_blm_pjb), hide_index=True, use_container_width=True)
+                    else:
+                        st.success("🎉 Luar biasa! Seluruh tim di wilayah ini sudah menyelesaikan PJB bulan Agustus.")
 
     st.markdown("<div class='section-title'>🛡️ MENU KHUSUS ADMIN</div>", unsafe_allow_html=True)
     if not st.session_state.admin_logged_in:
@@ -1377,20 +1424,26 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                         # Data Index Array Diperluas ke 37 Kolom
                         data_pjb = [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), tgl_pjb.strftime("%d/%m/%Y"), d["NOP"], d["Cluster"], d["Nama"], d["Role"], d["Site"], d["Keperluan"], d["BBM"], d["Desc"], str(km_akhir), nominal_pjb, d["Plat"], url_isi, url_notabbm, url_km, url_mat, url_notamat, url_inap, url_kerja, tot_nilai_nota, valid_cari_tiket, tot_liter, harga_satuan, str(round(total_km_tempuh, 2)), "", "", upload_foto(f_transfer), url_um1, url_um2, url_um3, url_um4, tgl_berangkat_str, lama_hari_str, nom_um_harian_str, pdf_link_cloud, specific_pm_tickets]
                         
-                        append_data(SHEET_PJB, [(r+[""]*37)[:37] for r in [data_pjb]][0], target_ss)
-                        append_data(SHEET_APP, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), d["Nama"], valid_cari_tiket, "Verifikasi PJB", nominal_pjb, "PENDING", "-"], target_ss)
+                        # --- PERBAIKAN LOGIKA SUBMIT PJB ---
+                        data_pjb_padded = (data_pjb + [""] * 37)[:37]
+                        sukses_pjb = append_data(SHEET_PJB, data_pjb_padded, target_ss)
                         
-                        if "Akomodasi" in jns_pjb:
-                            st.balloons()
-                            st.success("🎉 PJB Surat Tugas & UM Berhasil Dikirim untuk Verifikasi Admin!")
-                            st.session_state.pjb_data = None
+                        if sukses_pjb: # Hanya kirim ke Admin jika sukses masuk Form PJB
+                            append_data(SHEET_APP, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), d["Nama"], valid_cari_tiket, "Verifikasi PJB", nominal_pjb, "PENDING", "-"], target_ss)
+                            
+                            if "Akomodasi" in jns_pjb:
+                                st.balloons()
+                                st.success("🎉 PJB Surat Tugas & UM Berhasil Dikirim untuk Verifikasi Admin!")
+                                st.session_state.pjb_data = None
+                            else:
+                                st.balloons()
+                                st.success("🎉 PJB Operational Umum Berhasil Dikirim untuk Verifikasi Admin!")
+                                st.session_state.pjb_data = None
+                                time.sleep(2.5)
+                                st.session_state.page = "🏠 Hub Menu Utama"
+                                st.rerun()
                         else:
-                            st.balloons()
-                            st.success("🎉 PJB Operational Umum Berhasil Dikirim untuk Verifikasi Admin!")
-                            st.session_state.pjb_data = None
-                            time.sleep(2.5)
-                            st.session_state.page = "🏠 Hub Menu Utama"
-                            st.rerun()
+                            st.error("🚨 Sistem mendeteksi kegagalan jaringan saat mengirim ke Google Sheet. Silakan klik tombol Submit sekali lagi!")
 
         if st.session_state.get("pdf_ready"):
             st.markdown(f"""
