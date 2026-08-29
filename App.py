@@ -15,59 +15,76 @@ import re
 from collections import defaultdict
 
 # ==========================================
-# 0. KONFIGURASI HALAMAN & SUPER PREMIUM UI
+# 0. KONFIGURASI HALAMAN & UI 3D MODERN
 # ==========================================
-st.set_page_config(page_title="SiRAPI Enterprise", page_icon="💎", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SiRAPI Enterprise", page_icon="🔮", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;800;900&display=swap');
         
-        .main { background: #f4f7f6; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .main { background: #e0e5ec; font-family: 'Plus Jakarta Sans', sans-serif; }
         
-        /* Premium Header Card */
+        /* Premium Header Card 3D Neomorphism */
         .header-card {
             background: linear-gradient(135deg, #0F2027 0%, #203A43 50%, #2C5364 100%);
-            padding: 35px 20px; border-radius: 20px; color: white; text-align: center;
-            box-shadow: 0 15px 30px rgba(0,0,0,0.2); margin-bottom: 30px; margin-top: 15px;
-            border-bottom: 5px solid #00F2FE;
+            padding: 40px 20px; border-radius: 24px; color: white; text-align: center;
+            box-shadow: 10px 10px 20px rgba(15, 32, 39, 0.2), -10px -10px 20px rgba(255, 255, 255, 0.8);
+            margin-bottom: 35px; margin-top: 15px; border-bottom: 5px solid #00F2FE;
+            position: relative; overflow: hidden;
         }
-        .header-card h1 { font-weight: 900; font-size: 2.2rem; margin-bottom: 5px; }
-        .header-card p { font-size: 1rem; color: #cbd5e1; margin-bottom: 0; }
+        .header-card h1 { font-weight: 900; font-size: 2.5rem; margin-bottom: 5px; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }
+        .header-card p { font-size: 1.1rem; color: #e2e8f0; margin-bottom: 0; font-weight: 300;}
         
-        /* Mobile Friendly Menu Buttons */
+        /* Menu Buttons - 3D Glass/Neomorphism */
         div[data-testid="stButton"] > button {
-            background: rgba(255, 255, 255, 0.95) !important;
-            border: 1px solid #e2e8f0 !important; border-radius: 16px !important;
-            box-shadow: 0 8px 15px rgba(0,0,0,0.05) !important;
-            height: auto !important; padding: 20px 10px !important;
-            transition: all 0.3s ease !important;
+            background: rgba(255, 255, 255, 0.6) !important;
+            backdrop-filter: blur(12px) !important;
+            border: 1px solid rgba(255, 255, 255, 0.8) !important; 
+            border-radius: 20px !important;
+            box-shadow: 8px 8px 16px rgba(163,177,198,0.6), -8px -8px 16px rgba(255,255,255, 0.8) !important;
+            height: auto !important; padding: 25px 10px !important;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
         }
         div[data-testid="stButton"] > button:hover, div[data-testid="stButton"] > button:active {
             background: linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%) !important;
-            transform: translateY(-5px) !important; border: none !important;
+            transform: translateY(-8px) scale(1.02) !important;
+            box-shadow: 12px 12px 20px rgba(163,177,198,0.7), -12px -12px 20px rgba(255,255,255, 0.9) !important;
+            border: none !important;
         }
-        div[data-testid="stButton"] > button p { color: #1e293b !important; font-size: 1.1rem !important; font-weight: 800 !important; margin:0; text-align:center; }
-        div[data-testid="stButton"] > button:hover p, div[data-testid="stButton"] > button:active p { color: white !important; }
+        div[data-testid="stButton"] > button p { color: #334155 !important; font-size: 1.15rem !important; font-weight: 800 !important; margin:0; text-align:center; }
+        div[data-testid="stButton"] > button:hover p, div[data-testid="stButton"] > button:active p { color: white !important; text-shadow: 1px 1px 2px rgba(0,0,0,0.2); }
         
-        /* Admin Button Specific */
+        /* Admin Button Specific 3D */
         .btn-admin div[data-testid="stButton"] > button {
-            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%) !important;
+            background: linear-gradient(145deg, #1e293b, #0f172a) !important;
+            box-shadow: 8px 8px 16px rgba(163,177,198,0.6), -8px -8px 16px rgba(255,255,255, 0.8) !important;
         }
-        .btn-admin div[data-testid="stButton"] > button p { color: white !important; font-size: 1rem !important;}
-        .btn-admin div[data-testid="stButton"] > button:hover { background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%) !important; }
+        .btn-admin div[data-testid="stButton"] > button p { color: white !important; font-size: 1.05rem !important; font-weight: 600 !important;}
+        .btn-admin div[data-testid="stButton"] > button:hover { 
+            background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%) !important; 
+            box-shadow: inset 4px 4px 10px rgba(0,0,0,0.3) !important;
+            transform: translateY(-5px) !important;
+        }
         
-        /* Section Titles */
-        .section-title { color: #0F2027; font-size: 1.2rem; font-weight: 900; border-bottom: 3px solid #cbd5e1; padding-bottom: 8px; margin-top: 25px; margin-bottom: 20px;}
+        /* Section Titles Modern */
+        .section-title { 
+            color: #1e293b; font-size: 1.3rem; font-weight: 900; 
+            background: linear-gradient(90deg, #e2e8f0 0%, transparent 100%);
+            padding: 10px 15px; border-radius: 8px; border-left: 5px solid #4FACFE;
+            margin-top: 30px; margin-bottom: 20px;
+        }
         
-        /* Metric Cards */
+        /* Metric Cards 3D Neomorphism */
         .metric-3d {
-            background: white; padding: 20px; border-radius: 16px; text-align: center;
-            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.05); border-top: 5px solid #4FACFE; margin-bottom: 15px;
+            background: #e0e5ec; padding: 25px 20px; border-radius: 20px; text-align: center;
+            box-shadow: 9px 9px 16px rgb(163,177,198,0.6), -9px -9px 16px rgba(255,255,255, 0.5);
+            border-top: 5px solid #00F2FE; margin-bottom: 20px; transition: transform 0.3s;
         }
-        .metric-title { font-size: 0.8rem; color: #64748b; font-weight: 800; text-transform: uppercase; }
-        .metric-value { font-size: 1.6rem; font-weight: 900; margin-top: 5px; color: #0F2027;}
+        .metric-3d:hover { transform: translateY(-5px); }
+        .metric-title { font-size: 0.85rem; color: #64748b; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;}
+        .metric-value { font-size: 1.8rem; font-weight: 900; margin-top: 8px; color: #0F2027; text-shadow: 1px 1px 1px rgba(255,255,255,0.8);}
         
         /* Hide Sidebar completely for mobile purity */
         [data-testid="collapsedControl"] { display: none; }
@@ -478,7 +495,7 @@ if st.session_state.page == "🏠 Hub Menu Utama":
             if st.button("🖨️ REPORT & AUTO PJB\n(Export Laporan)", use_container_width=True): st.session_state.page = "🖨️ Auto PJB Report"; st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown("<div style='text-align: center; color: #94a3b8; font-size: 0.8rem; margin-top:50px;'>Created by Okta Pradika<br>KUT SYSTEM - v8.0 Enterprise Mobile Edition</div>", unsafe_allow_html=True)
+    st.markdown("<div style='text-align: center; color: #94a3b8; font-size: 0.8rem; margin-top:50px;'>Created by Okta Pradika<br>KUT SYSTEM - v8.1 Enterprise Mobile Edition (3D)</div>", unsafe_allow_html=True)
 
 
 # ==========================================
@@ -661,6 +678,7 @@ elif st.session_state.page == "📝 Form Request Dana":
         with c_lon2: long_tujuan = st.text_input("Long Tujuan", value=auto_long_tujuan)
 
         jarak_km_oneway = 0.0
+        jarak_km_pp = 0.0
         jarak_final_text = ""
         invalid_coords = False
         
@@ -687,13 +705,14 @@ elif st.session_state.page == "📝 Form Request Dana":
         is_mobil = is_motor = is_genset = False
         total_motor_this_month = 0
         
+        # --- PERTAHANKAN AUTO NOPOL HISTORY ---
         auto_nopol = ""
         if nama_lookup != "" and nama_lookup in tim_dict:
             auto_nopol = str(tim_dict[nama_lookup].get("NOPOL", "")).strip()
             if auto_nopol in ["nan", "0", "None"]: auto_nopol = ""
             
         if "BBM" in kebutuhan_dana_list:
-            st.markdown("<div style='background-color:#F8FAFC; padding:15px; border-radius:10px; border-left: 5px solid #3B82F6; margin-bottom: 15px;'>", unsafe_allow_html=True)
+            st.markdown("<div style='background-color:#F8FAFC; padding:15px; border-radius:10px; border-left: 5px solid #3B82F6; margin-bottom: 15px; box-shadow: 2px 2px 5px rgba(0,0,0,0.05);'>", unsafe_allow_html=True)
             jns_bbm_list = st.multiselect("BBM untuk Kendaraan/Peralatan apa saja? (Bisa pilih lebih dari 1)", ["Mobil", "Motor", "Genset"])
             
             if "Mobil" in jns_bbm_list:
@@ -706,7 +725,7 @@ elif st.session_state.page == "📝 Form Request Dana":
                     with c_m2:
                         plat_mobil = st.text_input("Plat Mobil", value=auto_nopol, key="p_mob").strip().upper()
                         last_km_mob = get_last_indicator(plat_mobil, "Mobil", pjb_r)
-                        if plat_mobil: st.info(f"Histori KM terakhir: **{last_km_mob}**")
+                        if plat_mobil: st.info(f"Histori KM terakhir (Auto-Track): **{last_km_mob}**")
                         km_awal_mob = st.number_input("Ketik KM Awal Mobil Aktual (Wajib)", min_value=0.0, step=0.1, value=float(last_km_mob), key="km_mob")
                         
                     sub_requests.append({
@@ -728,7 +747,7 @@ elif st.session_state.page == "📝 Form Request Dana":
                     with c_mt2:
                         plat_motor = st.text_input("Plat Motor", value=auto_nopol, key="p_mot").strip().upper()
                         last_km_mot = get_last_indicator(plat_motor, "Motor", pjb_r)
-                        if plat_motor: st.info(f"Histori KM terakhir: **{last_km_mot}**")
+                        if plat_motor: st.info(f"Histori KM terakhir (Auto-Track): **{last_km_mot}**")
                         km_awal_mot = st.number_input("Ketik KM Awal Motor Aktual (Wajib)", min_value=0.0, step=0.1, value=float(last_km_mot), key="km_mot")
                     
                     if l_butuh > k_tangki and k_tangki > 0:
@@ -769,8 +788,8 @@ elif st.session_state.page == "📝 Form Request Dana":
             st.markdown("</div>", unsafe_allow_html=True)
             
         if "Uang Makan" in kebutuhan_dana_list:
-            st.markdown("<div style='background-color:#E0F2FE; padding:15px; border-radius:10px; border-left: 5px solid #0284C7; margin-bottom: 15px;'>", unsafe_allow_html=True)
-            st.info("💡 **RULES UANG MAKAN:** Maks Rp 60.000 / Hari per orang. Hanya diberikan jika jarak perjalanan One-way $\ge$ 80 KM. Deskripsi detail pekerjaan wajib diisi di atas (minimal 15 huruf murni).")
+            st.markdown("<div style='background-color:#E0F2FE; padding:15px; border-radius:10px; border-left: 5px solid #0284C7; margin-bottom: 15px; box-shadow: 2px 2px 5px rgba(0,0,0,0.05);'>", unsafe_allow_html=True)
+            st.info("💡 **RULES UANG MAKAN UPDATE:** Maks Rp 60.000 / Hari per orang. Hanya diberikan jika jarak perjalanan Pulang-Pergi (PP) $\ge$ 80 KM. Deskripsi detail pekerjaan wajib diisi.")
             c_um1, c_um2 = st.columns(2)
             with c_um1:
                 hari_req = st.number_input("Rencana Berapa Hari?", min_value=1, step=1, value=1)
@@ -871,10 +890,11 @@ elif st.session_state.page == "📝 Form Request Dana":
                     for req in sub_requests:
                         if req['tipe'] == 'UM':
                             if not (is_mobil or is_motor or is_genset) or invalid_coords:
-                                st.error("❌ REQUEST UANG MAKAN DITOLAK: Koordinat Peta tidak valid. Syarat wajib Uang Makan adalah jarak tempuh aktual terdeteksi >= 80 KM.")
+                                st.error("❌ REQUEST UANG MAKAN DITOLAK: Koordinat Peta tidak valid. Syarat wajib Uang Makan adalah jarak tempuh aktual terdeteksi.")
                                 st.stop()
-                            if jarak_km_oneway < 80:
-                                st.error(f"❌ REQUEST UANG MAKAN DITOLAK: Jarak tempuh (One-way) ke titik lokasi Anda hanya {jarak_km_oneway:.1f} KM. Syarat wajib pencairan Uang Makan adalah jarak >= 80 KM.")
+                            # PERUBAHAN LOGIKA UANG MAKAN KE PP >= 80KM
+                            if jarak_km_pp < 80:
+                                st.error(f"❌ REQUEST UANG MAKAN DITOLAK: Jarak tempuh (Pulang-Pergi / PP) Anda hanya {jarak_km_pp:.1f} KM. Syarat wajib pencairan Uang Makan adalah jarak PP >= 80 KM.")
                                 st.stop()
                             if len(deskripsi.strip().replace(" ", "")) <= 15:
                                 st.error("❌ REQUEST UANG MAKAN DITOLAK: Deskripsi pekerjaan yang Anda ketik terlalu singkat (Hanya berisi <= 15 karakter murni). Sertakan detail spesifik pekerjaan (Contoh: 'PM membersihkan perangkat BTS dan area shelter').")
@@ -1513,7 +1533,7 @@ elif st.session_state.page == "🛡️ Approval Center":
                     if len(pjb_target) > 36 and pjb_target[36].strip():
                         st.info(f"💡 **INFO PJB MULTI-TIKET (PM):** Tiket spesifik yang diselesaikan pada PJB ini adalah: **{pjb_target[36]}**")
                         
-                    st.markdown("<div style='background:#F8FAFC; padding:15px; border-radius:10px; margin-bottom:15px;'><b>Bukti Terlampir:</b></div>", unsafe_allow_html=True)
+                    st.markdown("<div style='background:#F8FAFC; padding:15px; border-radius:10px; margin-bottom:15px; box-shadow: inset 2px 2px 5px rgba(0,0,0,0.05);'><b>Bukti Terlampir:</b></div>", unsafe_allow_html=True)
                     
                     is_akomodasi = False
                     if len(pjb_target) > 28 and str(pjb_target[28]).startswith("http"):
@@ -1741,7 +1761,7 @@ elif st.session_state.page == "🏦 Manajemen Kas & Distribusi":
                             "Nominal PJB": nom
                         })
                         
-                st.markdown(f"<div class='metric-3d' style='border-top: 6px solid #10B981;'><div class='metric-title'>Total Nominal PJB (Filtered)</div><div class='metric-value' style='background: -webkit-linear-gradient(45deg, #10B981, #059669); -webkit-background-clip: text;'>Rp {total_nominal_pjb:,.0f}</div></div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='metric-3d'><div class='metric-title'>Total Nominal PJB (Filtered)</div><div class='metric-value'>Rp {total_nominal_pjb:,.0f}</div></div>", unsafe_allow_html=True)
                 
                 if filtered_pjb:
                     df_pjb_ops = pd.DataFrame(filtered_pjb)
@@ -1758,14 +1778,14 @@ elif st.session_state.page == "🏦 Manajemen Kas & Distribusi":
 # PAGE 5: LIVE MONITORING
 # ==========================================
 elif st.session_state.page == "📈 Live Monitoring":
-    st.markdown("<div class='header-card'><h2>📈 LIVE MONITORING DASHBOARD</h2><p>Sistem Analisa Kas, Daily Pengeluaran, Tracker Satelit, & Anomali BBM</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='header-card'><h2>📈 LIVE MONITORING DASHBOARD</h2><p>Sistem Analisa Kas, Daily Pengeluaran, Tracker Satelit, & Analisa Performa Kendaraan</p></div>", unsafe_allow_html=True)
     
     nop_live = st.selectbox("🌐 Pilih Market (NOP):", ["-- Pilih NOP --"] + list(MASTER_DATA.keys()))
     if nop_live != "-- Pilih NOP --":
         data_all = fetch_spreadsheet_data(MASTER_DATA[nop_live]["spreadsheet_id"])
         um_r, rekap_r, pjb_r, req_r, app_r = data_all[SHEET_UM], data_all["Rekap PJB"], data_all[SHEET_PJB], data_all[SHEET_REQUEST], data_all[SHEET_APP]
         
-        t1, t2, t3 = st.tabs(["💰 1. Sisa Kas, Daily Graph & Kategori BBM", "🚨 2. Record Anomali & Warning Tim", "🕵️ 3. Evaluasi Kinerja (Track KM/RH)"])
+        t1, t2, t3, t4 = st.tabs(["💰 1. Sisa Kas & Daily Graph", "🚨 2. Record Anomali", "🕵️ 3. Evaluasi Kinerja (Track Satelit)", "🚗 4. Performa Kendaraan (NOPOL)"])
         
         with t1:
             total_um = sum([clean_nominal(r[3]) for r in um_r[1:] if len(r)>3]) if len(um_r)>1 else 0
@@ -1876,6 +1896,49 @@ elif st.session_state.page == "📈 Live Monitoring":
                 def highlight_markup(s): return ['background-color: #FEE2E2; color: #DC2626; font-weight: bold' if '🔴' in str(v) else '' for v in s]
                 st.dataframe(pd.DataFrame(eval_list).style.apply(highlight_markup, subset=['Status Jarak', 'Status Konsumsi']), hide_index=True, use_container_width=True)
             else: st.info("Belum ada data realisasi PJB yang dapat disandingkan dengan Satelit.")
+
+        with t4:
+            st.markdown("### 🚙 Analisa Performa & Efisiensi Mobil (Berdasarkan NOPOL)")
+            st.info("💡 **FITUR BARU:** Tabel ini membaca seluruh histori pengisian BBM Mobil, mengakumulasi Jarak Tempuh total, Isian Liter total, dan menghasilkan Konstanta (KM/L) untuk mengevaluasi efisiensi mobil bersangkutan secara keseluruhan.")
+            
+            car_stats = {}
+            for r in pjb_r[1:]:
+                if len(r) > 24:
+                    kategori = str(r[8]).lower()
+                    plat = str(r[12]).strip().upper()
+                    if "mobil" in kategori and plat:
+                        if plat not in car_stats:
+                            car_stats[plat] = {"Total Jarak (KM)": 0.0, "Total Liter": 0.0, "Total Dana (Rp)": 0}
+                        
+                        try: jarak = float(str(r[24]).replace(',', '.'))
+                        except: jarak = 0.0
+                        
+                        try: liter = float(str(r[22]).replace(',', '.'))
+                        except: liter = 0.0
+                        
+                        try: nominal = clean_nominal(r[11])
+                        except: nominal = 0
+                        
+                        car_stats[plat]["Total Jarak (KM)"] += jarak
+                        car_stats[plat]["Total Liter"] += liter
+                        car_stats[plat]["Total Dana (Rp)"] += nominal
+            
+            car_list = []
+            for plat, data in car_stats.items():
+                eff = data["Total Jarak (KM)"] / data["Total Liter"] if data["Total Liter"] > 0 else 0.0
+                car_list.append({
+                    "NOPOL Kendaraan": plat,
+                    "Total Jarak Ditempuh (KM)": round(data["Total Jarak (KM)"], 2),
+                    "Total Pengisian BBM (Liter)": round(data["Total Liter"], 2),
+                    "Total Dana Dikeluarkan": f"Rp {data['Total Dana (Rp)']:,.0f}",
+                    "Konstanta Mesin / Efisiensi": f"{eff:.2f} KM / Liter"
+                })
+                
+            if car_list:
+                df_cars = pd.DataFrame(car_list).sort_values("Total Jarak Ditempuh (KM)", ascending=False)
+                st.dataframe(df_cars, hide_index=True, use_container_width=True)
+            else:
+                st.info("Mengekstrak data... Belum ada data PJB Mobil ber-NOPOL yang ditemukan untuk dianalisa.")
 
 
 # ==========================================
