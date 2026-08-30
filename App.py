@@ -255,7 +255,6 @@ def load_excel_data():
                         tim_dict[pic_name]['NOPOL'] = nopol_val
     except Exception: pass
     
-    # LOAD DATABASE NIK (LINTAS REGION & NIK NOP PLK)
     nik_dict = {}
     try:
         for nik_file in ["NIK NOP PLK.xlsx", "Database_NIK.xlsx"]:
@@ -302,7 +301,7 @@ def get_user_tickets_status(nama, req_rows, pjb_rows, app_rows):
             tiket_app = r[2].strip().upper()
             if tiket_app != "": pjb_app_status[tiket_app] = {"status": r[5].strip(), "catatan": r[6] if len(r)>6 else ""}
 
-    outstanding_all, outstanding_lock, aging_august, history = [], [], [], []
+    outstanding_all, outstanding_lock, aging_tickets, history = [], [], [], []
     today = datetime.now().date()
     
     for req_tk_raw, tgl in req_tickets.items():
@@ -314,8 +313,10 @@ def get_user_tickets_status(nama, req_rows, pjb_rows, app_rows):
             req_date = parse_date(tgl)
             if req_date >= CUTOFF_DATE: outstanding_lock.append(req_tk_raw)
             aging_days = (today - req_date).days
-            if req_date.month == 8 and aging_days > 3:
-                aging_august.append(req_tk_raw)
+            
+            # --- PERBAIKAN LOGIKA: MULAI AGUSTUS DAN SETERUSNYA, BUKAN HANYA BULAN 8 ---
+            if req_date >= CUTOFF_DATE and aging_days > 3:
+                aging_tickets.append(req_tk_raw)
                 history.append({"Tiket": req_tk_raw, "Tanggal": tgl, "Status": f"🚨 Telat {aging_days} Hari"})
             else: history.append({"Tiket": req_tk_raw, "Tanggal": tgl, "Status": "🔴 Menunggu PJB (Belum Selesai)"})
         else:
@@ -328,7 +329,7 @@ def get_user_tickets_status(nama, req_rows, pjb_rows, app_rows):
                 history.append({"Tiket": req_tk_raw, "Tanggal": tgl, "Status": f"❌ PJB DITOLAK: {app_data['catatan']}"})
             else: history.append({"Tiket": req_tk_raw, "Tanggal": tgl, "Status": "🟢 PJB Selesai & Approved"})
             
-    return outstanding_all, outstanding_lock, aging_august, sorted(history, key=lambda x: x["Status"], reverse=True)
+    return outstanding_all, outstanding_lock, aging_tickets, sorted(history, key=lambda x: x["Status"], reverse=True)
 
 def upload_foto(file):
     if file is None: return ""
@@ -423,7 +424,7 @@ if st.session_state.page == "🏠 Hub Menu Utama":
     cek_nop = st.selectbox("Pilih Area Wilayah", ["-- Pilih Area --"] + list(MASTER_DATA.keys()), key="cek_area_hub")
     
     if cek_nop != "-- Pilih Area --":
-        tab_pribadi, tab_tim_agustus = st.tabs(["👤 Status Pribadi Anda", "🚨 Tim Belum PJB (Agustus)"])
+        tab_pribadi, tab_tim_pending = st.tabs(["👤 Status Pribadi Anda", "🚨 Tim Belum PJB (Mulai Agustus)"])
         
         with tab_pribadi:
             cek_nama = st.selectbox("Nama Petugas", ["-- Pilih Nama --"] + MASTER_DATA[cek_nop]["names"], key="cek_nama_hub")
@@ -431,17 +432,17 @@ if st.session_state.page == "🏠 Hub Menu Utama":
                 if cek_nama != "-- Pilih Nama --" and cek_nama != "":
                     with st.spinner("Menarik data server..."):
                         data_cek = fetch_spreadsheet_data(MASTER_DATA[cek_nop]["spreadsheet_id"])
-                        out_all, out_lock, aging_august, hist_tkt = get_user_tickets_status(cek_nama, data_cek[SHEET_REQUEST], data_cek[SHEET_PJB], data_cek[SHEET_APP])
+                        out_all, out_lock, aging_tickets, hist_tkt = get_user_tickets_status(cek_nama, data_cek[SHEET_REQUEST], data_cek[SHEET_PJB], data_cek[SHEET_APP])
                     
                     if hist_tkt:
                         st.dataframe(pd.DataFrame(hist_tkt), hide_index=True, use_container_width=True)
-                        if aging_august: st.warning(f"🔔 Ada {len(aging_august)} request tertunda >3 Hari. Tolong segera di-PJB!")
+                        if aging_tickets: st.warning(f"🔔 Ada {len(aging_tickets)} request tertunda >3 Hari. Tolong segera di-PJB!")
                         if out_all: st.error(f"⚠️ {len(out_all)} Request memblokir status Anda (Belum PJB / Pending Verifikasi).")
                         else: st.success("✅ Seluruh tiket aman dan Approved!")
                     else: st.info("Tidak ada data / belum pernah request.")
                     
-        with tab_tim_agustus:
-            st.info("Fitur ini menampilkan daftar tiket tim yang masih gantung (belum disubmit) khusus untuk pengajuan di bulan Agustus 2026.")
+        with tab_tim_pending:
+            st.info("Fitur ini menampilkan daftar tiket tim yang masih gantung (belum disubmit) mulai dari Agustus 2026 dan seterusnya ke depan.")
             if st.button("🔍 Tarik Data Tim Belum PJB", use_container_width=True, type="primary"):
                 with st.spinner("Memindai seluruh data tim wilayah ini..."):
                     data_cek = fetch_spreadsheet_data(MASTER_DATA[cek_nop]["spreadsheet_id"])
@@ -454,20 +455,21 @@ if st.session_state.page == "🏠 Hub Menu Utama":
                         
                         for h in hist_tkt:
                             tgl_req = parse_date(h["Tanggal"])
-                            if tgl_req.month == 8 and tgl_req.year == 2026:
+                            # --- PERBAIKAN LOGIKA TIM: MULAI AGUSTUS DAN SETERUSNYA ---
+                            if tgl_req >= CUTOFF_DATE:
                                 if "Menunggu PJB" in h["Status"] or "Telat" in h["Status"]:
                                     list_blm_pjb.append({
                                         "Nama Petugas": nm,
                                         "No Tiket / Request": h["Tiket"],
                                         "Tanggal Request": h["Tanggal"],
-                                        "Status Terkini": "🔴 Belum Submit PJB"
+                                        "Status Terkini": h["Status"]
                                     })
                     
                     if list_blm_pjb:
-                        st.error(f"⚠️ Ditemukan {len(list_blm_pjb)} tiket bulan Agustus yang belum dilaporkan!")
+                        st.error(f"⚠️ Ditemukan {len(list_blm_pjb)} tiket aktif yang belum dilaporkan!")
                         st.dataframe(pd.DataFrame(list_blm_pjb), hide_index=True, use_container_width=True)
                     else:
-                        st.success("🎉 Luar biasa! Seluruh tim di wilayah ini sudah menyelesaikan PJB bulan Agustus.")
+                        st.success("🎉 Luar biasa! Seluruh tim di wilayah ini sudah menyelesaikan PJB aktif.")
 
     st.markdown("<div class='section-title'>🛡️ MENU KHUSUS ADMIN</div>", unsafe_allow_html=True)
     if not st.session_state.admin_logged_in:
@@ -590,9 +592,9 @@ elif st.session_state.page == "📝 Form Request Dana":
             
             nama_lookup = nama.strip().upper()
             
-            out_all, out_lock, aging_august, hist_cek = get_user_tickets_status(nama, req_r, pjb_r, app_r)
-            if aging_august:
-                st.warning(f"🔔 PENGINGAT: Sdr/i {nama}, Anda memiliki **{len(aging_august)}** pengajuan bulan Agustus yang tertunda PJB >3 Hari!")
+            out_all, out_lock, aging_tickets, hist_cek = get_user_tickets_status(nama, req_r, pjb_r, app_r)
+            if aging_tickets:
+                st.warning(f"🔔 PENGINGAT: Sdr/i {nama}, Anda memiliki **{len(aging_tickets)}** pengajuan yang tertunda PJB >3 Hari!")
             
             for hc in hist_cek:
                 if "DITOLAK" in hc["Status"]: st.error(f"⚠️ HARAP REVISI PJB: {hc['Tiket']} {hc['Status']}")
@@ -633,7 +635,7 @@ elif st.session_state.page == "📝 Form Request Dana":
                 
             base_tiket_clean = tiket.strip().upper()
             
-            # --- CEK DUPLIKASI & IZIN REVISI ---
+            # --- CEK DUPLIKASI & IZIN REVISI (ERROR HANDLING DIPERKUAT) ---
             is_duplicate = False
             if base_tiket_clean != "":
                 for t in all_requested_tickets:
@@ -643,7 +645,8 @@ elif st.session_state.page == "📝 Form Request Dana":
                         
             status_izin = "NONE"
             if is_duplicate:
-                for r in reversed(app_r):
+                safe_app_r = app_r[1:] if len(app_r) > 1 else []
+                for r in reversed(safe_app_r):
                     if len(r) > 5 and r[3] == "Izin Revisi" and str(r[2]).strip().upper() == base_tiket_clean:
                         status_izin = str(r[5]).strip()
                         break
@@ -725,7 +728,6 @@ elif st.session_state.page == "📝 Form Request Dana":
                     with c_m1:
                         jb_mobil = st.selectbox("Jenis BBM Mobil", ["Pertalite", "Pertamax", "Dexlite", "Bio Solar", "Pertamina Dex"], key="b_mob")
                         
-                        # --- ESTIMASI BBM OTOMATIS BERDASARKAN JARAK ---
                         est_liter_mob = round(jarak_km_pp / 9.0, 1) if jarak_km_pp > 0 else 5.0
                         est_harga_mob = 10000 if "Pertalite" in jb_mobil else (12500 if "Pertamax" in jb_mobil else (14500 if "Dexlite" in jb_mobil else 6800))
                         default_est_dana_mob = int(est_liter_mob * est_harga_mob)
@@ -751,7 +753,6 @@ elif st.session_state.page == "📝 Form Request Dana":
                         k_tangki = st.number_input("Kapasitas Tangki (Liter)", min_value=0.0, step=0.1, value=4.0, key="kt_mot")
                         h_satuan = st.number_input("Harga Satuan BBM (Rp/Liter)", min_value=0, step=500, value=10000, key="hs_mot")
                         
-                        # --- ESTIMASI BBM OTOMATIS BERDASARKAN JARAK ---
                         est_l_mot = round(jarak_km_pp / 35.0, 1) if jarak_km_pp > 0 else 2.0
                         l_butuh = st.number_input("Berapa Liter Kebutuhan?", min_value=0.0, step=0.1, value=est_l_mot, key="lb_mot")
                         keb_motor = int(l_butuh * h_satuan)
@@ -865,7 +866,8 @@ elif st.session_state.page == "📝 Form Request Dana":
                 motor_kebutuhan = sum([r['kebutuhan'] for r in sub_requests if r['tipe'] == 'Motor'])
                 if (total_motor_this_month + motor_kebutuhan) > 500000:
                     st.markdown("<div style='background-color:#FFE4E6; padding:20px; border-radius:10px; border-left: 5px solid #E11D48; margin-top:15px; margin-bottom: 25px;'>", unsafe_allow_html=True)
-                    for r in reversed(app_r):
+                    safe_app_r = app_r[1:] if len(app_r) > 1 else []
+                    for r in reversed(safe_app_r):
                         if len(r) > 5 and str(r[2]).strip().upper() == base_tiket_clean and r[3] == "Limit Motor":
                             status_app_motor = str(r[5]).strip().upper()
                             break
@@ -966,21 +968,18 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                 pjb_tickets_all_set.update([t.strip().upper() for t in tk_str.split(",")])
         
         status_verif_dict = {}
-        catatan_verif_dict = {}
         for r in app_r[1:]:
             if len(r) > 5 and r[3] == "Verifikasi PJB":
                 tiket_app = str(r[2]).strip().upper()
-                if tiket_app != "":
-                    status_verif_dict[tiket_app] = str(r[5]).strip()
-                    if len(r) > 6: catatan_verif_dict[tiket_app] = r[6]
+                if tiket_app != "": status_verif_dict[tiket_app] = str(r[5]).strip()
         
         st.markdown("<div class='section-title'>🔍 2. Identifikasi Tim & Tarik Sub-Tiket Data</div>", unsafe_allow_html=True)
         col_id1, col_id2 = st.columns([2, 2])
         with col_id1: nama_pjb = st.selectbox("👤 Pilih Nama Anda:", ["-- Pilih Nama --"] + MASTER_DATA[nop_cari]["names"])
         
         if nama_pjb != "-- Pilih Nama --":
-            out_all, out_lock, aging_august, hist_cek = get_user_tickets_status(nama_pjb, req_r, pjb_r, app_r)
-            if aging_august: st.warning(f"🔔 NOTIFIKASI: Anda memiliki **{len(aging_august)}** tiket tertunda >3 hari.")
+            out_all, out_lock, aging_tickets, hist_cek = get_user_tickets_status(nama_pjb, req_r, pjb_r, app_r)
+            if aging_tickets: st.warning(f"🔔 NOTIFIKASI: Anda memiliki **{len(aging_tickets)}** tiket tertunda >3 hari.")
             for hc in hist_cek:
                 if "DITOLAK" in hc["Status"]: st.error(f"⚠️ HARAP REVISI PJB: {hc['Tiket']} {hc['Status']}")
                 elif "Review Admin" in hc["Status"]: st.warning(f"⏳ PENDING VERIFIKASI: {hc['Tiket']}")
@@ -1017,10 +1016,11 @@ elif st.session_state.page == "✅ Form PJB Operasional":
         if pending_list: st.dataframe(pd.DataFrame(pending_list), hide_index=True, use_container_width=True)
         else: st.success("💎 Seluruh sub-tiket sudah di-PJB!")
         
+        st.info("💡 Jika Anda sedang **merevisi PJB (Izin Revisi Approved)** namun tidak muncul di dropdown, silakan gunakan opsi **-- Ketik Manual --** dan masukkan nomor tiketnya secara spesifik.")
         col_s2, col_s3 = st.columns([3, 1])
         with col_s2: 
             pilihan_tiket = st.selectbox("🎫 Pilih Sub-Tiket Pending yang ingin di-PJB-kan:", ["-- Pilih Tiket --"] + pending_options + ["-- Ketik Manual --"]) if pending_options else "-- Ketik Manual --"
-            cari_tiket = st.text_input("Ketik Manual (Termasuk Request Lama untuk Revisi):") if pilihan_tiket == "-- Ketik Manual --" else ("" if pilihan_tiket == "-- Pilih Tiket --" else pilihan_tiket)
+            cari_tiket = st.text_input("Ketik Manual (Termasuk Request Baru Hasil Izin Revisi):") if pilihan_tiket == "-- Ketik Manual --" else ("" if pilihan_tiket == "-- Pilih Tiket --" else pilihan_tiket)
         
         valid_cari_tiket = str(cari_tiket).strip().upper()
 
@@ -2263,7 +2263,7 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
             else: st.success("Belum ada PJB yang disubmit hari ini.")
             
         with tab_warning:
-            st.markdown("### 🚨 Peringatan Otomatis (Data Sejak Agustus 2026)")
+            st.markdown("### 🚨 Peringatan Otomatis (Data Mulai Agustus 2026 dst)")
             st.info("Sistem melacak siapa yang belum setor PJB lebih dari 3 hari, dan mencocokkan nilai **Sisa Dana (Request awal vs Laporan PJB)**.")
             
             pjb_dict = {}
