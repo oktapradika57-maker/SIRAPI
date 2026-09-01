@@ -213,9 +213,9 @@ def update_pm_ticket_status(spreadsheet_id, tickets_to_update, new_status):
         client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
         ws = client.worksheet(SHEET_TIKET_PM)
         rows = ws.get_all_values()
+        t_list = [str(t).strip().upper() for t in tickets_to_update]
         for i, r in enumerate(rows):
-            if i == 0: continue
-            if len(r) > 3 and r[3] in tickets_to_update:
+            if len(r) > 3 and str(r[3]).strip().upper() in t_list:
                 ws.update_cell(i + 1, 6, new_status)
         fetch_spreadsheet_data.clear()
     except Exception: pass
@@ -314,7 +314,6 @@ def get_user_tickets_status(nama, req_rows, pjb_rows, app_rows):
             if req_date >= CUTOFF_DATE: outstanding_lock.append(req_tk_raw)
             aging_days = (today - req_date).days
             
-            # --- PERBAIKAN LOGIKA: MULAI AGUSTUS DAN SETERUSNYA, BUKAN HANYA BULAN 8 ---
             if req_date >= CUTOFF_DATE and aging_days > 3:
                 aging_tickets.append(req_tk_raw)
                 history.append({"Tiket": req_tk_raw, "Tanggal": tgl, "Status": f"🚨 Telat {aging_days} Hari"})
@@ -455,7 +454,6 @@ if st.session_state.page == "🏠 Hub Menu Utama":
                         
                         for h in hist_tkt:
                             tgl_req = parse_date(h["Tanggal"])
-                            # --- PERBAIKAN LOGIKA TIM: MULAI AGUSTUS DAN SETERUSNYA ---
                             if tgl_req >= CUTOFF_DATE:
                                 if "Menunggu PJB" in h["Status"] or "Telat" in h["Status"]:
                                     list_blm_pjb.append({
@@ -544,13 +542,13 @@ elif st.session_state.page == "🎫 Master Tiket PM":
         
         with c_pm2:
             st.markdown("### 📋 Daftar Tiket PM (Tersedia / AVAILABLE)")
-            avail_pm = []
-            for r in pm_r[1:]:
-                if len(r) >= 6 and r[1] == nop_pm and r[5] == "AVAILABLE":
-                    avail_pm.append({"Periode": r[2], "No Tiket": r[3], "Site/Cluster": r[4], "Status": r[5]})
+            avail_pm_view = []
+            for r in pm_r:
+                if len(r) >= 6 and str(r[1]).strip().upper() == nop_pm.strip().upper() and str(r[5]).strip().upper() == "AVAILABLE":
+                    avail_pm_view.append({"Periode": r[2], "No Tiket": r[3], "Site/Cluster": r[4], "Status": r[5]})
             
-            if avail_pm:
-                st.dataframe(pd.DataFrame(avail_pm), hide_index=True, use_container_width=True)
+            if avail_pm_view:
+                st.dataframe(pd.DataFrame(avail_pm_view), hide_index=True, use_container_width=True)
             else:
                 st.info("Tidak ada tiket PM yang tersedia di NOP ini. Silakan input di form sebelah kiri.")
 
@@ -624,7 +622,12 @@ elif st.session_state.page == "📝 Form Request Dana":
             if keperluan == "PM":
                 st.markdown("<div style='background-color:#F0F9FF; padding:15px; border-radius:10px; border-left: 5px solid #0EA5E9; margin-bottom: 15px;'><b>🎫 Fitur Multi-Select Tiket PM</b><br><small>Silakan pilih sebanyak mungkin tiket yang akan dikerjakan dalam 1x pencairan dana ini.</small></div>", unsafe_allow_html=True)
                 pm_r = data_all.get(SHEET_TIKET_PM, [])
-                avail_pm = [r[3] for r in pm_r[1:] if len(r) >= 6 and r[1] == nop and r[5] == "AVAILABLE"]
+                
+                avail_pm = []
+                for r in pm_r:
+                    if len(r) >= 6 and str(r[1]).strip().upper() == nop.strip().upper() and str(r[5]).strip().upper() == "AVAILABLE":
+                        avail_pm.append(str(r[3]).strip().upper())
+                        
                 pm_selected_list = st.multiselect("Pilih Tiket PM yang akan digarap (Multi-Select):", avail_pm)
                 tiket_string = ", ".join(pm_selected_list)
                 
@@ -635,7 +638,6 @@ elif st.session_state.page == "📝 Form Request Dana":
                 
             base_tiket_clean = tiket.strip().upper()
             
-            # --- CEK DUPLIKASI & IZIN REVISI (ERROR HANDLING DIPERKUAT) ---
             is_duplicate = False
             if base_tiket_clean != "":
                 for t in all_requested_tickets:
