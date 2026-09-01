@@ -713,7 +713,7 @@ elif st.session_state.page == "📝 Form Request Dana":
         st.markdown("<div class='section-title'>🛒 4. Rincian Kebutuhan Dana (Pilih Bisa Lebih Dari 1)</div>", unsafe_allow_html=True)
         st.info("💡 **INFO SPLIT ENGINE:** Anda bisa memilih banyak kebutuhan sekaligus. Sistem akan otomatis **memecah form ini menjadi beberapa tiket PJB pending yang terpisah**.")
         
-        kebutuhan_dana_list = st.multiselect("Silakan pilih seluruh jenis pengeluaran untuk tiket ini:", ["BBM", "Uang Makan", "Material", "Fery Reguler/Carter", "Klotok/Kapal Carter"])
+        kebutuhan_dana_list = st.multiselect("Silakan pilih seluruh jenis pengeluaran untuk tiket ini:", ["BBM", "Uang Makan", "Material", "Fery Reguler/Carter", "Klotok/Kapal Carter", "Penginapan" ])
         
         sub_requests = []
         is_mobil = is_motor = is_genset = False
