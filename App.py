@@ -2276,8 +2276,9 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
     
     nop_mon = st.selectbox("🌐 Pilih Wilayah Database (NOP):", ["-- Pilih NOP --"] + list(MASTER_DATA.keys()))
     if nop_mon != "-- Pilih NOP --":
+        target_ss = MASTER_DATA[nop_mon]["spreadsheet_id"]  # <-- Variabel ini yang sebelumnya terlewat
         with st.spinner("Menarik data langsung dari server..."):
-            data_all = fetch_spreadsheet_data(MASTER_DATA[nop_mon]["spreadsheet_id"])
+            data_all = fetch_spreadsheet_data(target_ss)
             req_r, pjb_r, app_r = data_all[SHEET_REQUEST], data_all[SHEET_PJB], data_all[SHEET_APP]
         
         tab_daily, tab_warning = st.tabs(["📅 1. Daily Realtime (Hari Ini)", "⚠️ 2. Warning List (Gantung & Sisa Dana)"])
