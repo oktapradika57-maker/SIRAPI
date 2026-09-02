@@ -298,10 +298,14 @@ def get_user_tickets_status(nama, req_rows, pjb_rows, app_rows):
             pjb_tickets_all_set.update([t.strip().upper() for t in tk_str.split(",")])
             
     pjb_app_status = {}
+    req_app_status = {}
     for r in app_rows[1:]:
-        if len(r) > 5 and r[3] == "Verifikasi PJB":
-            tiket_app = r[2].strip().upper()
-            if tiket_app != "": pjb_app_status[tiket_app] = {"status": r[5].strip(), "catatan": r[6] if len(r)>6 else ""}
+        if len(r) > 5:
+            tiket_app = str(r[2]).strip().upper()
+            if r[3] == "Verifikasi PJB":
+                if tiket_app != "": pjb_app_status[tiket_app] = {"status": r[5].strip(), "catatan": r[6] if len(r)>6 else ""}
+            elif r[3] == "Request Dana":
+                if tiket_app != "": req_app_status[tiket_app] = str(r[5]).strip().upper()
 
     outstanding_all, outstanding_lock, aging_tickets, history = [], [], [], []
     today = datetime.now().date()
@@ -310,6 +314,11 @@ def get_user_tickets_status(nama, req_rows, pjb_rows, app_rows):
         req_tk_list = [t.strip() for t in req_tk_raw.split(",") if t.strip()]
         req_set = set(req_tk_list)
         
+        # LOGIKA BARU: Abaikan (Lepaskan Blokir) jika Request telah di-Reject Admin
+        if req_app_status.get(req_tk_raw) == "REJECTED":
+            history.append({"Tiket": req_tk_raw, "Tanggal": tgl, "Status": "❌ REQUEST DITOLAK Admin (Harap Ajukan Ulang)"})
+            continue
+            
         if not req_set.issubset(pjb_tickets_all_set):
             outstanding_all.append(req_tk_raw)
             req_date = parse_date(tgl)
@@ -500,7 +509,7 @@ if st.session_state.page == "🏠 Hub Menu Utama":
             if st.button("🖨️ REPORT & AUTO PJB\n(Export Laporan)", use_container_width=True): st.session_state.page = "🖨️ Auto PJB Report"; st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown("<div style='text-align: center; color: #94a3b8; font-size: 0.8rem; margin-top:50px;'>Created by Okta Pradika<br>KUT SYSTEM - v8.6 Enterprise Mobile Edition (3D)</div>", unsafe_allow_html=True)
+    st.markdown("<div style='text-align: center; color: #94a3b8; font-size: 0.8rem; margin-top:50px;'>Created by Okta Pradika<br>KUT SYSTEM - v8.7 Enterprise Mobile Edition (3D)</div>", unsafe_allow_html=True)
 
 
 # ==========================================
@@ -599,7 +608,7 @@ elif st.session_state.page == "📝 Form Request Dana":
                 st.warning(f"🔔 PENGINGAT: Sdr/i {nama}, Anda memiliki **{len(aging_tickets)}** pengajuan yang tertunda PJB >3 Hari!")
             
             for hc in hist_cek:
-                if "DITOLAK" in hc["Status"]: st.error(f"⚠️ HARAP REVISI PJB: {hc['Tiket']} {hc['Status']}")
+                if "DITOLAK" in hc["Status"]: st.error(f"⚠️ HARAP REVISI/RE-REQUEST: {hc['Tiket']} {hc['Status']}")
                 elif "Review Admin" in hc["Status"]: st.warning(f"⏳ VERIFIKASI: {hc['Tiket']} Sedang Dalam Verifikasi Admin.")
 
             default_bank, default_no_rek = "BNI", ""
@@ -651,7 +660,16 @@ elif st.session_state.page == "📝 Form Request Dana":
             base_tiket_clean = tiket.strip().upper()
             
             is_duplicate = False
-            if base_tiket_clean != "":
+            is_rejected_request = False
+            
+            # Cek status "Request Dana" yang di reject di SHEET_APP
+            for r in reversed(app_r[1:]):
+                if len(r) > 5 and r[3] == "Request Dana" and str(r[2]).strip().upper() == base_tiket_clean:
+                    if str(r[5]).strip().upper() == "REJECTED": is_rejected_request = True
+                    break
+            
+            # Jika belum pernah ditolak Admin sepenuhnya, cek apakah duplikat
+            if base_tiket_clean != "" and not is_rejected_request:
                 for t in all_requested_tickets:
                     if base_tiket_clean in t: 
                         is_duplicate = True
@@ -677,6 +695,9 @@ elif st.session_state.page == "📝 Form Request Dana":
                     st.stop()
                 else:
                     st.success("✅ Izin Revisi DIBERIKAN Admin. Silakan isi kembali data perbaikan Anda di bawah ini.")
+                    
+            if is_rejected_request:
+                st.info(f"💡 Info: Request dengan tiket **{base_tiket_clean}** sebelumnya ditolak. Anda dapat menginput ulang (Re-Submit) di form ini.")
 
             deskripsi = st.text_area("Deskripsi Pekerjaan / Justifikasi (Harus Detail)", help="Contoh detail: PM membersihkan perangkat BTS dan area shelter dan recty")
             
@@ -1019,7 +1040,7 @@ elif st.session_state.page == "✅ Form PJB Operasional":
             out_all, out_lock, aging_tickets, hist_cek = get_user_tickets_status(nama_pjb, req_r, pjb_r, app_r)
             if aging_tickets: st.warning(f"🔔 NOTIFIKASI: Anda memiliki **{len(aging_tickets)}** tiket tertunda >3 hari.")
             for hc in hist_cek:
-                if "DITOLAK" in hc["Status"]: st.error(f"⚠️ HARAP REVISI PJB: {hc['Tiket']} {hc['Status']}")
+                if "DITOLAK" in hc["Status"]: st.error(f"⚠️ HARAP REVISI/RE-REQUEST: {hc['Tiket']} {hc['Status']}")
                 elif "Review Admin" in hc["Status"]: st.warning(f"⏳ PENDING VERIFIKASI: {hc['Tiket']}")
 
         with col_id2: pass_nominal = st.text_input("🔑 Akses Nominal (Admin):", type="password")
@@ -2257,7 +2278,7 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
     if nop_mon != "-- Pilih NOP --":
         with st.spinner("Menarik data langsung dari server..."):
             data_all = fetch_spreadsheet_data(MASTER_DATA[nop_mon]["spreadsheet_id"])
-            req_r, pjb_r = data_all[SHEET_REQUEST], data_all[SHEET_PJB]
+            req_r, pjb_r, app_r = data_all[SHEET_REQUEST], data_all[SHEET_PJB], data_all[SHEET_APP]
         
         tab_daily, tab_warning = st.tabs(["📅 1. Daily Realtime (Hari Ini)", "⚠️ 2. Warning List (Gantung & Sisa Dana)"])
         
@@ -2292,32 +2313,77 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
                 um_r_dist = data_all.get(SHEET_UM, [])
                 valid_batches = sorted(list(set([r[2].strip() for r in um_r_dist[1:] if len(r) > 2 and r[2].strip() != ""])))
                 
-                with st.form("form_quick_dist"):
-                    cd1, cd2, cd3 = st.columns(3)
-                    with cd1:
-                        tiket_to_app = st.selectbox("Pilih Tiket (Support):", ["-- Pilih Tiket --"] + [req['Sub-Tiket (Split)'] for req in daily_req])
-                    with cd2:
-                        sumber_dana_app = st.selectbox("Sumber Dana (Budget)", ["-- Pilih Dana --"] + valid_batches)
-                    with cd3:
-                        nom_dist_app = st.number_input("Nominal Transfer (Rp)", min_value=0, step=1000)
+                cd1, cd2, cd3 = st.columns(3)
+                with cd1:
+                    tiket_to_app = st.selectbox("Pilih Tiket (Support):", ["-- Pilih Tiket --"] + [req['Sub-Tiket (Split)'] for req in daily_req])
+                
+                # Logic Auto-Fill Nominal berdasarkan pilihan dropdown
+                auto_nom = 0
+                if tiket_to_app != "-- Pilih Tiket --":
+                    auto_nom = next((req['Nominal Request'] for req in daily_req if req['Sub-Tiket (Split)'] == tiket_to_app), 0)
                     
-                    if st.form_submit_button("✅ Approve & Support (Catat ke Distribusi)"):
-                        if tiket_to_app != "-- Pilih Tiket --" and sumber_dana_app != "-- Pilih Dana --" and nom_dist_app > 0:
-                            nama_penerima = next((r['Nama'] for r in daily_req if r['Sub-Tiket (Split)'] == tiket_to_app), "")
-                            append_data(SHEET_DISTRIBUSI, [
-                                datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
-                                datetime.now().strftime("%d/%m/%Y"),
-                                sumber_dana_app,
-                                nama_penerima,
-                                nom_dist_app,
-                                f"AUTO-SUPPORT: {tiket_to_app}" 
-                            ], target_ss)
-                            
-                            st.success(f"✅ Berhasil! Dana untuk {tiket_to_app} telah disetujui dan dicatat di Distribusi Tim.")
-                            time.sleep(2)
-                            st.rerun()
-                        else:
-                            st.error("Pilih Tiket, Sumber Dana, dan pastikan Nominal Transfer lebih dari 0!")
+                with cd2:
+                    sumber_dana_app = st.selectbox("Sumber Dana (Budget)", ["-- Pilih Dana --"] + valid_batches)
+                with cd3:
+                    nom_dist_app = st.number_input("Nominal Transfer (Rp) [Auto]", min_value=0, step=1000, value=int(auto_nom))
+                
+                c_act1, c_act2 = st.columns(2)
+                with c_act1:
+                    btn_approve = st.button("✅ Approve & Support (Catat ke Distribusi)", type="primary", use_container_width=True)
+                with c_act2:
+                    btn_reject = st.button("❌ Reject Request", use_container_width=True)
+                
+                if btn_approve:
+                    if tiket_to_app != "-- Pilih Tiket --" and sumber_dana_app != "-- Pilih Dana --" and nom_dist_app > 0:
+                        nama_penerima = next((r['Nama'] for r in daily_req if r['Sub-Tiket (Split)'] == tiket_to_app), "")
+                        
+                        # Data otomatis masuk ke Sheet Distribusi UM
+                        append_data(SHEET_DISTRIBUSI, [
+                            datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                            datetime.now().strftime("%d/%m/%Y"),
+                            sumber_dana_app,
+                            nama_penerima,
+                            nom_dist_app,
+                            f"AUTO-SUPPORT: {tiket_to_app}" 
+                        ], target_ss)
+                        
+                        # Data masuk ke Sheet APP sebagai histori approve
+                        append_data(SHEET_APP, [
+                            datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                            nama_penerima,
+                            tiket_to_app,
+                            "Request Dana",
+                            nom_dist_app,
+                            "APPROVED",
+                            "Telah didistribusikan"
+                        ], target_ss)
+                        
+                        st.success(f"✅ Berhasil! Dana untuk {tiket_to_app} sebesar Rp {nom_dist_app:,.0f} telah disetujui dan dicatat di Distribusi Tim.")
+                        time.sleep(2)
+                        st.rerun()
+                    else:
+                        st.error("Pilih Tiket, Sumber Dana, dan pastikan Nominal Transfer lebih dari 0!")
+                        
+                if btn_reject:
+                    if tiket_to_app != "-- Pilih Tiket --":
+                        nama_penerima = next((r['Nama'] for r in daily_req if r['Sub-Tiket (Split)'] == tiket_to_app), "")
+                        
+                        # Rekam status REJECTED di Sheet APP agar terbaca oleh sistem block/lepas
+                        append_data(SHEET_APP, [
+                            datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                            nama_penerima,
+                            tiket_to_app,
+                            "Request Dana",
+                            nom_dist_app,
+                            "REJECTED",
+                            "Ditolak Admin (Data tidak sesuai)"
+                        ], target_ss)
+                        
+                        st.success(f"❌ Request {tiket_to_app} berhasil di-REJECT. Sistem pemblokiran pada tim telah dilepas, mereka dapat mengajukan ulang.")
+                        time.sleep(2)
+                        st.rerun()
+                    else:
+                        st.error("Silakan pilih tiket yang akan di-reject!")
             else: st.success("Belum ada request dana hari ini.")
             
             st.markdown("<hr>", unsafe_allow_html=True)
@@ -2358,6 +2424,12 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
                     tk_str = r[36].strip() if (len(r) > 36 and r[36].strip()) else r[21].strip()
                     pjb_tickets_all_set.update([t.strip().upper() for t in tk_str.split(",")])
                     
+            # Ambil data tiket yang sudah di reject Admin (Agar tidak muncul sebagai Warning Gantung)
+            req_reject_set = set()
+            for r in app_r[1:]:
+                if len(r) > 5 and r[3] == "Request Dana" and str(r[5]).strip().upper() == "REJECTED":
+                    req_reject_set.add(str(r[2]).strip().upper())
+                    
             list_gantung = []
             list_sisa = []
             today_date = datetime.now().date()
@@ -2369,7 +2441,9 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
                     
                     if req_date >= CUTOFF_DATE:
                         req_tk_raw = str(r[3]).strip().upper()
-                        if not req_tk_raw: continue
+                        
+                        # Lewati tiket kosong atau yang statusnya sudah ditolak Admin di Daily Realtime
+                        if not req_tk_raw or req_tk_raw in req_reject_set: continue
                         
                         req_tk_list = [t.strip() for t in req_tk_raw.split(",") if t.strip()]
                         req_set = set(req_tk_list)
