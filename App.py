@@ -2291,11 +2291,28 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
             filter_date_str = filter_date.strftime("%d/%m/%Y")
             
             # --- DAILY REQUEST ---
-            st.markdown(f"#### 💸 Request Dana Masuk ({filter_date_str})")
+            st.markdown(f"#### 💸 Request Dana Masuk (Menunggu Diproses) - {filter_date_str}")
+            
+            # 1. Kumpulkan daftar tiket yang sudah di-REJECT atau di-APPROVE 
+            processed_tickets = set()
+            for app in app_r[1:]:
+                if len(app) > 5 and app[3] == "Request Dana":
+                    status_tiket = str(app[5]).strip().upper()
+                    # Menangkap tiket yang sudah Ditolak atau Disetujui
+                    if status_tiket in ["REJECTED", "APPROVED"]:
+                        processed_tickets.add(str(app[2]).strip().upper())
+
+            # 2. Filter data request yang masuk
             daily_req = []
             tot_req_daily = 0
             for r in req_r[1:]:
                 if len(r) > 13 and str(r[1]).strip() == filter_date_str:
+                    tiket_req = str(r[3]).strip().upper()
+                    
+                    # LOGIKA PENGHAPUSAN: Jika tiket ada di daftar processed_tickets, SKIP (Jangan Tampilkan)
+                    if tiket_req in processed_tickets:
+                        continue
+                        
                     nom = clean_nominal(r[9])
                     tot_req_daily += nom
                     daily_req.append({
