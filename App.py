@@ -17,7 +17,7 @@ from collections import defaultdict
 # ==========================================
 # 0. KONFIGURASI HALAMAN & UI 3D MODERN
 # ==========================================
-st.set_page_config(page_title="SiRAPI Enterprise", page_icon="🔮", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SiRAPI Enterprise", page_icon="💸", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
