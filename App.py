@@ -2598,12 +2598,8 @@ elif st.session_state.page == "📝 Report Lapangan":
                     kond_bts = st.text_input("📡 Status / Problem BTS & Rectifier")
                     kond_genset = st.text_input("⚡ Status / Kondisi Genset")
                 with c_k2:
-                    kond_enpas = st.text_input("🚀 Status / Hybrid (AC/SPS)")
+                    kond_enpas = st.text_input("⚠️ Status / Enva (Valid/Not Valid)")
                     kond_power = st.text_input("🔋 Status Backup Power (Baterai)")
-                 with c_k3:
-                    kond_Enva = st.text_input("⚠️ Status / Enva Valid (Mainfails/Genset run)")
-                    kond_Hasil = st.text_input("⚠️ Status / Pekerjaan (Done/Pending Material)")
-                 
                     
                 st.markdown("<div class='section-title'>📸 Upload Dokumentasi (Maks 5 Foto)</div>", unsafe_allow_html=True)
                 st.info("⚠️ Semua foto yang diupload di sini akan **DIKOMPRESI OTOMATIS (Size menjadi Kecil)** sebelum diupload ke server. Aman untuk kuota dan storage!")
@@ -2638,7 +2634,7 @@ elif st.session_state.page == "📝 Report Lapangan":
 *🛠️ Status Perangkat:*
 • BTS & Recti : {kond_bts if kond_bts else '-'}
 • Genset      : {kond_genset if kond_genset else '-'}
-• Enpas/AC    : {kond_enpas if kond_enpas else '-'}
+• Enva/SPS    : {kond_enpas if kond_enpas else '-'}
 • Baterai/BUP : {kond_power if kond_power else '-'}
 
 *📸 Link Dokumentasi:*
