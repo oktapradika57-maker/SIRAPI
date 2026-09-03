@@ -13,6 +13,8 @@ from datetime import datetime, timedelta
 import time
 import re
 from collections import defaultdict
+from PIL import Image
+import io
 
 # ==========================================
 # 0. KONFIGURASI HALAMAN & UI 3D MODERN
@@ -348,6 +350,28 @@ def upload_foto(file):
         return cloudinary.uploader.upload(f"data:{file.type};base64,{encoded}", resource_type="auto").get("secure_url") 
     except Exception: return ""
 
+def upload_foto_compressed(file):
+    if file is None: return ""
+    try:
+        # Buka gambar dan ubah ke format RGB (Mencegah error format)
+        img = Image.open(file)
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+            
+        # Kompresi Resolusi Maksimal 1024px (Menjaga rasio)
+        img.thumbnail((1024, 1024))
+        
+        # Kompresi Kualitas ke 60% (Bisa mengubah 2MB menjadi ~150KB)
+        img_byte_arr = io.BytesIO()
+        img.save(img_byte_arr, format='JPEG', quality=60)
+        img_byte_arr.seek(0)
+        
+        # Encode & Upload
+        encoded = base64.b64encode(img_byte_arr.read()).decode('utf-8')
+        return cloudinary.uploader.upload(f"data:image/jpeg;base64,{encoded}", resource_type="auto").get("secure_url") 
+    except Exception as e:
+        return ""
+
 def append_data(sheet_name, data, spreadsheet_id):
     try:
         client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
@@ -429,6 +453,8 @@ if st.session_state.page == "🏠 Hub Menu Utama":
         if st.button("💸\nREQUEST DANA\n(Pengajuan Baru)", use_container_width=True): st.session_state.page = "📝 Form Request Dana"; st.rerun()
     with c2:
         if st.button("✅\nPJB OPERASIONAL\n(Nota Realisasi)", use_container_width=True): st.session_state.page = "✅ Form PJB Operasional"; st.rerun()
+        
+    if st.button("📝\nREPORT LAPANGAN\n(Update Progress & Generate WA)", use_container_width=True): st.session_state.page = "📝 Report Lapangan"; st.rerun()
 
     st.markdown("<div class='section-title'>🔍 CEK STATUS TIKET (PRIBADI & TIM)</div>", unsafe_allow_html=True)
     cek_nop = st.selectbox("Pilih Area Wilayah", ["-- Pilih Area --"] + list(MASTER_DATA.keys()), key="cek_area_hub")
@@ -2510,3 +2536,130 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
                     df_sisa["Sisa Dana (Tarik)"] = df_sisa["Sisa Dana (Tarik)"].apply(lambda x: f"Rp {x:,.0f}")
                     st.dataframe(df_sisa, hide_index=True, use_container_width=True)
                 else: st.success("Aman! Semua pengajuan PM/Reguler nominalnya sesuai (Tidak ada sisa dana di tim).")
+
+
+# ==========================================
+# PAGE 8: REPORT LAPANGAN (WA GENERATOR)
+# ==========================================
+elif st.session_state.page == "📝 Report Lapangan":
+    st.markdown("<div class='header-card'><h2>📝 REPORT LAPANGAN (PROGRESS)</h2><p>Auto-Generate Laporan Teks WA & Kompresi Foto (Bebas Beban)</p></div>", unsafe_allow_html=True)
+    st.info("💡 **INFO:** Fitur ini 100% aman. Mengisi report ini tidak akan mengubah status tiket PJB Anda. Hasil akhirnya adalah teks yang siap Anda Copy-Paste ke WhatsApp.")
+    
+    nop_rep = st.selectbox("📂 1. Pilih Database (NOP):", ["-- Pilih NOP --"] + list(MASTER_DATA.keys()))
+    
+    if nop_rep != "-- Pilih NOP --":
+        target_ss = MASTER_DATA[nop_rep]["spreadsheet_id"]
+        with st.spinner("Memuat data tiket aktif..."):
+            data_all = fetch_spreadsheet_data(target_ss)
+            req_r, pjb_r = data_all[SHEET_REQUEST], data_all[SHEET_PJB]
+            
+            # Kumpulkan tiket yang sudah di-PJB untuk disingkirkan
+            pjb_tickets_all_set = set()
+            for r in pjb_r[1:]:
+                if len(r) > 21 and r[21].strip() != "":
+                    tk_str = r[36].strip() if (len(r) > 36 and r[36].strip()) else r[21].strip()
+                    pjb_tickets_all_set.update([t.strip().upper() for t in tk_str.split(",")])
+
+        c_rep1, c_rep2 = st.columns(2)
+        with c_rep1: nama_rep = st.selectbox("👤 Pilih Nama Anda:", ["-- Pilih Nama --"] + MASTER_DATA[nop_rep]["names"])
+        
+        pending_options = []
+        if nama_rep != "-- Pilih Nama --":
+            for r in req_r[1:]:
+                if len(r)>5 and str(r[3]).strip() != "" and str(r[5]).strip().upper() == nama_rep.strip().upper():
+                    req_tk_raw = str(r[3]).strip().upper()
+                    req_tk_list = [t.strip() for t in req_tk_raw.split(",") if t.strip()]
+                    req_set = set(req_tk_list)
+                    
+                    # Jika tiket belum ada di daftar PJB, maka tampilkan
+                    if not req_set.issubset(pjb_tickets_all_set):
+                        pending_options.append(req_tk_raw)
+                        
+            with c_rep2: 
+                if pending_options:
+                    tiket_rep = st.selectbox("🎫 Pilih Tiket Pekerjaan (Aktif):", ["-- Pilih Tiket --"] + pending_options)
+                else:
+                    st.success("Semua tiket Anda sudah selesai PJB!")
+                    tiket_rep = "-- Pilih Tiket --"
+                    
+            if tiket_rep != "-- Pilih Tiket --":
+                st.markdown("<div class='section-title'>🔍 Rincian Laporan Lapangan</div>", unsafe_allow_html=True)
+                site_name = ""
+                for r in reversed(req_r[1:]):
+                    if len(r) > 7 and str(r[3]).strip().upper() == tiket_rep:
+                        site_name = str(r[7]).strip()
+                        break
+                        
+                site_rep = st.text_input("Nama Site / Lokasi", value=site_name)
+                analisa_rep = st.text_area("📝 Analisa Pekerjaan (Apa saja yang dilakukan?)", height=100)
+                
+                c_k1, c_k2 = st.columns(2)
+                with c_k1:
+                    kond_bts = st.text_input("📡 Status / Problem BTS & Rectifier")
+                    kond_genset = st.text_input("⚡ Status / Kondisi Genset")
+                with c_k2:
+                    kond_enpas = st.text_input("❄️ Status / Kondisi Enpas (AC/Kipas)")
+                    kond_power = st.text_input("🔋 Status Backup Power (Baterai)")
+                    
+                st.markdown("<div class='section-title'>📸 Upload Dokumentasi (Maks 5 Foto)</div>", unsafe_allow_html=True)
+                st.info("⚠️ Semua foto yang diupload di sini akan **DIKOMPRESI OTOMATIS (Size menjadi Kecil)** sebelum diupload ke server. Aman untuk kuota dan storage!")
+                
+                cf1, cf2, cf3, cf4, cf5 = st.columns(5)
+                with cf1: f1 = st.file_uploader("Foto 1", type=["jpg", "png", "jpeg"])
+                with cf2: f2 = st.file_uploader("Foto 2", type=["jpg", "png", "jpeg"])
+                with cf3: f3 = st.file_uploader("Foto 3", type=["jpg", "png", "jpeg"])
+                with cf4: f4 = st.file_uploader("Foto 4", type=["jpg", "png", "jpeg"])
+                with cf5: f5 = st.file_uploader("Foto 5", type=["jpg", "png", "jpeg"])
+                
+                if st.button("🚀 GENERATE LAPORAN WA SEKARANG", type="primary", use_container_width=True):
+                    with st.spinner("🔄 Mengkompresi Foto & Mengupload ke Cloudinary (Mohon tunggu)..."):
+                        l_f1 = upload_foto_compressed(f1) if f1 else ""
+                        l_f2 = upload_foto_compressed(f2) if f2 else ""
+                        l_f3 = upload_foto_compressed(f3) if f3 else ""
+                        l_f4 = upload_foto_compressed(f4) if f4 else ""
+                        l_f5 = upload_foto_compressed(f5) if f5 else ""
+                        
+                        ts_now = datetime.now().strftime("%d %B %Y - %H:%M")
+                        
+                        # --- GENERATE FORMAT TEXT WA ---
+                        wa_text = f"""*UPDATE PROGRESS PEKERJAAN*
+📅 Tanggal: {ts_now}
+👤 Pelapor: {nama_rep}
+🎫 No Tiket: {tiket_rep}
+📍 Site: {site_rep}
+
+*📝 Analisa Pekerjaan:*
+{analisa_rep if analisa_rep else '-'}
+
+*🛠️ Status Perangkat:*
+• BTS & Recti : {kond_bts if kond_bts else '-'}
+• Genset      : {kond_genset if kond_genset else '-'}
+• Enpas/AC    : {kond_enpas if kond_enpas else '-'}
+• Baterai/BUP : {kond_power if kond_power else '-'}
+
+*📸 Link Dokumentasi:*
+"""
+                        counter = 1
+                        for link in [l_f1, l_f2, l_f3, l_f4, l_f5]:
+                            if link:
+                                wa_text += f"{counter}. {link}\n"
+                                counter += 1
+                        
+                        if counter == 1:
+                            wa_text += "- Tidak ada dokumentasi terlampir.\n"
+                            
+                        st.session_state.wa_text_ready = wa_text
+                        st.success("✅ Berhasil! Foto telah dikompres dan Laporan siap disalin.")
+                        
+            if st.session_state.get("wa_text_ready"):
+                st.markdown("<div class='section-title'>📱 Hasil Text Siap Copy-Paste / Download</div>", unsafe_allow_html=True)
+                st.code(st.session_state.wa_text_ready, language="markdown")
+                
+                # Fitur Download File TXT
+                st.download_button(
+                    label="📥 Download File (.txt) untuk WA", 
+                    data=st.session_state.wa_text_ready, 
+                    file_name=f"Report_WA_{tiket_rep}.txt", 
+                    mime="text/plain", 
+                    use_container_width=True
+                )
