@@ -2598,8 +2598,12 @@ elif st.session_state.page == "📝 Report Lapangan":
                     kond_bts = st.text_input("📡 Status / Problem BTS & Rectifier")
                     kond_genset = st.text_input("⚡ Status / Kondisi Genset")
                 with c_k2:
-                    kond_enpas = st.text_input("❄️ Status / Kondisi Enpas (AC/Kipas)")
+                    kond_enpas = st.text_input("🚀 Status / Hybrid (AC/SPS)")
                     kond_power = st.text_input("🔋 Status Backup Power (Baterai)")
+                 with c_k3:
+                    kond_Enva = st.text_input("⚠️ Status / Enva Valid (Mainfails/Genset run)")
+                    kond_Hasil = st.text_input("⚠️ Status / Pekerjaan (Done/Pending Material)")
+                 
                     
                 st.markdown("<div class='section-title'>📸 Upload Dokumentasi (Maks 5 Foto)</div>", unsafe_allow_html=True)
                 st.info("⚠️ Semua foto yang diupload di sini akan **DIKOMPRESI OTOMATIS (Size menjadi Kecil)** sebelum diupload ke server. Aman untuk kuota dan storage!")
