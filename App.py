@@ -2549,44 +2549,46 @@ elif st.session_state.page == "📝 Report Lapangan":
     
     if nop_rep != "-- Pilih NOP --":
         target_ss = MASTER_DATA[nop_rep]["spreadsheet_id"]
-        with st.spinner("Memuat data tiket aktif..."):
+        with st.spinner("Memuat data tiket..."):
             data_all = fetch_spreadsheet_data(target_ss)
-            req_r, pjb_r = data_all[SHEET_REQUEST], data_all[SHEET_PJB]
-            
-            # Kumpulkan tiket yang sudah di-PJB untuk disingkirkan
-            pjb_tickets_all_set = set()
-            for r in pjb_r[1:]:
-                if len(r) > 21 and r[21].strip() != "":
-                    tk_str = r[36].strip() if (len(r) > 36 and r[36].strip()) else r[21].strip()
-                    pjb_tickets_all_set.update([t.strip().upper() for t in tk_str.split(",")])
+            req_r = data_all[SHEET_REQUEST]
+            # Filter yang menyembunyikan tiket PJB telah Dihapus agar tiket lama/baru tetap bisa di-report.
 
         c_rep1, c_rep2 = st.columns(2)
         with c_rep1: nama_rep = st.selectbox("👤 Pilih Nama Anda:", ["-- Pilih Nama --"] + MASTER_DATA[nop_rep]["names"])
         
         pending_options = []
         if nama_rep != "-- Pilih Nama --":
-            for r in req_r[1:]:
+            # Menggunakan "reversed" agar tiket yang ditarik dari database diurutkan dari yang paling terbaru di atas
+            for r in reversed(req_r[1:]):
                 if len(r)>5 and str(r[3]).strip() != "" and str(r[5]).strip().upper() == nama_rep.strip().upper():
                     req_tk_raw = str(r[3]).strip().upper()
-                    req_tk_list = [t.strip() for t in req_tk_raw.split(",") if t.strip()]
-                    req_set = set(req_tk_list)
                     
-                    # Jika tiket belum ada di daftar PJB, maka tampilkan
-                    if not req_set.issubset(pjb_tickets_all_set):
-                        pending_options.append(req_tk_raw)
+                    # Mengambil Site ID, jika kosong diberi label "Tanpa Site"
+                    site_id_val = str(r[7]).strip() if len(r)>7 and str(r[7]).strip() else "Tanpa Site"
+                    
+                    # Format tampilan dropdown menjadi: NOMOR TIKET | SITE ID
+                    display_text = f"{req_tk_raw} | {site_id_val}"
+                    
+                    # Cegah duplikat masuk ke dropdown
+                    if display_text not in pending_options:
+                        pending_options.append(display_text)
                         
             with c_rep2: 
                 if pending_options:
-                    tiket_rep = st.selectbox("🎫 Pilih Tiket Pekerjaan (Aktif):", ["-- Pilih Tiket --"] + pending_options)
+                    tiket_rep = st.selectbox("🎫 Pilih Tiket Pekerjaan (Terbaru di atas):", ["-- Pilih Tiket --"] + pending_options)
                 else:
-                    st.success("Semua tiket Anda sudah selesai PJB!")
+                    st.success("Belum ada riwayat tiket untuk nama ini!")
                     tiket_rep = "-- Pilih Tiket --"
                     
             if tiket_rep != "-- Pilih Tiket --":
+                # Memisahkan kembali nomor tiket bersih tanpa teks Site ID untuk pencarian database
+                tiket_clean = tiket_rep.split(" | ")[0].strip()
+                
                 st.markdown("<div class='section-title'>🔍 Rincian Laporan Lapangan</div>", unsafe_allow_html=True)
                 site_name = ""
                 for r in reversed(req_r[1:]):
-                    if len(r) > 7 and str(r[3]).strip().upper() == tiket_rep:
+                    if len(r) > 7 and str(r[3]).strip().upper() == tiket_clean:
                         site_name = str(r[7]).strip()
                         break
                         
@@ -2598,7 +2600,7 @@ elif st.session_state.page == "📝 Report Lapangan":
                     kond_bts = st.text_input("📡 Status / Problem BTS & Rectifier")
                     kond_genset = st.text_input("⚡ Status / Kondisi Genset")
                 with c_k2:
-                    kond_enpas = st.text_input("⚠️ Status / Enva (Valid/Not Valid)")
+                    kond_enpas = st.text_input("❄️ Status / Kondisi Enpas (AC/Kipas)")
                     kond_power = st.text_input("🔋 Status Backup Power (Baterai)")
                     
                 st.markdown("<div class='section-title'>📸 Upload Dokumentasi (Maks 5 Foto)</div>", unsafe_allow_html=True)
@@ -2621,11 +2623,10 @@ elif st.session_state.page == "📝 Report Lapangan":
                         
                         ts_now = datetime.now().strftime("%d %B %Y - %H:%M")
                         
-                        # --- GENERATE FORMAT TEXT WA ---
                         wa_text = f"""*UPDATE PROGRESS PEKERJAAN*
 📅 Tanggal: {ts_now}
 👤 Pelapor: {nama_rep}
-🎫 No Tiket: {tiket_rep}
+🎫 No Tiket: {tiket_clean}
 📍 Site: {site_rep}
 
 *📝 Analisa Pekerjaan:*
@@ -2634,7 +2635,7 @@ elif st.session_state.page == "📝 Report Lapangan":
 *🛠️ Status Perangkat:*
 • BTS & Recti : {kond_bts if kond_bts else '-'}
 • Genset      : {kond_genset if kond_genset else '-'}
-• Enva/SPS    : {kond_enpas if kond_enpas else '-'}
+• Enpas/AC    : {kond_enpas if kond_enpas else '-'}
 • Baterai/BUP : {kond_power if kond_power else '-'}
 
 *📸 Link Dokumentasi:*
@@ -2655,11 +2656,10 @@ elif st.session_state.page == "📝 Report Lapangan":
                 st.markdown("<div class='section-title'>📱 Hasil Text Siap Copy-Paste / Download</div>", unsafe_allow_html=True)
                 st.code(st.session_state.wa_text_ready, language="markdown")
                 
-                # Fitur Download File TXT
                 st.download_button(
                     label="📥 Download File (.txt) untuk WA", 
                     data=st.session_state.wa_text_ready, 
-                    file_name=f"Report_WA_{tiket_rep}.txt", 
+                    file_name=f"Report_WA_{tiket_clean}.txt", 
                     mime="text/plain", 
                     use_container_width=True
                 )
