@@ -170,6 +170,19 @@ def ai_image_checker(uploaded_file, file_name_label):
         
     return True, "Aman"
 
+def ui_image_uploader(label, key=None):
+    """Fungsi pembantu agar UI AI Scanner otomatis muncul di setiap uploader foto"""
+    file = st.file_uploader(label, type=["jpg", "png", "jpeg"], key=key)
+    if file:
+        with st.status("🤖 AI Memindai Kualitas & Metadata Gambar...", expanded=True) as status:
+            is_valid, msg = ai_image_checker(file, label)
+            if is_valid:
+                status.update(label="✅ Lolos Uji AI: Gambar Asli & Jelas", state="complete")
+            else:
+                status.update(label="🚨 Peringatan AI: Gambar Bermasalah", state="error")
+                st.error(msg)
+    return file
+
 def parse_date(date_str):
     try: return datetime.strptime(str(date_str).strip(), "%d/%m/%Y").date()
     except: return datetime(1970, 1, 1).date()
@@ -995,34 +1008,12 @@ elif st.session_state.page == "📝 Form Request Dana":
             try: nominal_tf = int(nominal_tf_str.replace(".", "").replace(",", "").strip())
             except: nominal_tf = 0
             
-st.markdown("<div class='section-title'>📸 Lampiran & Pemindai AI (Forensik)</div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-title'>📸 Lampiran & Pemindai AI (Forensik)</div>", unsafe_allow_html=True)
         st.info("🤖 **Sistem KUT AI Forensics Aktif:** Setiap gambar akan dipindai otomatis untuk mendeteksi rekayasa digital (Photoshop/Canva) dan tingkat kejernihan (Blur).")
         
         c_up1, c_up2 = st.columns(2)
-        
-        # Kolom 1: Foto KM
-        with c_up1: 
-            foto_km = st.file_uploader("1. Upload Foto KM / RH Genset Awal", type=["jpg", "png", "jpeg"])
-            if foto_km:
-                with st.status("🤖 AI Memindai Metadata & Kualitas Gambar...", expanded=True) as status:
-                    is_valid_km, msg_km = ai_image_checker(foto_km, "Foto KM/RH")
-                    if is_valid_km:
-                        status.update(label="✅ Lolos Uji AI: Gambar Asli & Jelas", state="complete")
-                    else:
-                        status.update(label="🚨 Peringatan AI: Gambar Bermasalah", state="error")
-                        st.error(msg_km)
-
-        # Kolom 2: Foto Evidance
-        with c_up2: 
-            foto_evidance = st.file_uploader("2. Upload Foto Evidance Request", type=["jpg", "png", "jpeg"])
-            if foto_evidance:
-                with st.status("🤖 AI Memindai Metadata & Kualitas Gambar...", expanded=True) as status:
-                    is_valid_ev, msg_ev = ai_image_checker(foto_evidance, "Foto Evidance")
-                    if is_valid_ev:
-                        status.update(label="✅ Lolos Uji AI: Gambar Asli & Jelas", state="complete")
-                    else:
-                        status.update(label="🚨 Peringatan AI: Gambar Bermasalah", state="error")
-                        st.error(msg_ev)
+        with c_up1: foto_km = ui_image_uploader("1. Upload Foto KM / RH Genset Awal", key="req_km")
+        with c_up2: foto_evidance = ui_image_uploader("2. Upload Foto Evidance Request", key="req_ev")
         
         form_invalid = (nama == "" or cluster == "" or role == "-- Pilih Role --" or keperluan == "" or not base_tiket_clean)
 
@@ -1057,15 +1048,6 @@ st.markdown("<div class='section-title'>📸 Lampiran & Pemindai AI (Forensik)</
             if not motor_limit_lock:
                 if st.button("📤 Submit Request Dana (Generate Tiket Split)", type="primary", use_container_width=True):
                     
-                    # ================= AI CHECKER (IMAGE VALIDATION) =================
-                    for f_obj, f_label in [(foto_km, "Foto KM/RH Awal"), (foto_evidance, "Foto Evidance Request")]:
-                        if f_obj:
-                            is_valid_img, msg_img = ai_image_checker(f_obj, f_label)
-                            if not is_valid_img:
-                                st.error(msg_img)
-                                st.stop()
-                    # =================================================================
-
                     if form_invalid: 
                         st.error("❌ PENGIRIMAN DITOLAK: Pastikan semua form identitas dasar dan Tiket terisi lengkap!")
                         st.stop()
@@ -1335,11 +1317,11 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                             harga_satuan = st.number_input("Harga Satuan (BBM)", min_value=0, step=500, value=d.get("harga_lama", 0))
                             tot_nilai_nota = st.number_input("Total Fisik Sesuai Nota (Rp)", min_value=0, step=1000, value=d.get("nota_lama", 0))
                             
-                        st.markdown("<div class='section-title'>📸 Lampiran Bukti Utama</div>", unsafe_allow_html=True)
+                        st.markdown("<div class='section-title'>📸 Lampiran Bukti Utama (AI Scanner Aktif)</div>", unsafe_allow_html=True)
                         p1, p2, p3 = st.columns(3)
-                        with p1: f_isi = st.file_uploader("1. Foto Evidance Pengisian", type=["jpg","png"])
-                        with p2: f_km = st.file_uploader("2. Foto Nota disanding KM/RH", type=["jpg","png"])
-                        with p3: f_kerja = st.file_uploader("3. Foto Evidance Pekerjaan", type=["jpg","png"])
+                        with p1: f_isi = ui_image_uploader("1. Foto Evidance Pengisian", key="pjb_isi")
+                        with p2: f_km = ui_image_uploader("2. Foto Nota disanding KM/RH", key="pjb_km")
+                        with p3: f_kerja = ui_image_uploader("3. Foto Evidance Pekerjaan", key="pjb_krj1")
                     else:
                         c_m1, c_m2 = st.columns(2)
                         with c_m1:
@@ -1350,16 +1332,16 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                             tot_liter = "0"
                             harga_satuan = 0
                             
-                        st.markdown("<div class='section-title'>📸 Lampiran Bukti Utama</div>", unsafe_allow_html=True)
+                        st.markdown("<div class='section-title'>📸 Lampiran Bukti Utama (AI Scanner Aktif)</div>", unsafe_allow_html=True)
                         p1, p2, p3 = st.columns(3)
-                        with p1: f_nota_bbm = st.file_uploader("1. Kwitansi Support", type=["jpg","png"])
+                        with p1: f_nota_bbm = ui_image_uploader("1. Kwitansi Support", key="pjb_nota1")
                         
                         if "penginapan" in str(d["BBM"]).lower():
-                            with p2: f_inap = st.file_uploader("2. Foto Nota/Kwitansi Hotel", type=["jpg","png"])
+                            with p2: f_inap = ui_image_uploader("2. Foto Nota/Kwitansi Hotel", key="pjb_inap")
                         else:
-                            with p2: f_notamat = st.file_uploader("2. Foto Nota Material Disanding", type=["jpg","png"])
+                            with p2: f_notamat = ui_image_uploader("2. Foto Nota Material Disanding", key="pjb_mat")
                             
-                        with p3: f_kerja = st.file_uploader("3. Foto Evidance Pekerjaan", type=["jpg","png"])
+                        with p3: f_kerja = ui_image_uploader("3. Foto Evidance Pekerjaan", key="pjb_krj2")
                 else:
                     st.markdown("<div class='section-title'>🗓️ Rincian Keberangkatan & Nominal Uang Makan</div>", unsafe_allow_html=True)
                     c_um_a, c_um_b, c_um_c = st.columns(3)
@@ -1371,29 +1353,15 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                     total_um_calc = lama_hari * nom_um_harian
                     st.success(f"📅 Tanggal Kembali: **{tgl_kembali.strftime('%d/%m/%Y')}** | 💰 Total Uang Makan: **Rp {total_um_calc:,.0f}**")
                     
-                    st.markdown("<div class='section-title'>📸 Lampiran Eviden Aktivitas Uang Makan (WAJIB 4 FOTO)</div>", unsafe_allow_html=True)
+                    st.markdown("<div class='section-title'>📸 Lampiran Eviden Aktivitas Uang Makan (AI Scanner Aktif)</div>", unsafe_allow_html=True)
                     c_um1, c_um2, c_um3, c_um4 = st.columns(4)
-                    with c_um1: f_um1 = st.file_uploader("Foto Aktivitas 1", type=["jpg","png","jpeg"], key="um1")
-                    with c_um2: f_um2 = st.file_uploader("Foto Aktivitas 2", type=["jpg","png","jpeg"], key="um2")
-                    with c_um3: f_um3 = st.file_uploader("Foto Aktivitas 3", type=["jpg","png","jpeg"], key="um3")
-                    with c_um4: f_um4 = st.file_uploader("Foto Aktivitas 4", type=["jpg","png","jpeg"], key="um4")
+                    with c_um1: f_um1 = ui_image_uploader("Foto Aktivitas 1", key="um1")
+                    with c_um2: f_um2 = ui_image_uploader("Foto Aktivitas 2", key="um2")
+                    with c_um3: f_um3 = ui_image_uploader("Foto Aktivitas 3", key="um3")
+                    with c_um4: f_um4 = ui_image_uploader("Foto Aktivitas 4", key="um4")
 
                 st.markdown("<br>", unsafe_allow_html=True)
                 if st.button("🚀 Sahkan Pelaporan PJB / Submit Revisi", type="primary", use_container_width=True):
-                    
-                    # ================= AI CHECKER (IMAGE VALIDATION) =================
-                    list_fotos = [
-                        (f_isi, "Foto Evidance Pengisian"), (f_km, "Foto Nota KM/RH"), (f_kerja, "Foto Pekerjaan"),
-                        (f_nota_bbm, "Kwitansi Support"), (f_inap, "Nota Penginapan"), (f_notamat, "Nota Material"),
-                        (f_um1, "Foto Aktivitas UM 1"), (f_um2, "Foto Aktivitas UM 2"), (f_um3, "Foto Aktivitas UM 3"), (f_um4, "Foto Aktivitas UM 4")
-                    ]
-                    for f_obj, f_label in list_fotos:
-                        if f_obj:
-                            is_valid_img, msg_img = ai_image_checker(f_obj, f_label)
-                            if not is_valid_img:
-                                st.error(msg_img)
-                                st.stop()
-                    # =================================================================
 
                     if "Operational" in jns_pjb:
                         if is_vehicle and (km_akhir <= 0):
