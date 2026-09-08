@@ -13,8 +13,10 @@ from datetime import datetime, timedelta
 import time
 import re
 from collections import defaultdict
-from PIL import Image
+from PIL import Image, ExifTags
 import io
+import cv2
+import numpy as np
 
 # ==========================================
 # 0. KONFIGURASI HALAMAN & UI 3D MODERN
@@ -124,8 +126,50 @@ MASTER_DATA = {
 LIST_KEPERLUAN = ["", "Tshoot", "Backup", "Support", "PM", "Program BCP", "Program Quikwin", "Program G348T", "Pengiriman Material SPMS", "Pembelian Material","Transportasi Air"]
 
 # ==========================================
-# 2. FUNGSI INTI & CACHING 
+# 2. FUNGSI INTI & CACHING (TERMASUK AI CHECKER)
 # ==========================================
+def ai_image_checker(uploaded_file, file_name_label):
+    if uploaded_file is None:
+        return True, "Tidak ada file"
+    
+    # 1. Cek EXIF Metadata (Deteksi Gambar Editan Photoshop / Aplikasi)
+    try:
+        img = Image.open(uploaded_file)
+        exif = img.getexif()
+        uploaded_file.seek(0)
+        
+        if exif:
+            suspicious_software = ['photoshop', 'canva', 'picsart', 'lightroom', 'snapseed', 'gimp', 'coreldraw', 'illustrator', 'capcut', 'pics', 'edit']
+            for tag_id, value in exif.items():
+                tag = ExifTags.TAGS.get(tag_id, tag_id)
+                if tag == 'Software':
+                    val_lower = str(value).lower()
+                    for sw in suspicious_software:
+                        if sw in val_lower:
+                            return False, f"🚨 FORENSIK DITOLAK: Gambar {file_name_label} terdeteksi sebagai hasil editan aplikasi ({value}). Sistem KUT mengharuskan foto murni dari kamera!"
+    except Exception:
+        uploaded_file.seek(0)
+        pass
+
+    # 2. Cek Kualitas/Blur dengan OpenCV (Laplacian Variance)
+    try:
+        file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
+        img_cv = cv2.imdecode(file_bytes, 1)
+        uploaded_file.seek(0)
+        
+        if img_cv is not None:
+            gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
+            blur_score = cv2.Laplacian(gray, cv2.CV_64F).var()
+            
+            # Threshold blur (Semakin kecil angkanya, semakin blur). Angka 40.0 adalah batas toleransi nota terbaca.
+            if blur_score < 40.0:  
+                return False, f"🌫️ KUALITAS DITOLAK: Gambar {file_name_label} terdeteksi SANGAT BLUR / BURAM oleh AI (Skor Ketajaman: {blur_score:.1f}). Mohon pastikan fokus kamera stabil dan tulisan terbaca jelas!"
+    except Exception:
+        uploaded_file.seek(0)
+        pass
+        
+    return True, "Aman"
+
 def parse_date(date_str):
     try: return datetime.strptime(str(date_str).strip(), "%d/%m/%Y").date()
     except: return datetime(1970, 1, 1).date()
@@ -987,6 +1031,16 @@ elif st.session_state.page == "📝 Form Request Dana":
             
             if not motor_limit_lock:
                 if st.button("📤 Submit Request Dana (Generate Tiket Split)", type="primary", use_container_width=True):
+                    
+                    # ================= AI CHECKER (IMAGE VALIDATION) =================
+                    for f_obj, f_label in [(foto_km, "Foto KM/RH Awal"), (foto_evidance, "Foto Evidance Request")]:
+                        if f_obj:
+                            is_valid_img, msg_img = ai_image_checker(f_obj, f_label)
+                            if not is_valid_img:
+                                st.error(msg_img)
+                                st.stop()
+                    # =================================================================
+
                     if form_invalid: 
                         st.error("❌ PENGIRIMAN DITOLAK: Pastikan semua form identitas dasar dan Tiket terisi lengkap!")
                         st.stop()
@@ -999,7 +1053,6 @@ elif st.session_state.page == "📝 Form Request Dana":
                         
                     for req in sub_requests:
                         if req['tipe'] in ['UM', 'Inap']:
-                            # PERBAIKAN LOGIKA UANG MAKAN: TIDAK LAGI MEWAJIBKAN MEMILIH BBM MOBIL/MOTOR
                             if invalid_coords:
                                 st.error(f"❌ REQUEST {req['tipe']} DITOLAK: Koordinat Peta tidak valid. Pastikan Latitude & Longitude tidak 0 (Titik Keberangkatan & Tujuan Terdeteksi).")
                                 st.stop()
@@ -1302,12 +1355,27 @@ elif st.session_state.page == "✅ Form PJB Operasional":
 
                 st.markdown("<br>", unsafe_allow_html=True)
                 if st.button("🚀 Sahkan Pelaporan PJB / Submit Revisi", type="primary", use_container_width=True):
+                    
+                    # ================= AI CHECKER (IMAGE VALIDATION) =================
+                    list_fotos = [
+                        (f_isi, "Foto Evidance Pengisian"), (f_km, "Foto Nota KM/RH"), (f_kerja, "Foto Pekerjaan"),
+                        (f_nota_bbm, "Kwitansi Support"), (f_inap, "Nota Penginapan"), (f_notamat, "Nota Material"),
+                        (f_um1, "Foto Aktivitas UM 1"), (f_um2, "Foto Aktivitas UM 2"), (f_um3, "Foto Aktivitas UM 3"), (f_um4, "Foto Aktivitas UM 4")
+                    ]
+                    for f_obj, f_label in list_fotos:
+                        if f_obj:
+                            is_valid_img, msg_img = ai_image_checker(f_obj, f_label)
+                            if not is_valid_img:
+                                st.error(msg_img)
+                                st.stop()
+                    # =================================================================
+
                     if "Operational" in jns_pjb:
                         if is_vehicle and (km_akhir <= 0):
                             st.error(f"❌ PENGIRIMAN DITOLAK: {label_akhir} aktual belum diisi!")
                             st.stop()
                         elif is_vehicle and (km_akhir < real_km_awal):
-                            st.error(f"❌ PENGIRIMAN DITOLAK: Angka yang dimasukkan ({km_akhir}) lebih kecil dari KM/RH Awal ({real_km_awal})!")
+                            st.error(f"❌ PENGIRIMAN DITOLAK: Angka yang dimasukkan ({km_akhir}) lebih kecil dari KM/RH Awal histori ({real_km_awal})!")
                             st.stop()
                     else:
                         if not (f_um1 and f_um2 and f_um3 and f_um4):
