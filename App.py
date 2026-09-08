@@ -233,12 +233,18 @@ def load_excel_data():
     except: site_dict, site_list = {}, []
     
     tim_dict, list_nopol_csv = {}, []
+    # PERBAIKAN 4: Pembacaan kolom lonlat tim.xlsx yang lebih handal dan kebal error
     try:
         df_tim = pd.read_excel("lonlat tim.xlsx").fillna(0)
-        for _, row in df_tim.iterrows():
-            nama_key = str(row['Nama']).strip().upper()
-            tim_dict[nama_key] = {'Latitude': row.get('Latitude', 0), 'Longtitude': row.get('Longtitude', 0)}
-    except: pass
+        col_nama = next((c for c in df_tim.columns if 'nama' in c.lower()), None)
+        col_lat = next((c for c in df_tim.columns if 'lat' in c.lower()), None)
+        col_lon = next((c for c in df_tim.columns if 'lon' in c.lower() or 'lng' in c.lower()), None)
+        
+        if col_nama and col_lat and col_lon:
+            for _, row in df_tim.iterrows():
+                nama_key = str(row[col_nama]).strip().upper()
+                tim_dict[nama_key] = {'Latitude': row.get(col_lat, 0), 'Longtitude': row.get(col_lon, 0)}
+    except Exception: pass
         
     try:
         df_nopol = pd.read_csv("DATA NOPOL MOBIL DAN GENSET NOP PLK.csv", sep=None, engine='python')
@@ -316,7 +322,7 @@ def get_user_tickets_status(nama, req_rows, pjb_rows, app_rows):
         req_tk_list = [t.strip() for t in req_tk_raw.split(",") if t.strip()]
         req_set = set(req_tk_list)
         
-        # LOGIKA BARU: Abaikan (Lepaskan Blokir) jika Request telah di-Reject Admin
+        # LOGIKA PERBAIKAN 2: Abaikan (Lepaskan Blokir) jika Request telah di-Reject Admin
         if req_app_status.get(req_tk_raw) == "REJECTED":
             history.append({"Tiket": req_tk_raw, "Tanggal": tgl, "Status": "❌ REQUEST DITOLAK Admin (Harap Ajukan Ulang)"})
             continue
@@ -353,20 +359,14 @@ def upload_foto(file):
 def upload_foto_compressed(file):
     if file is None: return ""
     try:
-        # Buka gambar dan ubah ke format RGB (Mencegah error format)
         img = Image.open(file)
-        if img.mode != 'RGB':
-            img = img.convert('RGB')
-            
-        # Kompresi Resolusi Maksimal 1024px (Menjaga rasio)
+        if img.mode != 'RGB': img = img.convert('RGB')
         img.thumbnail((1024, 1024))
         
-        # Kompresi Kualitas ke 60% (Bisa mengubah 2MB menjadi ~150KB)
         img_byte_arr = io.BytesIO()
         img.save(img_byte_arr, format='JPEG', quality=60)
         img_byte_arr.seek(0)
         
-        # Encode & Upload
         encoded = base64.b64encode(img_byte_arr.read()).decode('utf-8')
         return cloudinary.uploader.upload(f"data:image/jpeg;base64,{encoded}", resource_type="auto").get("secure_url") 
     except Exception as e:
@@ -615,7 +615,9 @@ elif st.session_state.page == "📝 Form Request Dana":
         for r in pjb_r[1:]:
             if len(r) > 12 and r[12].strip(): history_nopols.add(r[12].strip().upper())
             
-        list_nopol = sorted(list(set([n.strip().upper() for n in list_nopol_csv if n.strip()] + list(history_nopols))))
+        list_nopol_bersih = sorted(list(set([n.strip().upper() for n in list_nopol_csv if n.strip()] + list(history_nopols))))
+        options_nopol = ["-- Pilih Nopol / Ketik Baru --"] + list_nopol_bersih
+        
         auto_lat_tujuan, auto_long_tujuan, auto_lat_brgkt, auto_long_brgkt = "0", "0", "0", "0"
         
         status_app_motor = "NONE"
@@ -801,7 +803,14 @@ elif st.session_state.page == "📝 Form Request Dana":
                         keb_mobil = st.number_input("Estimasi Dana BBM Mobil (Rp)", min_value=0, step=1000, value=default_est_dana_mob, key="k_mob")
                         st.info(f"⛽ **Estimasi Otomatis:** Berdasarkan jarak PP {jarak_km_pp:.1f} KM (asumsi 9 KM/L), estimasi kebutuhan ± **{est_liter_mob} Liter**.")
                     with c_m2:
-                        plat_mobil = st.text_input("Plat Mobil (Auto-Filled dari Nama Tim)", value=auto_nopol, key="p_mob").strip().upper()
+                        # PERBAIKAN 3: KEMBALIKAN MENU DROPDOWN NOPOL
+                        idx_mob = options_nopol.index(auto_nopol) if auto_nopol in options_nopol else 0
+                        pilihan_mob = st.selectbox("Plat Mobil", options_nopol, index=idx_mob, key="p_mob")
+                        if pilihan_mob == "-- Pilih Nopol / Ketik Baru --":
+                            plat_mobil = st.text_input("Ketik Plat Mobil Manual (Otomatis Simpan):", key="pmob_man").strip().upper()
+                        else:
+                            plat_mobil = pilihan_mob.strip().upper()
+                            
                         last_km_mob = get_last_indicator(plat_mobil, "Mobil", pjb_r)
                         if plat_mobil: st.info(f"Histori KM terakhir (Auto-Track): **{last_km_mob}**")
                         km_awal_mob = st.number_input("Ketik KM Awal Mobil Aktual (Wajib)", min_value=0.0, step=0.1, value=float(last_km_mob), key="km_mob")
@@ -825,7 +834,13 @@ elif st.session_state.page == "📝 Form Request Dana":
                         st.info(f"💰 Estimasi Dana: **Rp {keb_motor:,.0f}** (Estimasi ± {est_l_mot} Liter berdasarkan jarak PP)")
                         jb_motor = st.selectbox("Jenis BBM Motor", ["Pertalite", "Pertamax"], key="b_mot")
                     with c_mt2:
-                        plat_motor = st.text_input("Plat Motor (Auto-Filled dari Nama Tim)", value=auto_nopol, key="p_mot").strip().upper()
+                        idx_mot = options_nopol.index(auto_nopol) if auto_nopol in options_nopol else 0
+                        pilihan_mot = st.selectbox("Plat Motor", options_nopol, index=idx_mot, key="p_mot")
+                        if pilihan_mot == "-- Pilih Nopol / Ketik Baru --":
+                            plat_motor = st.text_input("Ketik Plat Motor Manual:", key="pmot_man").strip().upper()
+                        else:
+                            plat_motor = pilihan_mot.strip().upper()
+                            
                         last_km_mot = get_last_indicator(plat_motor, "Motor", pjb_r)
                         if plat_motor: st.info(f"Histori KM terakhir (Auto-Track): **{last_km_mot}**")
                         km_awal_mot = st.number_input("Ketik KM Awal Motor Aktual (Wajib)", min_value=0.0, step=0.1, value=float(last_km_mot), key="km_mot")
@@ -856,7 +871,12 @@ elif st.session_state.page == "📝 Form Request Dana":
                         jb_genset = st.selectbox("Jenis BBM Genset", ["Dexlite", "Bio Solar", "Pertalite"], key="b_gen")
                         keb_genset = st.number_input("Estimasi Dana BBM Genset (Rp)", min_value=0, step=1000, value=150000, key="k_gen")
                     with c_g2:
-                        plat_genset = st.text_input("ID / Kode / Plat Genset", key="p_gen").strip().upper()
+                        pilihan_gen = st.selectbox("ID / Kode / Plat Genset", options_nopol, key="p_gen")
+                        if pilihan_gen == "-- Pilih Nopol / Ketik Baru --":
+                            plat_genset = st.text_input("Ketik ID Genset Manual:", key="pgen_man").strip().upper()
+                        else:
+                            plat_genset = pilihan_gen.strip().upper()
+                            
                         last_rh_gen = get_last_indicator(plat_genset, "Genset", pjb_r)
                         if plat_genset: st.info(f"Histori RH terakhir: **{last_rh_gen}**")
                         rh_awal_gen = st.number_input("Ketik RH Awal Genset Aktual (Wajib)", min_value=0.0, step=0.1, value=float(last_rh_gen), key="rh_gen")
@@ -1022,7 +1042,7 @@ elif st.session_state.page == "📝 Form Request Dana":
                             ]
                             append_data(SHEET_REQUEST, data_req, target_ss)
                             
-                            if req['plat'] and req['plat'] not in list_nopol:
+                            if req['plat'] and req['plat'] not in list_nopol_bersih:
                                 save_new_nopol_to_csv(req['plat'])
                                 
                         if pm_selected_list:
@@ -1058,6 +1078,13 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                 tiket_app = str(r[2]).strip().upper()
                 if tiket_app != "": status_verif_dict[tiket_app] = str(r[5]).strip()
         
+        # PERBAIKAN 2: AMBIL DATA TIKET REQUEST YANG DI-REJECT ADMIN
+        req_app_status = {}
+        for r in app_r[1:]:
+            if len(r) > 5 and r[3] == "Request Dana":
+                tiket_app = str(r[2]).strip().upper()
+                if tiket_app != "": req_app_status[tiket_app] = str(r[5]).strip().upper()
+        
         st.markdown("<div class='section-title'>🔍 2. Identifikasi Tim & Tarik Sub-Tiket Data</div>", unsafe_allow_html=True)
         col_id1, col_id2 = st.columns([2, 2])
         with col_id1: nama_pjb = st.selectbox("👤 Pilih Nama Anda:", ["-- Pilih Nama --"] + MASTER_DATA[nop_cari]["names"])
@@ -1081,8 +1108,12 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                 req_set = set(req_tk_list)
                 is_ready_to_pjb = False
                 
+                # PERBAIKAN 2: Jika tiket belum ada di riwayat PJB, pastikan BUKAN tiket yang di-Reject Admin.
                 if not req_set.issubset(pjb_tickets_all_set):
-                    is_ready_to_pjb = True
+                    if req_app_status.get(req_tk_raw) == "REJECTED":
+                        is_ready_to_pjb = False # HILANGKAN DARI DAFTAR PJB TIM
+                    else:
+                        is_ready_to_pjb = True
                 elif status_verif_dict.get(req_tk_raw) == "REJECTED":
                     is_ready_to_pjb = True 
                     
@@ -1194,7 +1225,10 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                     if "Operational" in jns_pjb: nominal_pjb = st.number_input("Nominal PJB Terpakai pada sub-tiket ini", value=int(d["NominalReq"]))
                     else: st.info("Nominal PJB disesuaikan dengan Kalkulator UM di bawah.")
 
+                # PERBAIKAN 1: KM Awal dipaksa sama persis dengan yang diketik waktu Request!
                 d_km_awal = float(d["KMAwal"])
+                real_km_awal = d_km_awal # <- INI YANG MEMPERBAIKI MASALAH JARAK (TOTAL TRIP)
+                
                 km_akhir = d_km_awal
                 total_km_tempuh = 0.0
                 tot_liter = "0"
@@ -1210,17 +1244,12 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                 info_text = "Total Jam Backup (RH)" if is_genset else "Total Perjalanan (KM)"
                 icon_text = "⏱️" if is_genset else "🛣️"
                 
-                # Fetch actual last KM from PJB history to enforce continuity
-                jenis_kendaraan = "Mobil" if "mobil" in str(d["BBM"]).lower() else ("Motor" if "motor" in str(d["BBM"]).lower() else "Genset")
-                real_km_awal = get_last_indicator(d["Plat"].strip().upper(), jenis_kendaraan, pjb_r) if is_vehicle else 0.0
-                
                 if "Operational" in jns_pjb:
                     st.markdown("<div class='section-title'>📝 Realisasi Lapangan & Nominal (Fisik)</div>", unsafe_allow_html=True)
                     if is_vehicle:
                         c_c1, c_d1 = st.columns(2)
                         with c_c1:
-                            st.info(f"📍 {label_akhir.split(' ')[0]} Terakhir di Sistem (Histori PJB Sebelumnya): **{real_km_awal}**")
-                            st.caption(f"*(Mengabaikan input saat request ({d_km_awal}) agar perhitungan valid dari PJB ke PJB)*")
+                            st.info(f"📍 {label_akhir.split(' ')[0]} Awal (Saat Request): **{real_km_awal}**")
                             
                             default_km_akhir = float(d.get("km_akhir_lama", real_km_awal))
                             km_akhir = st.number_input(f"Ketik Angka {label_akhir} AKTUAL SAAT INI (Wajib)", min_value=0.0, value=default_km_akhir, step=0.1)
@@ -1228,7 +1257,7 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                             total_km_tempuh = km_akhir - real_km_awal
                             
                             if km_akhir > 0 and total_km_tempuh >= 0: st.info(f"{icon_text} Kalkulasi {info_text} (Trip): **{total_km_tempuh:.2f}**")
-                            elif km_akhir > 0 and total_km_tempuh < 0: st.error(f"⚠️ PERINGATAN: Angka yang diketik lebih kecil dari KM/RH Awal histori ({real_km_awal})!")
+                            elif km_akhir > 0 and total_km_tempuh < 0: st.error(f"⚠️ PERINGATAN: Angka yang diketik lebih kecil dari KM/RH Awal ({real_km_awal})!")
                         
                         with c_d1:
                             tot_liter = st.text_input("Total Liter BBM", value=d.get("liter_lama", "0"))
@@ -2302,7 +2331,7 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
     
     nop_mon = st.selectbox("🌐 Pilih Wilayah Database (NOP):", ["-- Pilih NOP --"] + list(MASTER_DATA.keys()))
     if nop_mon != "-- Pilih NOP --":
-        target_ss = MASTER_DATA[nop_mon]["spreadsheet_id"]  # <-- Variabel ini yang sebelumnya terlewat
+        target_ss = MASTER_DATA[nop_mon]["spreadsheet_id"]
         with st.spinner("Menarik data langsung dari server..."):
             data_all = fetch_spreadsheet_data(target_ss)
             req_r, pjb_r, app_r = data_all[SHEET_REQUEST], data_all[SHEET_PJB], data_all[SHEET_APP]
@@ -2324,7 +2353,6 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
             for app in app_r[1:]:
                 if len(app) > 5 and app[3] == "Request Dana":
                     status_tiket = str(app[5]).strip().upper()
-                    # Menangkap tiket yang sudah Ditolak atau Disetujui
                     if status_tiket in ["REJECTED", "APPROVED"]:
                         processed_tickets.add(str(app[2]).strip().upper())
 
@@ -2335,7 +2363,6 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
                 if len(r) > 13 and str(r[1]).strip() == filter_date_str:
                     tiket_req = str(r[3]).strip().upper()
                     
-                    # LOGIKA PENGHAPUSAN: Jika tiket ada di daftar processed_tickets, SKIP (Jangan Tampilkan)
                     if tiket_req in processed_tickets:
                         continue
                         
@@ -2361,7 +2388,6 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
                 with cd1:
                     tiket_to_app = st.selectbox("Pilih Tiket (Support):", ["-- Pilih Tiket --"] + [req['Sub-Tiket (Split)'] for req in daily_req])
                 
-                # Logic Auto-Fill Nominal berdasarkan pilihan dropdown
                 auto_nom = 0
                 if tiket_to_app != "-- Pilih Tiket --":
                     auto_nom = next((req['Nominal Request'] for req in daily_req if req['Sub-Tiket (Split)'] == tiket_to_app), 0)
@@ -2381,7 +2407,6 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
                     if tiket_to_app != "-- Pilih Tiket --" and sumber_dana_app != "-- Pilih Dana --" and nom_dist_app > 0:
                         nama_penerima = next((r['Nama'] for r in daily_req if r['Sub-Tiket (Split)'] == tiket_to_app), "")
                         
-                        # Data otomatis masuk ke Sheet Distribusi UM
                         append_data(SHEET_DISTRIBUSI, [
                             datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
                             datetime.now().strftime("%d/%m/%Y"),
@@ -2391,7 +2416,6 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
                             f"AUTO-SUPPORT: {tiket_to_app}" 
                         ], target_ss)
                         
-                        # Data masuk ke Sheet APP sebagai histori approve
                         append_data(SHEET_APP, [
                             datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
                             nama_penerima,
@@ -2412,7 +2436,6 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
                     if tiket_to_app != "-- Pilih Tiket --":
                         nama_penerima = next((r['Nama'] for r in daily_req if r['Sub-Tiket (Split)'] == tiket_to_app), "")
                         
-                        # Rekam status REJECTED di Sheet APP agar terbaca oleh sistem block/lepas
                         append_data(SHEET_APP, [
                             datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
                             nama_penerima,
@@ -2468,7 +2491,6 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
                     tk_str = r[36].strip() if (len(r) > 36 and r[36].strip()) else r[21].strip()
                     pjb_tickets_all_set.update([t.strip().upper() for t in tk_str.split(",")])
                     
-            # Ambil data tiket yang sudah di reject Admin (Agar tidak muncul sebagai Warning Gantung)
             req_reject_set = set()
             for r in app_r[1:]:
                 if len(r) > 5 and r[3] == "Request Dana" and str(r[5]).strip().upper() == "REJECTED":
@@ -2486,7 +2508,6 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
                     if req_date >= CUTOFF_DATE:
                         req_tk_raw = str(r[3]).strip().upper()
                         
-                        # Lewati tiket kosong atau yang statusnya sudah ditolak Admin di Daily Realtime
                         if not req_tk_raw or req_tk_raw in req_reject_set: continue
                         
                         req_tk_list = [t.strip() for t in req_tk_raw.split(",") if t.strip()]
@@ -2552,25 +2573,20 @@ elif st.session_state.page == "📝 Report Lapangan":
         with st.spinner("Memuat data tiket..."):
             data_all = fetch_spreadsheet_data(target_ss)
             req_r = data_all[SHEET_REQUEST]
-            # Filter yang menyembunyikan tiket PJB telah Dihapus agar tiket lama/baru tetap bisa di-report.
 
         c_rep1, c_rep2 = st.columns(2)
         with c_rep1: nama_rep = st.selectbox("👤 Pilih Nama Anda:", ["-- Pilih Nama --"] + MASTER_DATA[nop_rep]["names"])
         
         pending_options = []
         if nama_rep != "-- Pilih Nama --":
-            # Menggunakan "reversed" agar tiket yang ditarik dari database diurutkan dari yang paling terbaru di atas
             for r in reversed(req_r[1:]):
                 if len(r)>5 and str(r[3]).strip() != "" and str(r[5]).strip().upper() == nama_rep.strip().upper():
                     req_tk_raw = str(r[3]).strip().upper()
                     
-                    # Mengambil Site ID, jika kosong diberi label "Tanpa Site"
                     site_id_val = str(r[7]).strip() if len(r)>7 and str(r[7]).strip() else "Tanpa Site"
                     
-                    # Format tampilan dropdown menjadi: NOMOR TIKET | SITE ID
                     display_text = f"{req_tk_raw} | {site_id_val}"
                     
-                    # Cegah duplikat masuk ke dropdown
                     if display_text not in pending_options:
                         pending_options.append(display_text)
                         
@@ -2582,7 +2598,6 @@ elif st.session_state.page == "📝 Report Lapangan":
                     tiket_rep = "-- Pilih Tiket --"
                     
             if tiket_rep != "-- Pilih Tiket --":
-                # Memisahkan kembali nomor tiket bersih tanpa teks Site ID untuk pencarian database
                 tiket_clean = tiket_rep.split(" | ")[0].strip()
                 
                 st.markdown("<div class='section-title'>🔍 Rincian Laporan Lapangan</div>", unsafe_allow_html=True)
@@ -2600,7 +2615,7 @@ elif st.session_state.page == "📝 Report Lapangan":
                     kond_bts = st.text_input("📡 Status / Problem BTS & Rectifier")
                     kond_genset = st.text_input("⚡ Status / Kondisi Genset")
                 with c_k2:
-                    kond_enpas = st.text_input("⚠️ Status / Enva (BTS/SPS)")
+                    kond_enpas = st.text_input("❄️ Status / Kondisi Enpas (AC/Kipas)")
                     kond_power = st.text_input("🔋 Status Backup Power (Baterai)")
                     
                 st.markdown("<div class='section-title'>📸 Upload Dokumentasi (Maks 5 Foto)</div>", unsafe_allow_html=True)
@@ -2635,7 +2650,7 @@ elif st.session_state.page == "📝 Report Lapangan":
 *🛠️ Status Perangkat:*
 • BTS & Recti : {kond_bts if kond_bts else '-'}
 • Genset      : {kond_genset if kond_genset else '-'}
-• Enva BTS    : {kond_enpas if kond_enpas else '-'}
+• Enpas/AC    : {kond_enpas if kond_enpas else '-'}
 • Baterai/BUP : {kond_power if kond_power else '-'}
 
 *📸 Link Dokumentasi:*
