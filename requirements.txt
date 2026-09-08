@@ -3,3 +3,5 @@ pandas
 gspread
 cloudinary
 openpyxl
+opencv-python-headless
+numpy
