@@ -233,7 +233,6 @@ def load_excel_data():
     except: site_dict, site_list = {}, []
     
     tim_dict, list_nopol_csv = {}, []
-    # PERBAIKAN 4: Pembacaan kolom lonlat tim.xlsx yang lebih handal dan kebal error
     try:
         df_tim = pd.read_excel("lonlat tim.xlsx").fillna(0)
         col_nama = next((c for c in df_tim.columns if 'nama' in c.lower()), None)
@@ -322,7 +321,6 @@ def get_user_tickets_status(nama, req_rows, pjb_rows, app_rows):
         req_tk_list = [t.strip() for t in req_tk_raw.split(",") if t.strip()]
         req_set = set(req_tk_list)
         
-        # LOGIKA PERBAIKAN 2: Abaikan (Lepaskan Blokir) jika Request telah di-Reject Admin
         if req_app_status.get(req_tk_raw) == "REJECTED":
             history.append({"Tiket": req_tk_raw, "Tanggal": tgl, "Status": "❌ REQUEST DITOLAK Admin (Harap Ajukan Ulang)"})
             continue
@@ -690,13 +688,11 @@ elif st.session_state.page == "📝 Form Request Dana":
             is_duplicate = False
             is_rejected_request = False
             
-            # Cek status "Request Dana" yang di reject di SHEET_APP
             for r in reversed(app_r[1:]):
                 if len(r) > 5 and r[3] == "Request Dana" and str(r[2]).strip().upper() == base_tiket_clean:
                     if str(r[5]).strip().upper() == "REJECTED": is_rejected_request = True
                     break
             
-            # Jika belum pernah ditolak Admin sepenuhnya, cek apakah duplikat
             if base_tiket_clean != "" and not is_rejected_request:
                 for t in all_requested_tickets:
                     if base_tiket_clean in t: 
@@ -767,7 +763,7 @@ elif st.session_state.page == "📝 Form Request Dana":
             st.info(f"🛣️ Jarak Tempuh Peta: **{jarak_km_pp:.1f} Km (PP)** (Titik HB ke Site: {jarak_km_oneway:.1f} Km)\n\n⏱️ Estimasi Waktu (PP): **{jam_int} Jam {mnt_int} Mnt**")
         else:
             invalid_coords = True
-            st.warning("⚠️ Koordinat masih 0 / belum lengkap. Jika Anda memilih item kendaraan atau Uang Makan, sistem berpotensi menolak karena tidak bisa menghitung jarak.")
+            st.warning("⚠️ Koordinat masih 0 / belum lengkap. Sistem berpotensi menolak karena tidak bisa menghitung jarak tempuh aktual.")
 
         # --- AUTO NOPOL BERDASARKAN NAMA TIM (DARI EXCEL/CSV) ---
         auto_nopol = ""
@@ -803,7 +799,6 @@ elif st.session_state.page == "📝 Form Request Dana":
                         keb_mobil = st.number_input("Estimasi Dana BBM Mobil (Rp)", min_value=0, step=1000, value=default_est_dana_mob, key="k_mob")
                         st.info(f"⛽ **Estimasi Otomatis:** Berdasarkan jarak PP {jarak_km_pp:.1f} KM (asumsi 9 KM/L), estimasi kebutuhan ± **{est_liter_mob} Liter**.")
                     with c_m2:
-                        # PERBAIKAN 3: KEMBALIKAN MENU DROPDOWN NOPOL
                         idx_mob = options_nopol.index(auto_nopol) if auto_nopol in options_nopol else 0
                         pilihan_mob = st.selectbox("Plat Mobil", options_nopol, index=idx_mob, key="p_mob")
                         if pilihan_mob == "-- Pilih Nopol / Ketik Baru --":
@@ -1004,8 +999,9 @@ elif st.session_state.page == "📝 Form Request Dana":
                         
                     for req in sub_requests:
                         if req['tipe'] in ['UM', 'Inap']:
-                            if not (is_mobil or is_motor or is_genset) or invalid_coords:
-                                st.error(f"❌ REQUEST {req['tipe']} DITOLAK: Koordinat Peta tidak valid. Syarat wajib adalah jarak tempuh aktual terdeteksi.")
+                            # PERBAIKAN LOGIKA UANG MAKAN: TIDAK LAGI MEWAJIBKAN MEMILIH BBM MOBIL/MOTOR
+                            if invalid_coords:
+                                st.error(f"❌ REQUEST {req['tipe']} DITOLAK: Koordinat Peta tidak valid. Pastikan Latitude & Longitude tidak 0 (Titik Keberangkatan & Tujuan Terdeteksi).")
                                 st.stop()
                             if jarak_km_pp < 80:
                                 st.error(f"❌ REQUEST {req['tipe']} DITOLAK: Jarak tempuh (Pulang-Pergi / PP) Anda hanya {jarak_km_pp:.1f} KM. Syarat wajib pencairan adalah jarak PP >= 80 KM.")
@@ -1078,7 +1074,6 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                 tiket_app = str(r[2]).strip().upper()
                 if tiket_app != "": status_verif_dict[tiket_app] = str(r[5]).strip()
         
-        # PERBAIKAN 2: AMBIL DATA TIKET REQUEST YANG DI-REJECT ADMIN
         req_app_status = {}
         for r in app_r[1:]:
             if len(r) > 5 and r[3] == "Request Dana":
@@ -1108,10 +1103,9 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                 req_set = set(req_tk_list)
                 is_ready_to_pjb = False
                 
-                # PERBAIKAN 2: Jika tiket belum ada di riwayat PJB, pastikan BUKAN tiket yang di-Reject Admin.
                 if not req_set.issubset(pjb_tickets_all_set):
                     if req_app_status.get(req_tk_raw) == "REJECTED":
-                        is_ready_to_pjb = False # HILANGKAN DARI DAFTAR PJB TIM
+                        is_ready_to_pjb = False
                     else:
                         is_ready_to_pjb = True
                 elif status_verif_dict.get(req_tk_raw) == "REJECTED":
@@ -1225,9 +1219,8 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                     if "Operational" in jns_pjb: nominal_pjb = st.number_input("Nominal PJB Terpakai pada sub-tiket ini", value=int(d["NominalReq"]))
                     else: st.info("Nominal PJB disesuaikan dengan Kalkulator UM di bawah.")
 
-                # PERBAIKAN 1: KM Awal dipaksa sama persis dengan yang diketik waktu Request!
                 d_km_awal = float(d["KMAwal"])
-                real_km_awal = d_km_awal # <- INI YANG MEMPERBAIKI MASALAH JARAK (TOTAL TRIP)
+                real_km_awal = d_km_awal
                 
                 km_akhir = d_km_awal
                 total_km_tempuh = 0.0
@@ -1314,7 +1307,7 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                             st.error(f"❌ PENGIRIMAN DITOLAK: {label_akhir} aktual belum diisi!")
                             st.stop()
                         elif is_vehicle and (km_akhir < real_km_awal):
-                            st.error(f"❌ PENGIRIMAN DITOLAK: Angka yang dimasukkan ({km_akhir}) lebih kecil dari KM/RH Awal histori ({real_km_awal})!")
+                            st.error(f"❌ PENGIRIMAN DITOLAK: Angka yang dimasukkan ({km_akhir}) lebih kecil dari KM/RH Awal ({real_km_awal})!")
                             st.stop()
                     else:
                         if not (f_um1 and f_um2 and f_um3 and f_um4):
