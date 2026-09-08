@@ -995,9 +995,34 @@ elif st.session_state.page == "📝 Form Request Dana":
             try: nominal_tf = int(nominal_tf_str.replace(".", "").replace(",", "").strip())
             except: nominal_tf = 0
             
+st.markdown("<div class='section-title'>📸 Lampiran & Pemindai AI (Forensik)</div>", unsafe_allow_html=True)
+        st.info("🤖 **Sistem KUT AI Forensics Aktif:** Setiap gambar akan dipindai otomatis untuk mendeteksi rekayasa digital (Photoshop/Canva) dan tingkat kejernihan (Blur).")
+        
         c_up1, c_up2 = st.columns(2)
-        with c_up1: foto_km = st.file_uploader("Upload Foto KM / RH Genset Awal", type=["jpg", "png", "jpeg"])
-        with c_up2: foto_evidance = st.file_uploader("Upload Foto Evidance Request", type=["jpg", "png", "jpeg"])
+        
+        # Kolom 1: Foto KM
+        with c_up1: 
+            foto_km = st.file_uploader("1. Upload Foto KM / RH Genset Awal", type=["jpg", "png", "jpeg"])
+            if foto_km:
+                with st.status("🤖 AI Memindai Metadata & Kualitas Gambar...", expanded=True) as status:
+                    is_valid_km, msg_km = ai_image_checker(foto_km, "Foto KM/RH")
+                    if is_valid_km:
+                        status.update(label="✅ Lolos Uji AI: Gambar Asli & Jelas", state="complete")
+                    else:
+                        status.update(label="🚨 Peringatan AI: Gambar Bermasalah", state="error")
+                        st.error(msg_km)
+
+        # Kolom 2: Foto Evidance
+        with c_up2: 
+            foto_evidance = st.file_uploader("2. Upload Foto Evidance Request", type=["jpg", "png", "jpeg"])
+            if foto_evidance:
+                with st.status("🤖 AI Memindai Metadata & Kualitas Gambar...", expanded=True) as status:
+                    is_valid_ev, msg_ev = ai_image_checker(foto_evidance, "Foto Evidance")
+                    if is_valid_ev:
+                        status.update(label="✅ Lolos Uji AI: Gambar Asli & Jelas", state="complete")
+                    else:
+                        status.update(label="🚨 Peringatan AI: Gambar Bermasalah", state="error")
+                        st.error(msg_ev)
         
         form_invalid = (nama == "" or cluster == "" or role == "-- Pilih Role --" or keperluan == "" or not base_tiket_clean)
 
