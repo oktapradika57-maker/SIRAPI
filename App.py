@@ -94,6 +94,81 @@ st.markdown("""
         [data-testid="collapsedControl"] { display: none; }
     </style>
 """, unsafe_allow_html=True)
+# ==========================================
+# 0.5. SISTEM KEAMANAN & LOGIN KARYAWAN (GATEKEEPER)
+# ==========================================
+@st.cache_data
+def load_user_credentials():
+    try:
+        # Membaca file excel pass and username
+        df = pd.read_excel("pass and username.xlsx")
+        creds = {}
+        for _, row in df.iterrows():
+            nama = str(row['NAMA']).strip().upper()
+            nik = str(row['NIK']).strip()
+            if nama and nik and nik != 'nan':
+                creds[nama] = nik
+        return creds
+    except Exception as e:
+        st.error(f"Gagal memuat database user: {e}")
+        return {}
+
+# Inisialisasi status login
+if 'is_authenticated' not in st.session_state: 
+    st.session_state.is_authenticated = False
+if 'logged_in_user' not in st.session_state: 
+    st.session_state.logged_in_user = ""
+
+# --- HALAMAN LOGIN UTAMA ---
+if not st.session_state.is_authenticated:
+    user_creds = load_user_credentials()
+    list_users = ["-- Pilih Nama Anda --"] + sorted(list(user_creds.keys()))
+    
+    c_log1, c_log2, c_log3 = st.columns([1, 2, 1])
+    with c_log2:
+        st.markdown("<div style='margin-top: 80px;'></div>", unsafe_allow_html=True)
+        try: 
+            st.image("koperasi-jasa-konstruksi-tower-event-organizer-network-monitoring-telekomunikasi-kisel-group-logo-kut.webp", use_container_width=True)
+        except: 
+            pass
+        
+        st.markdown("""
+            <div class="header-card" style="margin-bottom: 25px;">
+                <h2>🔒 PORTAL LOGIN TIM</h2>
+                <p>Silakan masuk menggunakan identitas Anda</p>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        with st.form("login_form"):
+            selected_user = st.selectbox("👤 Nama Karyawan:", list_users)
+            input_password = st.text_input("🔑 Password (NIK):", type="password")
+            submit_login = st.form_submit_button("🚀 MASUK KE SISTEM", use_container_width=True)
+            
+            if submit_login:
+                if selected_user == "-- Pilih Nama Anda --":
+                    st.error("⚠️ Silakan pilih nama Anda terlebih dahulu!")
+                else:
+                    valid_nik = user_creds.get(selected_user, "")
+                    if input_password == valid_nik:
+                        st.session_state.is_authenticated = True
+                        st.session_state.logged_in_user = selected_user
+                        st.success(f"✅ Login Berhasil! Selamat datang, {selected_user}.")
+                        time.sleep(1.5)
+                        st.rerun()
+                    else:
+                        st.error("❌ Password (NIK) Salah! Pastikan penulisan huruf besar/kecil sesuai.")
+    
+    # PERINTAH STOP: Mencegah kode di bawahnya (menu utama) berjalan sebelum login sukses
+    st.stop() 
+
+# --- TOMBOL LOGOUT UNTUK USER YANG SUDAH MASUK ---
+c_out1, c_out2 = st.columns([5, 1])
+with c_out2:
+    if st.button(f"🚪 Logout ({st.session_state.logged_in_user.title()})", use_container_width=True):
+        st.session_state.is_authenticated = False
+        st.session_state.logged_in_user = ""
+        st.session_state.page = "🏠 Hub Menu Utama"
+        st.rerun()
 
 # ==========================================
 # 1. MASTER DATA & KONFIGURASI
