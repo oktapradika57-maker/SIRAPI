@@ -94,32 +94,32 @@ st.markdown("""
         [data-testid="collapsedControl"] { display: none; }
     </style>
 """, unsafe_allow_html=True)
+
 # ==========================================
 # 0.5. SISTEM KEAMANAN & LOGIN KARYAWAN (GATEKEEPER)
 # ==========================================
-@st.cache_data
+@st.cache_data(ttl=60)
 def load_user_credentials():
     try:
-        # Membaca file excel pass and username
         df = pd.read_excel("pass and username.xlsx")
+        df.columns = df.columns.astype(str).str.strip().str.upper() 
         creds = {}
-        for _, row in df.iterrows():
-            nama = str(row['NAMA']).strip().upper()
-            nik = str(row['NIK']).strip()
-            if nama and nik and nik != 'nan':
-                creds[nama] = nik
+        if 'NAMA' in df.columns and 'NIK' in df.columns:
+            for _, row in df.iterrows():
+                nama = str(row['NAMA']).strip().upper()
+                nik = str(row['NIK']).replace('.0', '').strip() 
+                if nama != 'NAN' and nik != 'NAN' and nama != '':
+                    creds[nama] = nik
+        else:
+            st.error("⚠️ Kolom 'NAMA' dan 'NIK' tidak ditemukan di baris pertama Excel!")
         return creds
     except Exception as e:
-        st.error(f"Gagal memuat database user: {e}")
+        st.error(f"⚠️ Gagal membaca file Excel 'pass and username.xlsx'. Pastikan file sudah terupload. Error: {e}")
         return {}
 
-# Inisialisasi status login
-if 'is_authenticated' not in st.session_state: 
-    st.session_state.is_authenticated = False
-if 'logged_in_user' not in st.session_state: 
-    st.session_state.logged_in_user = ""
+if 'is_authenticated' not in st.session_state: st.session_state.is_authenticated = False
+if 'logged_in_user' not in st.session_state: st.session_state.logged_in_user = ""
 
-# --- HALAMAN LOGIN UTAMA ---
 if not st.session_state.is_authenticated:
     user_creds = load_user_credentials()
     list_users = ["-- Pilih Nama Anda --"] + sorted(list(user_creds.keys()))
@@ -127,10 +127,8 @@ if not st.session_state.is_authenticated:
     c_log1, c_log2, c_log3 = st.columns([1, 2, 1])
     with c_log2:
         st.markdown("<div style='margin-top: 80px;'></div>", unsafe_allow_html=True)
-        try: 
-            st.image("koperasi-jasa-konstruksi-tower-event-organizer-network-monitoring-telekomunikasi-kisel-group-logo-kut.webp", use_container_width=True)
-        except: 
-            pass
+        try: st.image("koperasi-jasa-konstruksi-tower-event-organizer-network-monitoring-telekomunikasi-kisel-group-logo-kut.webp", use_container_width=True)
+        except: pass
         
         st.markdown("""
             <div class="header-card" style="margin-bottom: 25px;">
@@ -156,19 +154,8 @@ if not st.session_state.is_authenticated:
                         time.sleep(1.5)
                         st.rerun()
                     else:
-                        st.error("❌ Password (NIK) Salah! Pastikan penulisan huruf besar/kecil sesuai.")
-    
-    # PERINTAH STOP: Mencegah kode di bawahnya (menu utama) berjalan sebelum login sukses
+                        st.error("❌ Password (NIK) Salah! Pastikan huruf besar/kecil dan angka sesuai.")
     st.stop() 
-
-# --- TOMBOL LOGOUT UNTUK USER YANG SUDAH MASUK ---
-c_out1, c_out2 = st.columns([5, 1])
-with c_out2:
-    if st.button(f"🚪 Logout ({st.session_state.logged_in_user.title()})", use_container_width=True):
-        st.session_state.is_authenticated = False
-        st.session_state.logged_in_user = ""
-        st.session_state.page = "🏠 Hub Menu Utama"
-        st.rerun()
 
 # ==========================================
 # 1. MASTER DATA & KONFIGURASI
@@ -207,7 +194,6 @@ def ai_image_checker(uploaded_file, file_name_label):
     if uploaded_file is None:
         return True, "Tidak ada file"
     
-    # 1. Cek EXIF Metadata (Deteksi Gambar Editan Photoshop / Aplikasi)
     try:
         img = Image.open(uploaded_file)
         exif = img.getexif()
@@ -226,7 +212,6 @@ def ai_image_checker(uploaded_file, file_name_label):
         uploaded_file.seek(0)
         pass
 
-    # 2. Cek Kualitas/Blur dengan OpenCV (Laplacian Variance)
     try:
         file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
         img_cv = cv2.imdecode(file_bytes, 1)
@@ -236,7 +221,6 @@ def ai_image_checker(uploaded_file, file_name_label):
             gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
             blur_score = cv2.Laplacian(gray, cv2.CV_64F).var()
             
-            # Threshold blur (Semakin kecil angkanya, semakin blur). Angka 40.0 adalah batas toleransi nota terbaca.
             if blur_score < 40.0:  
                 return False, f"🌫️ KUALITAS DITOLAK: Gambar {file_name_label} terdeteksi SANGAT BLUR / BURAM oleh AI (Skor Ketajaman: {blur_score:.1f}). Mohon pastikan fokus kamera stabil dan tulisan terbaca jelas!"
     except Exception:
@@ -246,7 +230,6 @@ def ai_image_checker(uploaded_file, file_name_label):
     return True, "Aman"
 
 def ui_image_uploader(label, key=None):
-    """Fungsi pembantu agar UI AI Scanner otomatis muncul di setiap uploader foto"""
     file = st.file_uploader(label, type=["jpg", "png", "jpeg"], key=key)
     if file:
         with st.status("🤖 AI Memindai Kualitas & Metadata Gambar...", expanded=True) as status:
@@ -552,12 +535,22 @@ if 'page' not in st.session_state: st.session_state.page = "🏠 Hub Menu Utama"
 if 'admin_logged_in' not in st.session_state: st.session_state.admin_logged_in = False
 if 'pdf_ready' not in st.session_state: st.session_state.pdf_ready = False
 
-if st.session_state.page != "🏠 Hub Menu Utama":
-    if st.button("⬅️ KEMBALI KE MENU UTAMA", use_container_width=True):
+c_nav1, c_nav2, c_nav3 = st.columns([4, 1, 1])
+with c_nav3:
+    if st.button(f"🚪 Logout", help=f"Keluar dari akun {st.session_state.logged_in_user}", use_container_width=True):
+        st.session_state.is_authenticated = False
+        st.session_state.logged_in_user = ""
         st.session_state.page = "🏠 Hub Menu Utama"
-        st.session_state.pdf_ready = False
         st.rerun()
-    st.markdown("<hr style='margin: 10px 0 30px 0;'>", unsafe_allow_html=True)
+
+if st.session_state.page != "🏠 Hub Menu Utama":
+    with c_nav1:
+        if st.button("⬅️ KEMBALI KE MENU UTAMA", use_container_width=True):
+            st.session_state.page = "🏠 Hub Menu Utama"
+            st.session_state.pdf_ready = False
+            st.rerun()
+            
+st.markdown("<hr style='margin: 10px 0 30px 0;'>", unsafe_allow_html=True)
 
 
 # ==========================================
@@ -757,7 +750,10 @@ elif st.session_state.page == "📝 Form Request Dana":
         with col1:
             tanggal = st.date_input("Tanggal Pengajuan")
             cluster = st.selectbox("Cluster Regional", [""] + MASTER_DATA[nop]["clusters"])
-            nama = st.selectbox("Nama Petugas / Pemohon (PIC Utama)", [""] + MASTER_DATA[nop]["names"])
+            
+            # Auto-fill nama dari login (TIDAK BISA diubah oleh user yang login)
+            idx_nama_login = MASTER_DATA[nop]["names"].index(st.session_state.logged_in_user) if st.session_state.logged_in_user in MASTER_DATA[nop]["names"] else 0
+            nama = st.selectbox("Nama Petugas / Pemohon (PIC Utama)", [""] + MASTER_DATA[nop]["names"], index=idx_nama_login+1 if idx_nama_login != 0 else 0)
             
             nama_lookup = nama.strip().upper()
             
@@ -1217,7 +1213,9 @@ elif st.session_state.page == "✅ Form PJB Operasional":
         
         st.markdown("<div class='section-title'>🔍 2. Identifikasi Tim & Tarik Sub-Tiket Data</div>", unsafe_allow_html=True)
         col_id1, col_id2 = st.columns([2, 2])
-        with col_id1: nama_pjb = st.selectbox("👤 Pilih Nama Anda:", ["-- Pilih Nama --"] + MASTER_DATA[nop_cari]["names"])
+        with col_id1: 
+            idx_nama_pjb = MASTER_DATA[nop_cari]["names"].index(st.session_state.logged_in_user) if st.session_state.logged_in_user in MASTER_DATA[nop_cari]["names"] else 0
+            nama_pjb = st.selectbox("👤 Pilih Nama Anda:", ["-- Pilih Nama --"] + MASTER_DATA[nop_cari]["names"], index=idx_nama_pjb+1 if idx_nama_pjb != 0 else 0)
         
         if nama_pjb != "-- Pilih Nama --":
             out_all, out_lock, aging_tickets, hist_cek = get_user_tickets_status(nama_pjb, req_r, pjb_r, app_r)
@@ -2704,7 +2702,9 @@ elif st.session_state.page == "📝 Report Lapangan":
             req_r = data_all[SHEET_REQUEST]
 
         c_rep1, c_rep2 = st.columns(2)
-        with c_rep1: nama_rep = st.selectbox("👤 Pilih Nama Anda:", ["-- Pilih Nama --"] + MASTER_DATA[nop_rep]["names"])
+        with c_rep1: 
+            idx_nama_rep = MASTER_DATA[nop_rep]["names"].index(st.session_state.logged_in_user) if st.session_state.logged_in_user in MASTER_DATA[nop_rep]["names"] else 0
+            nama_rep = st.selectbox("👤 Pilih Nama Anda:", ["-- Pilih Nama --"] + MASTER_DATA[nop_rep]["names"], index=idx_nama_rep+1 if idx_nama_rep != 0 else 0)
         
         pending_options = []
         if nama_rep != "-- Pilih Nama --":
