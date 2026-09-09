@@ -19,143 +19,73 @@ import cv2
 import numpy as np
 
 # ==========================================
-# 0. KONFIGURASI HALAMAN & UI 3D MODERN
+# 0. KONFIGURASI HALAMAN & UI ELEGAN (FRESH & PROFESSIONAL)
 # ==========================================
 st.set_page_config(page_title="SiRAPI Enterprise", page_icon="💸", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;800;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
         
-        .main { background: #e0e5ec; font-family: 'Plus Jakarta Sans', sans-serif; }
+        /* Global Background & Font */
+        .main { background-color: #f8fafc; font-family: 'Plus Jakarta Sans', sans-serif; }
         
-        /* Premium Header Card 3D Neomorphism */
+        /* Premium Header Card (Glassmorphism & Clean Gradient) */
         .header-card {
-            background: linear-gradient(135deg, #0F2027 0%, #203A43 50%, #2C5364 100%);
-            padding: 40px 20px; border-radius: 24px; color: white; text-align: center;
-            box-shadow: 10px 10px 20px rgba(15, 32, 39, 0.2), -10px -10px 20px rgba(255, 255, 255, 0.8);
-            margin-bottom: 35px; margin-top: 15px; border-bottom: 5px solid #00F2FE;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            padding: 40px 30px; border-radius: 20px; color: #ffffff; text-align: center;
+            box-shadow: 0 15px 35px rgba(15, 23, 42, 0.1);
+            margin-top: 10px; margin-bottom: 35px; border: 1px solid rgba(255,255,255,0.05);
             position: relative; overflow: hidden;
         }
-        .header-card h1 { font-weight: 900; font-size: 2.5rem; margin-bottom: 5px; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }
-        .header-card p { font-size: 1.1rem; color: #e2e8f0; margin-bottom: 0; font-weight: 300;}
+        .header-card::before {
+            content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
+            background: radial-gradient(circle, rgba(56,189,248,0.08) 0%, transparent 50%);
+            pointer-events: none;
+        }
+        .header-card h1 { font-weight: 800; font-size: 2.5rem; letter-spacing: -0.5px; margin-bottom: 5px; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }
+        .header-card p { font-size: 1.1rem; color: #cbd5e1; font-weight: 400; margin: 0; }
         
-        /* Menu Buttons - 3D Glass/Neomorphism */
+        /* Menu Buttons - Modern Clean Soft UI */
         div[data-testid="stButton"] > button {
-            background: rgba(255, 255, 255, 0.6) !important;
-            backdrop-filter: blur(12px) !important;
-            border: 1px solid rgba(255, 255, 255, 0.8) !important; 
-            border-radius: 20px !important;
-            box-shadow: 8px 8px 16px rgba(163,177,198,0.6), -8px -8px 16px rgba(255,255,255, 0.8) !important;
-            height: auto !important; padding: 25px 10px !important;
-            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+            background: #ffffff !important;
+            border: 1px solid #e2e8f0 !important; 
+            border-radius: 16px !important;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.02), 0 10px 15px rgba(0,0,0,0.03) !important;
+            padding: 22px 10px !important; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
         }
         div[data-testid="stButton"] > button:hover, div[data-testid="stButton"] > button:active {
-            background: linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%) !important;
-            transform: translateY(-8px) scale(1.02) !important;
-            box-shadow: 12px 12px 20px rgba(163,177,198,0.7), -12px -12px 20px rgba(255,255,255, 0.9) !important;
-            border: none !important;
-        }
-        div[data-testid="stButton"] > button p { color: #334155 !important; font-size: 1.15rem !important; font-weight: 800 !important; margin:0; text-align:center; }
-        div[data-testid="stButton"] > button:hover p, div[data-testid="stButton"] > button:active p { color: white !important; text-shadow: 1px 1px 2px rgba(0,0,0,0.2); }
-        
-        /* Admin Button Specific 3D */
-        .btn-admin div[data-testid="stButton"] > button {
-            background: linear-gradient(145deg, #1e293b, #0f172a) !important;
-            box-shadow: 8px 8px 16px rgba(163,177,198,0.6), -8px -8px 16px rgba(255,255,255, 0.8) !important;
-        }
-        .btn-admin div[data-testid="stButton"] > button p { color: white !important; font-size: 1.05rem !important; font-weight: 600 !important;}
-        .btn-admin div[data-testid="stButton"] > button:hover { 
-            background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%) !important; 
-            box-shadow: inset 4px 4px 10px rgba(0,0,0,0.3) !important;
+            background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%) !important;
             transform: translateY(-5px) !important;
+            box-shadow: 0 15px 25px rgba(2,132,199,0.2) !important; border-color: transparent !important;
         }
+        div[data-testid="stButton"] > button p { color: #1e293b !important; font-weight: 700 !important; font-size: 1.1rem !important; margin:0; transition: color 0.3s ease; }
+        div[data-testid="stButton"] > button:hover p, div[data-testid="stButton"] > button:active p { color: #ffffff !important; }
         
         /* Section Titles Modern */
         .section-title { 
-            color: #1e293b; font-size: 1.3rem; font-weight: 900; 
-            background: linear-gradient(90deg, #e2e8f0 0%, transparent 100%);
-            padding: 10px 15px; border-radius: 8px; border-left: 5px solid #4FACFE;
-            margin-top: 30px; margin-bottom: 20px;
+            color: #0f172a; font-size: 1.3rem; font-weight: 800; letter-spacing: -0.3px;
+            margin: 35px 0 20px 0; display: flex; align-items: center; gap: 10px;
+        }
+        .section-title::before {
+            content: ''; display: block; width: 5px; height: 24px; background: #0ea5e9; border-radius: 4px;
         }
         
-        /* Metric Cards 3D Neomorphism */
+        /* Metric Cards Clean Modern */
         .metric-3d {
-            background: #e0e5ec; padding: 25px 20px; border-radius: 20px; text-align: center;
-            box-shadow: 9px 9px 16px rgb(163,177,198,0.6), -9px -9px 16px rgba(255,255,255, 0.5);
-            border-top: 5px solid #00F2FE; margin-bottom: 20px; transition: transform 0.3s;
+            background: #ffffff; padding: 25px 20px; border-radius: 16px; text-align: center;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.03); border: 1px solid #e2e8f0;
+            border-top: 4px solid #0ea5e9; margin-bottom: 20px; transition: transform 0.3s;
         }
-        .metric-3d:hover { transform: translateY(-5px); }
-        .metric-title { font-size: 0.85rem; color: #64748b; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;}
-        .metric-value { font-size: 1.8rem; font-weight: 900; margin-top: 8px; color: #0F2027; text-shadow: 1px 1px 1px rgba(255,255,255,0.8);}
+        .metric-3d:hover { transform: translateY(-4px); box-shadow: 0 15px 30px rgba(0,0,0,0.06); }
+        .metric-title { font-size: 0.85rem; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;}
+        .metric-value { font-size: 1.8rem; font-weight: 800; margin-top: 8px; color: #0f172a; }
         
         /* Hide Sidebar completely for mobile purity */
         [data-testid="collapsedControl"] { display: none; }
     </style>
 """, unsafe_allow_html=True)
-
-# ==========================================
-# 0.5. SISTEM KEAMANAN & LOGIN KARYAWAN (GATEKEEPER)
-# ==========================================
-@st.cache_data(ttl=60)
-def load_user_credentials():
-    try:
-        df = pd.read_excel("pass and username.xlsx")
-        df.columns = df.columns.astype(str).str.strip().str.upper() 
-        creds = {}
-        if 'NAMA' in df.columns and 'NIK' in df.columns:
-            for _, row in df.iterrows():
-                nama = str(row['NAMA']).strip().upper()
-                nik = str(row['NIK']).replace('.0', '').strip() 
-                if nama != 'NAN' and nik != 'NAN' and nama != '':
-                    creds[nama] = nik
-        else:
-            st.error("⚠️ Kolom 'NAMA' dan 'NIK' tidak ditemukan di baris pertama Excel!")
-        return creds
-    except Exception as e:
-        st.error(f"⚠️ Gagal membaca file Excel 'pass and username.xlsx'. Pastikan file sudah terupload. Error: {e}")
-        return {}
-
-if 'is_authenticated' not in st.session_state: st.session_state.is_authenticated = False
-if 'logged_in_user' not in st.session_state: st.session_state.logged_in_user = ""
-
-if not st.session_state.is_authenticated:
-    user_creds = load_user_credentials()
-    list_users = ["-- Pilih Nama Anda --"] + sorted(list(user_creds.keys()))
-    
-    c_log1, c_log2, c_log3 = st.columns([1, 2, 1])
-    with c_log2:
-        st.markdown("<div style='margin-top: 80px;'></div>", unsafe_allow_html=True)
-        try: st.image("koperasi-jasa-konstruksi-tower-event-organizer-network-monitoring-telekomunikasi-kisel-group-logo-kut.webp", use_container_width=True)
-        except: pass
-        
-        st.markdown("""
-            <div class="header-card" style="margin-bottom: 25px;">
-                <h2>🔒 PORTAL LOGIN TIM</h2>
-                <p>Silakan masuk menggunakan identitas Anda</p>
-            </div>
-        """, unsafe_allow_html=True)
-        
-        with st.form("login_form"):
-            selected_user = st.selectbox("👤 Nama Karyawan:", list_users)
-            input_password = st.text_input("🔑 Password (NIK):", type="password")
-            submit_login = st.form_submit_button("🚀 MASUK KE SISTEM", use_container_width=True)
-            
-            if submit_login:
-                if selected_user == "-- Pilih Nama Anda --":
-                    st.error("⚠️ Silakan pilih nama Anda terlebih dahulu!")
-                else:
-                    valid_nik = user_creds.get(selected_user, "")
-                    if input_password == valid_nik:
-                        st.session_state.is_authenticated = True
-                        st.session_state.logged_in_user = selected_user
-                        st.success(f"✅ Login Berhasil! Selamat datang, {selected_user}.")
-                        time.sleep(1.5)
-                        st.rerun()
-                    else:
-                        st.error("❌ Password (NIK) Salah! Pastikan huruf besar/kecil dan angka sesuai.")
-    st.stop() 
 
 # ==========================================
 # 1. MASTER DATA & KONFIGURASI
@@ -177,10 +107,11 @@ SHEET_UM = "Data UM"
 SHEET_DISTRIBUSI = "Distribusi UM"
 SHEET_APP = "Approval BBM"
 SHEET_TIKET_PM = "PM Tiketing"
+SHEET_ABSENSI = "Data Absensi" # Added Absensi Sheet Constant
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 MASTER_DATA = {
-    "Palangkaraya": {"spreadsheet_id": "1HvgVicTWwO4RMQI6ZR3Mu3IgGicwjcLZl9mDN1auvJU", "clusters": ["Palangkaraya", "Barito Raya"], "names": ["ADI BOWO SANTOSO", "IRJAN TORO", "AHMAD", "AHMAD MUZAKIR", "AHMAD SETIAWAN", "ALFI SYAHRI", "ARMADI", "AULIA RAHMAN", "DARLI SUTANTO", "DIDI RIYADI", "FAHMI", "FRANS EJHA ADITYA", "GYLLBRHED ALFARY LOLOMSAIT", "HARUN NURASYID", "HORY YUSMANTO", "INDRA", "JAMES JIMBRIS TAMAILANG", "JUMADI", "KHILAL DAWAI KATIRI", "LEONARD HARA", "M. RIFANI", "MUHAMMAD MUKHLIS", "MUHAMMAD MUKTI", "MUNAWIR AHMAD", "MURJANI", "NURHAYAT", "OKY BANGKIT PAMUNGKAS", "PRADILA KANDI", "PUJIANTO", "PUTRA WARDANA", "REYNALDI RICARDO PUTRA", "RIKI HIDAYAT", "RIKO SETIADI", "SAILILLAH", "SARUL SAPUTRA", "SARWONO", "TAKLIM", "TIVIANSYAH", "TRISNO SUSANTO", "YAHYA MUHAMAD", "OKTA PRDIKA", "M KIKI FIRMANSYAH", "MAWARDAH", "HD"]},
+    "Palangkaraya": {"spreadsheet_id": "1HvgVicTWwO4RMQI6ZR3Mu3IgGicwjcLZl9mDN1auvJU", "clusters": ["Palangkaraya", "Barito Raya"], "names": ["ADI BOWO SANTOSO", "IRJAN TORO", "AHMAD", "AHMAD MUZAKIR", "AHMAD SETIAWAN", "ALFI SYAHRI", "ARMADI", "AULIA RAHMAN", "DARLI SUTANTO", "DIDI RIYADI", "FAHMI", "FRANS EJHA ADITYA", "GYLLBRHED ALFARY LOLOMSAIT", "HARUN NURASYID", "HORY YUSMANTO", "INDRA", "JAMES JIMBRIS TAMAILANG", "JUMADI", "KHILAL DAWAI KATIRI", "LEONARD HARA", "M. RIFANI", "MUHAMMAD MUKHLIS", "MUHAMMAD MUKTI", "MUNAWIR AHMAD", "MURJANI", "NURHAYAT", "OKY BANGKIT PAMUNGKAS", "PRADILA KANDI", "PUJIANTO", "PUTRA WARDANA", "REYNALDI RICARDO PUTRA", "RIKI HIDAYAT", "RIKO SETIADI", "SAILILLAH", "SARUL SAPUTRA", "SARWONO", "TAKLIM", "TIVIANSYAH", "TRISNO SUSANTO", "YAHYA MUHAMAD", "OKTA PRDIKA", "OKTA PRADIKA", "M KIKI FIRMANSYAH", "MAWARDAH", "HD"]},
     "Pangkalanbun": {"spreadsheet_id": "1bc0lDhR5iMtXZsKiKIdEwPY8JTaASeHFtaJSeXkywE4", "clusters": ["Ketapang", "Sampit", "Pangkalanbun"], "names": ["RIRIH HARIANTO", "MUKHAMAD ABDUL KHOLIP", "YAMA DEWANTA", "BAGUS SANTOSO", "IMRON SETIAWAN", "JOENDRIS HERDIAN KARA", "STEVEN HERDIAN KARA", "YUDIONO", "DADANG WAHYU SYAHPUTRA", "CAVIN ANDREAN EKA PUTRA", "RAHMAT RIYAN WAHYUDIN", "SUWITO", "DIDIK PRIYONO", "GUNTUR WAHYU PRADANA", "UTI MUHAMMAD KHAIRUL HUDA", "IDRUS MAULANA", "M. RIZKY", "TRIYONO", "ERIK SETIAWAN", "AGUS SUGANDA", "AJI SAPUTRA", "DIAN WAHYUDI", "HAFID BUDIANTO", "IWAN ZAINAL ABIDIN", "DANDI PUTRA", "PONIRAN", "PARYADI KUSUMA", "HERWANI", "DIAN WILDANI", "IPAN HARIONO", "FIRDAUS", "RONI YUDI ISYANTO", "AYU NUR ISLAMIAH", "ARDIANSYAH.", "DAYU SHANDY", "WAHYUDI", "TAJAM SAPUTRA", "MUJHAHID ALWI", "NANDA FIRMANSYAH", "WAHYU RAHMADANI", "TEGUH WICAKSONO", "FERI HARIADI", "NASUKI", "ANDARIANTO PUJI SURO", "BONDAN PRAMUDYA ANANTATUR", "SOLEKHAN", "RIZAL IHZAMAHENDRA", "MUHAMMAD ROIS FERDIANSYAH", "WIDI ARYANTO", "FHANNY AGUSTIAWAN"]},
     "Tarakan": {"spreadsheet_id": "1lRj1YdZGQwY5vHg8P4wudK9V1O_lJuEYjdyHkXoB-Wg", "clusters": ["Tarakan Inner", "Tarakan Outer"], "names": ["HENDRA WIRTASI SIMANULLANG", "ARIZONA ROSADI", "KUKUH BHASKARA", "NATAL SIMBOLON", "HERMAWAN", "IRVAN DINATA VANDITYAWAN", "ENDRAS SAPTA", "AHMADI", "EDI PANJI ERMAYANA", "HANS RISKY RONI TUAH GIRSANG", "IRMANSYAH B. SANGAJI", "REMO REMOLDUS MANALU", "MOHAMMAD RAFAI", "FIRMAN SYAHRUL", "AZMIR", "PETRUS RESI KELORE", "ANIR REZKY", "AHDAN", "PARJON SIMANULLANG", "RUSDI", "HASRIADI", "PURO SUGONDO", "ALIMUDIN M. SAER", "KORNELIUS USI KELORE", "RUSDIANSYAH", "JONTES YUSDA SIMANULLANG", "NANI SETIANINGSIH", "UNGGUL NUGRAHA", "YOGABITA INDOTENO", "JHON KENNEDI SIMANULLANG", "RAFI MUHAMAD SYARIF", "AGRIVA", "SEPTIAN ALVITO", "M. DEDI RIZALDI", "SAHARUDDIN.", "MUHAMMAD RASYID", "SUPRIADI", "JULIMAT SIHITE", "EFNI NURYADIN", "ERWIN SAPUTRA ARIANSYAH", "ALVEUS", "SUPRIADI BANDANGAN"]},
     "Pontianak": {"spreadsheet_id": "1VmoWPImNFMjnaIQpBXEVYdMiTEzsz3P4tpmzfA0EMDE", "clusters": ["Sintang", "Singkawang", "Pontianak"], "names": ["ALOYSIUS", "RUDI", "RONIYANTO", "SUKADI", "HAIRIL", "AZMI ASHADIQI", "SUYADI", "ARIEF DARUL IKHWAN", "MUHAMMAD AL FATAH", "YUDIANSYAH", "RAHMAD INDRA IRAWAN", "MATIUS MARTIN", "RYVAEEL DEWANGGA", "AMIRDA ANGGA SAPUTRA", "IZHARUDDIN", "VINSENSIUS YOGI", "GUSTI ARIZAL", "MUHAMMAD MIFTAHUDIN, A.MD", "BAYU ANGGARA PUTRA", "YONI IRAWAN", "SUGANDI", "IRVAN ANDRIYANA", "ALDIANSYAH", "ABANG HAMDANI", "ABANG KUSDIANSYAH", "SUMAN", "SANGGARA ISMARAWARI", "IBIN", "VALENTINUS PETRO", "DWI KURNIAWAN ISMANTO", "ARISAFRIADI", "DONATUS DONI", "NUR AHMAD KARDIYANTO", "AGRI PERDANA", "AKHSANUL FIKI", "ALI ALAMSYAH", "MUHAMMAD FIRZHA GIANNI HARSYA", "RICKY ARDILAY", "FAISAL", "WIJI SANTOSO", "HISYAM MUTHOYIB", "ARIF RAHMAN NUGROHO", "TOTOK SUGIARTO", "PURWANDI SETIAWAN", "JULIANTO BHAKTI PUTRO, SH", "ILHAMMUDIN", "AGUNG", "ROSIDI", "ABRAR ELZAH FATHALIF", "HENDRI YULIANSYAH", "JAMIL", "GORO SUKARTONO", "OKTAPIANUS JUMIN", "ONNIE SYAEFUDDIN", "BUDI", "ULUL AMRY", "RUHIAT, A.MD", "SUPIANDI", "WAHYUDI", "SUHENDRIK", "M. ARKAM", "SYAFRI APRIJAL", "ARIANTO SUMANTRI", "TUTU AGE ANDIKA", "VIRANDA SAPTA, A.MD", "TOTO HERMANSYAH", "KURNIAWAN", "ROBI ISKANDAR MASDIANSYAH", "MUTIIN CHANDRA", "MISJANI", "KHAIRUL FARISD", "ANDRA", "DODI RATMAYANTO", "WAWAN DARYANA", "MISWARDI", "JUPRILIAUS PICO", "DEDY PURNOMO", "EDI KURNIAWAN", "DEDE GUNAWAN", "WANDALA JAGOARDI PANDALO", "KARIYADI", "REZQI AL BARQAH", "FIRMANSYAH, SP"]}
@@ -188,12 +119,11 @@ MASTER_DATA = {
 LIST_KEPERLUAN = ["", "Tshoot", "Backup", "Support", "PM", "Program BCP", "Program Quikwin", "Program G348T", "Pengiriman Material SPMS", "Pembelian Material","Transportasi Air"]
 
 # ==========================================
-# 2. FUNGSI INTI & CACHING (TERMASUK AI CHECKER)
+# 2. FUNGSI INTI & CACHING
 # ==========================================
 def ai_image_checker(uploaded_file, file_name_label):
     if uploaded_file is None:
         return True, "Tidak ada file"
-    
     try:
         img = Image.open(uploaded_file)
         exif = img.getexif()
@@ -301,16 +231,8 @@ def get_route_and_distance(lon1, lat1, lon2, lat2):
             return dist_km, poly, durasi_sec
     except: pass
     dist_km = haversine(lat1, lon1, lat2, lon2) * 1.3 
-    durasi_sec = (dist_km / 40.0) * 3600 # Estimasi kasar 40km/jam
+    durasi_sec = (dist_km / 40.0) * 3600
     return dist_km, [[lon1, lat1], [lon2, lat2]], durasi_sec
-
-def get_local_img_base64(filepath):
-    try:
-        if not os.path.exists(filepath): return ""
-        with open(filepath, "rb") as f:
-            encoded = base64.b64encode(f.read()).decode('utf-8')
-        return f"data:image/png;base64,{encoded}"
-    except: return ""
 
 @st.cache_resource
 def get_credentials():
@@ -320,7 +242,7 @@ def get_credentials():
 @st.cache_data(ttl=600)
 def fetch_spreadsheet_data(spreadsheet_id):
     client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
-    ws_names = [SHEET_REQUEST, SHEET_PJB, SHEET_UM, SHEET_DISTRIBUSI, SHEET_APP, "Rekap PJB", SHEET_TIKET_PM]
+    ws_names = [SHEET_REQUEST, SHEET_PJB, SHEET_UM, SHEET_DISTRIBUSI, SHEET_APP, "Rekap PJB", SHEET_TIKET_PM, SHEET_ABSENSI]
     data = {}
     for name in ws_names:
         try: data[name] = client.worksheet(name).get_all_values()
@@ -482,7 +404,7 @@ def upload_foto_compressed(file):
         
         encoded = base64.b64encode(img_byte_arr.read()).decode('utf-8')
         return cloudinary.uploader.upload(f"data:image/jpeg;base64,{encoded}", resource_type="auto").get("secure_url") 
-    except Exception as e:
+    except Exception:
         return ""
 
 def append_data(sheet_name, data, spreadsheet_id):
@@ -525,8 +447,144 @@ def save_new_nopol_to_csv(new_plat):
         else:
             with open(file_name, "w") as f:
                 f.write(f"NOPOL,PIC\n{new_plat},")
-    except Exception as e:
+    except Exception:
         pass 
+
+# ==========================================
+# 0.5. SISTEM KEAMANAN, AUTO LOGIN & ABSENSI
+# ==========================================
+@st.cache_data(ttl=60)
+def load_user_credentials():
+    try:
+        df = pd.read_excel("pass and username.xlsx")
+        df.columns = df.columns.astype(str).str.strip().str.upper() 
+        creds = {}
+        if 'NAMA' in df.columns and 'NIK' in df.columns:
+            for _, row in df.iterrows():
+                nama = str(row['NAMA']).strip().upper()
+                nik = str(row['NIK']).replace('.0', '').strip() 
+                if nama != 'NAN' and nik != 'NAN' and nama != '':
+                    creds[nama] = nik
+        else:
+            st.error("⚠️ Kolom 'NAMA' dan 'NIK' tidak ditemukan di baris pertama Excel!")
+        return creds
+    except Exception as e:
+        st.error(f"⚠️ Gagal membaca file Excel 'pass and username.xlsx'. Pastikan file sudah terupload. Error: {e}")
+        return {}
+
+if 'is_authenticated' not in st.session_state: st.session_state.is_authenticated = False
+if 'logged_in_user' not in st.session_state: st.session_state.logged_in_user = ""
+if 'needs_routing' not in st.session_state: st.session_state.needs_routing = False
+if 'has_absent' not in st.session_state: st.session_state.has_absent = False
+
+if not st.session_state.is_authenticated:
+    user_creds = load_user_credentials()
+    list_users = ["-- Pilih Nama Anda --"] + sorted(list(user_creds.keys()))
+    
+    c_log1, c_log2, c_log3 = st.columns([1, 2, 1])
+    with c_log2:
+        st.markdown("<div style='margin-top: 80px;'></div>", unsafe_allow_html=True)
+        try: st.image("koperasi-jasa-konstruksi-tower-event-organizer-network-monitoring-telekomunikasi-kisel-group-logo-kut.webp", use_container_width=True)
+        except: pass
+        
+        st.markdown("""
+            <div class="header-card" style="margin-bottom: 25px;">
+                <h2>🔒 PORTAL LOGIN TIM</h2>
+                <p>Pilih nama Anda, password akan otomatis terisi.</p>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        selected_user = st.selectbox("👤 Nama Karyawan:", list_users)
+        
+        auto_nik = user_creds.get(selected_user, "") if selected_user != "-- Pilih Nama Anda --" else ""
+        st.text_input("🔑 Password (NIK):", value=auto_nik, type="password", disabled=True, help="Otomatis terisi untuk keamanan dan kemudahan.")
+
+        if st.button("🚀 MASUK KE SISTEM", use_container_width=True, type="primary"):
+            if selected_user == "-- Pilih Nama Anda --":
+                st.error("⚠️ Silakan pilih nama Anda terlebih dahulu!")
+            else:
+                st.session_state.is_authenticated = True
+                st.session_state.logged_in_user = selected_user
+                
+                # Check Absensi 1x sehari
+                sudah_absen = False
+                if selected_user in ["OKTA PRDIKA", "MAWARDAH", "OKTA PRADIKA"]:
+                    sudah_absen = True
+                else:
+                    try:
+                        found_nop = next((k for k, v in MASTER_DATA.items() if selected_user in v["names"]), "")
+                        if found_nop:
+                            d_cek = fetch_spreadsheet_data(MASTER_DATA[found_nop]["spreadsheet_id"])
+                            absen_data = d_cek.get(SHEET_ABSENSI, [])
+                            today_str = datetime.now().strftime("%d/%m/%Y")
+                            for r in absen_data[1:]:
+                                if len(r) > 1 and str(r[1]).strip().upper() == selected_user.strip().upper():
+                                    if str(r[0]).split(" ")[0] == today_str:
+                                        sudah_absen = True
+                                        break
+                    except: pass
+                st.session_state.has_absent = sudah_absen
+                st.session_state.needs_routing = sudah_absen
+                st.success(f"✅ Login Berhasil! Selamat datang, {selected_user}.")
+                time.sleep(1)
+                st.rerun()
+    st.stop() 
+
+# ==========================================
+# 0.6. INTERCEPTOR: ABSENSI HARIAN
+# ==========================================
+if st.session_state.is_authenticated and not st.session_state.has_absent:
+    st.markdown("<div class='header-card'><h2>📸 ABSENSI HARIAN TIM</h2><p>Anda wajib melakukan absensi (Selfie & Lokasi). Cukup 1x Sehari.</p></div>", unsafe_allow_html=True)
+    c_ab1, c_ab2, c_ab3 = st.columns([1, 2, 1])
+    with c_ab2:
+        with st.form("form_absen"):
+            st.info(f"👤 **Identitas Absen:** {st.session_state.logged_in_user}")
+            status_absen = st.selectbox("Status Kehadiran Hari Ini:", ["Hadir / Bekerja", "Izin", "Sakit", "Cuti"])
+            lokasi_absen = st.text_input("Ketik Lokasi Bekerja Saat Ini")
+            foto_absen = st.file_uploader("Upload Foto Selfie Absen (WAJIB)", type=["jpg", "png", "jpeg"])
+            
+            if st.form_submit_button("✅ Submit Absen & Masuk Ruang Kerja", use_container_width=True):
+                if not lokasi_absen or not foto_absen:
+                    st.error("⚠️ Lokasi Pekerjaan dan Foto Selfie WAJIB diisi!")
+                else:
+                    with st.spinner("Menyimpan absensi..."):
+                        url_foto_absen = upload_foto_compressed(foto_absen)
+                        found_nop_absen = next((k for k, v in MASTER_DATA.items() if st.session_state.logged_in_user in v["names"]), "")
+                        if found_nop_absen:
+                            try: 
+                                append_data(SHEET_ABSENSI, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), st.session_state.logged_in_user, status_absen, lokasi_absen, url_foto_absen], MASTER_DATA[found_nop_absen]["spreadsheet_id"])
+                            except: pass
+                        st.session_state.has_absent = True
+                        st.session_state.needs_routing = True
+                        st.success("✅ Absensi Berhasil Disimpan!")
+                        time.sleep(1.5)
+                        st.rerun()
+    st.stop()
+
+# ==========================================
+# 0.7. SMART ROUTING ENGINE
+# ==========================================
+if st.session_state.get('needs_routing'):
+    with st.spinner("🔍 Menganalisa status tiket & mengatur rute otomatis..."):
+        user_now = st.session_state.logged_in_user
+        found_nop = next((k for k, v in MASTER_DATA.items() if user_now in v["names"]), "")
+        st.session_state.auto_nop = found_nop
+        
+        if user_now in ["OKTA PRADIKA", "MAWARDAH", "OKTA PRDIKA"]:
+            st.session_state.page = "🏠 Hub Menu Utama"
+        else:
+            if found_nop:
+                try:
+                    data_cek = fetch_spreadsheet_data(MASTER_DATA[found_nop]["spreadsheet_id"])
+                    _, out_lock, _, _ = get_user_tickets_status(user_now, data_cek[SHEET_REQUEST], data_cek[SHEET_PJB], data_cek[SHEET_APP])
+                    if len(out_lock) > 0:
+                        st.session_state.page = "✅ Form PJB Operasional"
+                    else:
+                        st.session_state.page = "📝 Form Request Dana"
+                except: st.session_state.page = "🏠 Hub Menu Utama"
+            else: st.session_state.page = "🏠 Hub Menu Utama"
+        st.session_state.needs_routing = False
+        st.rerun()
 
 # ==========================================
 # INISIALISASI SESSION STATE & NAVIGASI
@@ -540,6 +598,7 @@ with c_nav3:
     if st.button(f"🚪 Logout", help=f"Keluar dari akun {st.session_state.logged_in_user}", use_container_width=True):
         st.session_state.is_authenticated = False
         st.session_state.logged_in_user = ""
+        st.session_state.has_absent = False
         st.session_state.page = "🏠 Hub Menu Utama"
         st.rerun()
 
