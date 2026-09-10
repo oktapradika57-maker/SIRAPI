@@ -1862,14 +1862,15 @@ elif st.session_state.page == "🏦 Manajemen Kas & Distribusi":
 # PAGE 5: LIVE MONITORING
 # ==========================================
 elif st.session_state.page == "📈 Live Monitoring":
-    st.markdown("<div class='header-card'><h2>📈 LIVE MONITORING DASHBOARD</h2><p>Analisa Kas, Daily Pengeluaran, Tracker Satelit, & Analisa Performa Mobil (NOPOL)</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='header-card'><h2>📈 LIVE MONITORING DASHBOARD</h2><p>Analisa Kas, Daily Pengeluaran, Tracker Satelit, Performa Mobil, & Analisa Role</p></div>", unsafe_allow_html=True)
     
     nop_live = st.selectbox("🌐 Pilih Market (NOP):", ["-- Pilih NOP --"] + list(MASTER_DATA.keys()))
     if nop_live != "-- Pilih NOP --":
         data_all = fetch_spreadsheet_data(MASTER_DATA[nop_live]["spreadsheet_id"])
         um_r, rekap_r, pjb_r, req_r, app_r = data_all[SHEET_UM], data_all["Rekap PJB"], data_all[SHEET_PJB], data_all[SHEET_REQUEST], data_all[SHEET_APP]
         
-        t1, t2, t3, t4 = st.tabs(["💰 1. Sisa Kas", "🚨 2. Anomali", "🕵️ 3. Evaluasi Satelit", "🚗 4. Performa Mobil (NOPOL)"])
+        # TAB 5 DITAMBAHKAN DI SINI
+        t1, t2, t3, t4, t5 = st.tabs(["💰 1. Sisa Kas", "🚨 2. Anomali", "🕵️ 3. Evaluasi Satelit", "🚗 4. Performa Mobil", "👥 5. Analisa Per Role"])
         
         with t1:
             total_um = sum([clean_nominal(r[3]) for r in um_r[1:] if len(r)>3]) if len(um_r)>1 else 0
@@ -1966,7 +1967,7 @@ elif st.session_state.page == "📈 Live Monitoring":
 
         with t4:
             st.markdown("### 🚙 Analisa Performa & Efisiensi Mobil (Berdasarkan NOPOL)")
-            st.info("💡 **ANALISA KENDARAAN (FIXED):** Tabel ini menghitung jarak tempuh **TOTAL (Akumulasi)** dari selisih `KM Akhir - KM Awal` untuk setiap perjalanan yang dilakukan mobil bersangkutan. Menjadikan rasio Konsumsi Mesin (KM/L) sangat valid.")
+            st.info("💡 **ANALISA KENDARAAN (FIXED):** Tabel ini menghitung jarak tempuh **TOTAL (Akumulasi)** dari selisih `KM Akhir - KM Awal` untuk setiap perjalanan.")
             
             car_stats = {}
             for pjb in pjb_r[1:]:
@@ -2011,6 +2012,47 @@ elif st.session_state.page == "📈 Live Monitoring":
             else:
                 st.info("Belum ada data PJB Mobil ber-NOPOL yang tercatat di database untuk dianalisa.")
 
+        # TAB 5: ANALISA PER ROLE
+        with t5:
+            st.markdown("### 👥 Analisa Pengeluaran Berdasarkan Role & Kategori")
+            st.info("💡 Menampilkan total pengeluaran operasional (PJB) berdasarkan Jabatan/Role (Misal: MBP, TE) dipecah berdasarkan jenis item (BBM Mobil, Genset, Akomodasi, dll).")
+            
+            role_stats = []
+            for pjb in pjb_r[1:]:
+                if len(pjb) > 11:
+                    role = str(pjb[5]).strip()
+                    if not role or role == "-- Pilih Role --": role = "Lainnya/Kosong"
+                    
+                    kategori = str(pjb[8]).strip()
+                    if not kategori: kategori = "Lainnya"
+                    
+                    try: nominal = clean_nominal(pjb[11])
+                    except: nominal = 0
+                    
+                    if nominal > 0:
+                        role_stats.append({"Role": role, "Kategori Item": kategori, "Nominal": nominal})
+                        
+            if role_stats:
+                df_role = pd.DataFrame(role_stats)
+                
+                # Buat Pivot Table
+                pivot_role = df_role.pivot_table(index="Role", columns="Kategori Item", values="Nominal", aggfunc="sum", fill_value=0)
+                pivot_role['Total Keseluruhan'] = pivot_role.sum(axis=1)
+                pivot_role = pivot_role.sort_values('Total Keseluruhan', ascending=False)
+                
+                # Format ke Rupiah
+                pivot_role_view = pivot_role.copy()
+                for col in pivot_role_view.columns:
+                    pivot_role_view[col] = pivot_role_view[col].apply(lambda x: f"Rp {x:,.0f}")
+                    
+                st.dataframe(pivot_role_view, use_container_width=True)
+                
+                # Bar Chart
+                st.markdown("#### 📊 Grafik Komposisi Pengeluaran per Role")
+                chart_data = pivot_role.drop(columns=['Total Keseluruhan'])
+                st.bar_chart(chart_data, use_container_width=True)
+            else:
+                st.info("Belum ada data penyelesaian (PJB) yang dapat dianalisa per Role.")
 
 # ==========================================
 # PAGE 6: REPORT & AUTO PJB
