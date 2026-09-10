@@ -515,7 +515,7 @@ if not st.session_state.is_authenticated:
                 st.session_state.is_authenticated = True
                 st.session_state.logged_in_user = selected_user
                 
-                # Check Absensi 1x sehari menggunakan zona waktu Indonesia
+                # Check Absensi 1x sehari menggunakan konversi Pandas (Anti-Gagal Format)
                 sudah_absen = False
                 if selected_user in ["OKTA PRDIKA", "MAWARDAH", "OKTA PRADIKA"]:
                     sudah_absen = True
@@ -526,23 +526,29 @@ if not st.session_state.is_authenticated:
                             d_cek = fetch_spreadsheet_data(MASTER_DATA[found_nop]["spreadsheet_id"])
                             absen_data = d_cek.get(SHEET_ABSENSI, [])
                             
-                            # KUNCI PERBAIKAN: Gunakan waktu lokal Indonesia (UTC+7) 
+                            # Ambil tanggal hari ini zona waktu Indonesia
                             now_indo = datetime.utcnow() + timedelta(hours=7)
-                            today_str = now_indo.strftime("%d/%m/%Y")
+                            today_date = now_indo.date()
                             
-                            # KUNCI PERBAIKAN: Gunakan 'reversed' agar langsung membaca absensi terbaru (dari bawah)
+                            # Baca dari bawah ke atas agar menemukan absen teraktual
                             for r in reversed(absen_data[1:]):
                                 if len(r) > 1 and str(r[1]).strip().upper() == selected_user.strip().upper():
-                                    tgl_record = str(r[0]).strip()
-                                    if tgl_record.startswith(today_str):
-                                        sudah_absen = True
-                                        break
+                                    try:
+                                        # Pecah format "10/09/2026 08:30:00" ambil hanya "10/09/2026"
+                                        tgl_record_str = str(r[0]).strip().split(" ")[0]
+                                        # Gunakan Pandas untuk menormalkan segala jenis format tanggal ke YYYY-MM-DD
+                                        record_date = pd.to_datetime(tgl_record_str, dayfirst=True, errors='coerce').date()
+                                        
+                                        if record_date == today_date:
+                                            sudah_absen = True
+                                            break
+                                    except: pass
                     except: pass
                     
                 st.session_state.has_absent = sudah_absen
                 st.session_state.needs_routing = sudah_absen
                 st.success(f"✅ Login Berhasil! Selamat datang, {selected_user}.")
-                time.sleep(1)
+                time.sleep(0.5)
                 st.rerun()
     st.stop() 
 
@@ -568,14 +574,17 @@ if st.session_state.is_authenticated and not st.session_state.has_absent:
                         found_nop_absen = next((k for k, v in MASTER_DATA.items() if st.session_state.logged_in_user in v["names"]), "")
                         if found_nop_absen:
                             try: 
-                                # Simpan data absensi menggunakan zona waktu lokal Indonesia
                                 ts_now_indo = (datetime.utcnow() + timedelta(hours=7)).strftime("%d/%m/%Y %H:%M:%S")
                                 append_data(SHEET_ABSENSI, [ts_now_indo, st.session_state.logged_in_user, status_absen, lokasi_absen, url_foto_absen], MASTER_DATA[found_nop_absen]["spreadsheet_id"])
                             except: pass
                         st.session_state.has_absent = True
                         st.session_state.needs_routing = True
+                        
+                        # Clear cache otomatis agar data fetch terbaru langsung mengenali absen ini
+                        st.cache_data.clear() 
+                        
                         st.success("✅ Absensi Berhasil Disimpan!")
-                        time.sleep(1.5)
+                        time.sleep(1)
                         st.rerun()
     st.stop()
 
@@ -1862,15 +1871,15 @@ elif st.session_state.page == "🏦 Manajemen Kas & Distribusi":
 # PAGE 5: LIVE MONITORING
 # ==========================================
 elif st.session_state.page == "📈 Live Monitoring":
-    st.markdown("<div class='header-card'><h2>📈 LIVE MONITORING DASHBOARD</h2><p>Analisa Kas, Daily Pengeluaran, Tracker Satelit, Performa Mobil, & Analisa Per Role dengan Filter</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='header-card'><h2>📈 LIVE MONITORING DASHBOARD</h2><p>Analisa Kas, Anomali, Evaluasi Satelit, Performa Mobil & Trend Analisa Per Role</p></div>", unsafe_allow_html=True)
     
     nop_live = st.selectbox("🌐 Pilih Market (NOP):", ["-- Pilih NOP --"] + list(MASTER_DATA.keys()))
     if nop_live != "-- Pilih NOP --":
         data_all = fetch_spreadsheet_data(MASTER_DATA[nop_live]["spreadsheet_id"])
         um_r, rekap_r, pjb_r, req_r, app_r = data_all[SHEET_UM], data_all["Rekap PJB"], data_all[SHEET_PJB], data_all[SHEET_REQUEST], data_all[SHEET_APP]
         
-        # --- KONTROL FILTER PERIODE & TAHAPAN / KEPERLUAN ---
-        st.markdown("<div class='section-title'>🔍 Filter Global Data (Periode & Tahapan)</div>", unsafe_allow_html=True)
+        # --- KONTROL FILTER GLOBAL (PERIODE & TAHAPAN) ---
+        st.markdown("<div class='section-title'>🔍 Filter Global Data</div>", unsafe_allow_html=True)
         
         all_periods = set()
         all_keperluan = set()
@@ -1881,7 +1890,7 @@ elif st.session_state.page == "📈 Live Monitoring":
                     all_periods.add(dt.strftime("%B %Y"))
                 except: pass
             if len(pjb) > 7 and pjb[7].strip():
-                all_keperluan.add(pjb[7].strip())
+                all_keperluan.add(pjb[7].strip().title()) # Rapihkan format teks tahap
                 
         list_periode_opt = ["-- Semua Periode --"] + sorted(list(all_periods), reverse=True)
         list_keperluan_opt = ["-- Semua Tahapan / Keperluan --"] + sorted(list(all_keperluan))
@@ -1902,13 +1911,11 @@ elif st.session_state.page == "📈 Live Monitoring":
                 if selected_periode_filter != "-- Semua Periode --":
                     try:
                         dt = datetime.strptime(pjb[1].strip(), "%d/%m/%Y")
-                        if dt.strftime("%B %Y") != selected_periode_filter:
-                            pass_p = False
+                        if dt.strftime("%B %Y") != selected_periode_filter: pass_p = False
                     except: pass
                     
                 if selected_keperluan_filter != "-- Semua Tahapan / Keperluan --":
-                    if len(pjb) > 7 and pjb[7].strip() != selected_keperluan_filter:
-                        pass_k = False
+                    if len(pjb) > 7 and pjb[7].strip().title() != selected_keperluan_filter: pass_k = False
                         
                 if pass_p and pass_k:
                     filtered_pjb_rows.append(pjb)
@@ -1919,8 +1926,6 @@ elif st.session_state.page == "📈 Live Monitoring":
         
         with t1:
             total_um = sum([clean_nominal(r[3]) for r in um_r[1:] if len(r)>3]) if len(um_r)>1 else 0
-            
-            # Hitung penyerapan berdasarkan data yang sudah difilter
             tot_serap = sum([clean_nominal(r[11]) for r in filtered_pjb_rows])
             sisa_kas = total_um - tot_serap
             
@@ -1936,8 +1941,8 @@ elif st.session_state.page == "📈 Live Monitoring":
                 df_daily = df_pjb_all.dropna(subset=['Tanggal_PJB']).groupby('Tanggal_PJB')['Nominal_Clean'].sum().reset_index().sort_values('Tanggal_PJB')
                 
                 if not df_daily.empty:
-                    df_daily.columns = ['Tanggal PJB', 'Total Pengeluaran (Rp)_num']
-                    st.area_chart(df_daily.set_index('Tanggal PJB')['Total Pengeluaran (Rp)_num'], use_container_width=True)
+                    df_daily.columns = ['Tanggal PJB', 'Total Pengeluaran (Rp)']
+                    st.area_chart(df_daily.set_index('Tanggal PJB')['Total Pengeluaran (Rp)'], use_container_width=True)
         
         with t2:
             warning_list = []
@@ -2059,12 +2064,15 @@ elif st.session_state.page == "📈 Live Monitoring":
             else:
                 st.info("Belum ada data PJB Mobil ber-NOPOL pada filter ini.")
 
+        # --- PERUBAHAN TAB 5: DIPISAH PER ROLE, PER TANGGAL, & ADA GARIS AVERAGE ---
         with t5:
-            st.markdown("### 👥 Analisa Pengeluaran Berdasarkan Role & Kategori")
+            st.markdown("### 👥 Trend Pengeluaran Harian Per Role (Deteksi Lonjakan)")
+            st.info("💡 Grafik di bawah memisahkan pengeluaran berdasarkan **Tanggal**. Garis biru adalah pengeluaran aktual hari itu, dan garis abu-abu/oranye adalah **Batas Rata-Rata (Average)** untuk melihat hari apa yang melampaui batas normal.")
             
             role_stats = []
             for pjb in filtered_pjb_rows:
                 if len(pjb) > 11:
+                    tgl_str = str(pjb[1]).strip()
                     role = str(pjb[5]).strip()
                     if not role or role == "-- Pilih Role --": role = "Lainnya/Kosong"
                     
@@ -2075,10 +2083,16 @@ elif st.session_state.page == "📈 Live Monitoring":
                     except: nominal = 0
                     
                     if nominal > 0:
-                        role_stats.append({"Role": role, "Kategori Item": kategori, "Nominal": nominal})
+                        role_stats.append({"Tanggal": tgl_str, "Role": role, "Kategori Item": kategori, "Nominal": nominal})
                         
             if role_stats:
                 df_role = pd.DataFrame(role_stats)
+                # Validasi & standarisasi format Tanggal untuk X-Axis grafik
+                df_role['Tanggal_Valid'] = pd.to_datetime(df_role['Tanggal'], format='%d/%m/%Y', errors='coerce')
+                df_role = df_role.dropna(subset=['Tanggal_Valid'])
+                
+                # Menampilkan Tabel Akumulasi Total per Kategori
+                st.markdown("#### 📋 Tabel Total (Akumulasi)")
                 pivot_role = df_role.pivot_table(index="Role", columns="Kategori Item", values="Nominal", aggfunc="sum", fill_value=0)
                 pivot_role['Total Keseluruhan'] = pivot_role.sum(axis=1)
                 pivot_role = pivot_role.sort_values('Total Keseluruhan', ascending=False)
@@ -2086,15 +2100,35 @@ elif st.session_state.page == "📈 Live Monitoring":
                 pivot_role_view = pivot_role.copy()
                 for col in pivot_role_view.columns:
                     pivot_role_view[col] = pivot_role_view[col].apply(lambda x: f"Rp {x:,.0f}")
-                    
                 st.dataframe(pivot_role_view, use_container_width=True)
                 
-                st.markdown("#### 📊 Grafik Komposisi Pengeluaran per Role")
-                chart_data = pivot_role.drop(columns=['Total Keseluruhan'])
-                st.bar_chart(chart_data, use_container_width=True)
+                st.markdown("<hr>", unsafe_allow_html=True)
+                st.markdown("#### 📈 Deteksi Lonjakan Harian (Grafik Per Role)")
+                
+                # Memilah (Looping) grafik berdasarkan masing-masing Role yang terdeteksi
+                unique_roles = df_role['Role'].unique()
+                for r in unique_roles:
+                    st.markdown(f"**🔹 Role: {r}**")
+                    
+                    # Filter data hanya untuk Role ini, lalu group per tanggal
+                    df_r = df_role[df_role['Role'] == r]
+                    df_daily = df_r.groupby('Tanggal_Valid')['Nominal'].sum().reset_index().sort_values('Tanggal_Valid')
+                    
+                    # Menghitung nilai Average pengeluaran harian Role ini
+                    avg_val = df_daily['Nominal'].mean()
+                    df_daily['Batas Average'] = avg_val
+                    
+                    # Rename kolom untuk legenda grafik
+                    df_daily = df_daily.rename(columns={'Nominal': 'Pengeluaran Aktual (Rp)'})
+                    
+                    # Set X-Axis sebagai tanggal
+                    df_chart = df_daily.set_index('Tanggal_Valid')
+                    
+                    # Plot Multi-line chart (Garis aktual vs Garis Average)
+                    st.line_chart(df_chart[['Pengeluaran Aktual (Rp)', 'Batas Average']], use_container_width=True)
+                    st.markdown("<br>", unsafe_allow_html=True)
             else:
                 st.info("Belum ada data penyelesaian (PJB) pada filter ini untuk dianalisa per Role.")
-
 # ==========================================
 # PAGE 6: REPORT & AUTO PJB
 # ==========================================
