@@ -1862,27 +1862,75 @@ elif st.session_state.page == "🏦 Manajemen Kas & Distribusi":
 # PAGE 5: LIVE MONITORING
 # ==========================================
 elif st.session_state.page == "📈 Live Monitoring":
-    st.markdown("<div class='header-card'><h2>📈 LIVE MONITORING DASHBOARD</h2><p>Analisa Kas, Daily Pengeluaran, Tracker Satelit, Performa Mobil, & Analisa Role</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='header-card'><h2>📈 LIVE MONITORING DASHBOARD</h2><p>Analisa Kas, Daily Pengeluaran, Tracker Satelit, Performa Mobil, & Analisa Per Role dengan Filter</p></div>", unsafe_allow_html=True)
     
     nop_live = st.selectbox("🌐 Pilih Market (NOP):", ["-- Pilih NOP --"] + list(MASTER_DATA.keys()))
     if nop_live != "-- Pilih NOP --":
         data_all = fetch_spreadsheet_data(MASTER_DATA[nop_live]["spreadsheet_id"])
         um_r, rekap_r, pjb_r, req_r, app_r = data_all[SHEET_UM], data_all["Rekap PJB"], data_all[SHEET_PJB], data_all[SHEET_REQUEST], data_all[SHEET_APP]
         
-        # TAB 5 DITAMBAHKAN DI SINI
+        # --- KONTROL FILTER PERIODE & TAHAPAN / KEPERLUAN ---
+        st.markdown("<div class='section-title'>🔍 Filter Global Data (Periode & Tahapan)</div>", unsafe_allow_html=True)
+        
+        all_periods = set()
+        all_keperluan = set()
+        for pjb in pjb_r[1:]:
+            if len(pjb) > 1 and pjb[1].strip():
+                try:
+                    dt = datetime.strptime(pjb[1].strip(), "%d/%m/%Y")
+                    all_periods.add(dt.strftime("%B %Y"))
+                except: pass
+            if len(pjb) > 7 and pjb[7].strip():
+                all_keperluan.add(pjb[7].strip())
+                
+        list_periode_opt = ["-- Semua Periode --"] + sorted(list(all_periods), reverse=True)
+        list_keperluan_opt = ["-- Semua Tahapan / Keperluan --"] + sorted(list(all_keperluan))
+        
+        cf_1, cf_2 = st.columns(2)
+        with cf_1:
+            selected_periode_filter = st.selectbox("📅 Filter Periode (Bulan):", list_periode_opt)
+        with cf_2:
+            selected_keperluan_filter = st.selectbox("📌 Filter Tahapan / Keperluan:", list_keperluan_opt)
+            
+        # Saring baris PJB berdasarkan filter yang dipilih
+        filtered_pjb_rows = []
+        for pjb in pjb_r[1:]:
+            if len(pjb) > 11:
+                pass_p = True
+                pass_k = True
+                
+                if selected_periode_filter != "-- Semua Periode --":
+                    try:
+                        dt = datetime.strptime(pjb[1].strip(), "%d/%m/%Y")
+                        if dt.strftime("%B %Y") != selected_periode_filter:
+                            pass_p = False
+                    except: pass
+                    
+                if selected_keperluan_filter != "-- Semua Tahapan / Keperluan --":
+                    if len(pjb) > 7 and pjb[7].strip() != selected_keperluan_filter:
+                        pass_k = False
+                        
+                if pass_p and pass_k:
+                    filtered_pjb_rows.append(pjb)
+        
+        st.markdown("<hr style='margin: 15px 0;'>", unsafe_allow_html=True)
+        
         t1, t2, t3, t4, t5 = st.tabs(["💰 1. Sisa Kas", "🚨 2. Anomali", "🕵️ 3. Evaluasi Satelit", "🚗 4. Performa Mobil", "👥 5. Analisa Per Role"])
         
         with t1:
             total_um = sum([clean_nominal(r[3]) for r in um_r[1:] if len(r)>3]) if len(um_r)>1 else 0
-            tot_serap = sum([clean_nominal(r[15]) for r in rekap_r[1:] if len(r)>15]) if len(rekap_r)>1 else 0
+            
+            # Hitung penyerapan berdasarkan data yang sudah difilter
+            tot_serap = sum([clean_nominal(r[11]) for r in filtered_pjb_rows])
             sisa_kas = total_um - tot_serap
+            
             m1, m2, m3 = st.columns(3)
             m1.markdown(f"<div class='metric-3d'><div class='metric-title'>Total Kas Masuk</div><div class='metric-value'>Rp {total_um:,.0f}</div></div>", unsafe_allow_html=True)
-            m2.markdown(f"<div class='metric-3d'><div class='metric-title'>Total Penyerapan</div><div class='metric-value'>Rp {tot_serap:,.0f}</div></div>", unsafe_allow_html=True)
+            m2.markdown(f"<div class='metric-3d'><div class='metric-title'>Total Penyerapan (Filtered)</div><div class='metric-value'>Rp {tot_serap:,.0f}</div></div>", unsafe_allow_html=True)
             m3.markdown(f"<div class='metric-3d'><div class='metric-title'>Sisa Kas</div><div class='metric-value'>Rp {sisa_kas:,.0f}</div></div>", unsafe_allow_html=True)
             
-            if len(pjb_r) > 1:
-                df_pjb_all = pd.DataFrame([(r + [""] * 37)[:37] for r in pjb_r[1:]], columns=["Waktu","Tanggal","N","C","Nama","R","S","Keperluan","BBM","D","KMAkhir","Nominal","Pl","u1","u2","u3","u4","u5","u6","u7","NN","NoTiket","Lt","Hs","TKM_RH","u8","u9","BuktiTF","UM1","UM2","UM3","UM4", "TglB", "LmHr", "NomH", "PDFLink", "PMMulti"])
+            if filtered_pjb_rows:
+                df_pjb_all = pd.DataFrame([(r + [""] * 37)[:37] for r in filtered_pjb_rows], columns=["Waktu","Tanggal","N","C","Nama","R","S","Keperluan","BBM","D","KMAkhir","Nominal","Pl","u1","u2","u3","u4","u5","u6","u7","NN","NoTiket","Lt","Hs","TKM_RH","u8","u9","BuktiTF","UM1","UM2","UM3","UM4", "TglB", "LmHr", "NomH", "PDFLink", "PMMulti"])
                 df_pjb_all['Nominal_Clean'] = df_pjb_all['Nominal'].apply(clean_nominal)
                 df_pjb_all['Tanggal_PJB'] = pd.to_datetime(df_pjb_all['Tanggal'], format='%d/%m/%Y', errors='coerce')
                 df_daily = df_pjb_all.dropna(subset=['Tanggal_PJB']).groupby('Tanggal_PJB')['Nominal_Clean'].sum().reset_index().sort_values('Tanggal_PJB')
@@ -1893,7 +1941,7 @@ elif st.session_state.page == "📈 Live Monitoring":
         
         with t2:
             warning_list = []
-            for pjb in pjb_r[1:]:
+            for pjb in filtered_pjb_rows:
                 if len(pjb) > 24:
                     no_tiket = pjb[21]
                     req_match = next((x for x in req_r[1:] if len(x) > 13 and x[3] == no_tiket), None)
@@ -1920,11 +1968,11 @@ elif st.session_state.page == "📈 Live Monitoring":
                         if is_boros: warning_list.append({"Nama Tim": nama_petugas, "Tiket Spesifik": no_tiket, "Nominal PJB": f"Rp {nominal_pjb_val:,.0f}", "Kategori": kategori_bbm, "Total Jarak/RH": f"{total_km:.2f}", "Liter": liter_val, "Status Warning": ket_status})
                         
             if warning_list: st.dataframe(pd.DataFrame(warning_list), hide_index=True, use_container_width=True)
-            else: st.success("✨ Sempurna! Tidak ada anomali atau pemborosan pada tim wilayah ini.")
+            else: st.success("✨ Sempurna! Tidak ada anomali atau pemborosan pada filter ini.")
 
         with t3:
             eval_list = []
-            for pjb in pjb_r[1:]:
+            for pjb in filtered_pjb_rows:
                 if len(pjb) > 24:
                     no_tiket = str(pjb[21]).strip().upper()
                     req_match = next((x for x in req_r[1:] if len(x) > 13 and str(x[3]).strip().upper() == no_tiket), None)
@@ -1967,10 +2015,9 @@ elif st.session_state.page == "📈 Live Monitoring":
 
         with t4:
             st.markdown("### 🚙 Analisa Performa & Efisiensi Mobil (Berdasarkan NOPOL)")
-            st.info("💡 **ANALISA KENDARAAN (FIXED):** Tabel ini menghitung jarak tempuh **TOTAL (Akumulasi)** dari selisih `KM Akhir - KM Awal` untuk setiap perjalanan.")
             
             car_stats = {}
-            for pjb in pjb_r[1:]:
+            for pjb in filtered_pjb_rows:
                 if len(pjb) > 24:
                     kategori = str(pjb[8]).lower()
                     plat = str(pjb[12]).strip().upper()
@@ -2010,15 +2057,13 @@ elif st.session_state.page == "📈 Live Monitoring":
                 df_cars = pd.DataFrame(car_list).sort_values("Total Akumulasi Jarak (KM)", ascending=False)
                 st.dataframe(df_cars, hide_index=True, use_container_width=True)
             else:
-                st.info("Belum ada data PJB Mobil ber-NOPOL yang tercatat di database untuk dianalisa.")
+                st.info("Belum ada data PJB Mobil ber-NOPOL pada filter ini.")
 
-        # TAB 5: ANALISA PER ROLE
         with t5:
             st.markdown("### 👥 Analisa Pengeluaran Berdasarkan Role & Kategori")
-            st.info("💡 Menampilkan total pengeluaran operasional (PJB) berdasarkan Jabatan/Role (Misal: MBP, TE) dipecah berdasarkan jenis item (BBM Mobil, Genset, Akomodasi, dll).")
             
             role_stats = []
-            for pjb in pjb_r[1:]:
+            for pjb in filtered_pjb_rows:
                 if len(pjb) > 11:
                     role = str(pjb[5]).strip()
                     if not role or role == "-- Pilih Role --": role = "Lainnya/Kosong"
@@ -2034,25 +2079,21 @@ elif st.session_state.page == "📈 Live Monitoring":
                         
             if role_stats:
                 df_role = pd.DataFrame(role_stats)
-                
-                # Buat Pivot Table
                 pivot_role = df_role.pivot_table(index="Role", columns="Kategori Item", values="Nominal", aggfunc="sum", fill_value=0)
                 pivot_role['Total Keseluruhan'] = pivot_role.sum(axis=1)
                 pivot_role = pivot_role.sort_values('Total Keseluruhan', ascending=False)
                 
-                # Format ke Rupiah
                 pivot_role_view = pivot_role.copy()
                 for col in pivot_role_view.columns:
                     pivot_role_view[col] = pivot_role_view[col].apply(lambda x: f"Rp {x:,.0f}")
                     
                 st.dataframe(pivot_role_view, use_container_width=True)
                 
-                # Bar Chart
                 st.markdown("#### 📊 Grafik Komposisi Pengeluaran per Role")
                 chart_data = pivot_role.drop(columns=['Total Keseluruhan'])
                 st.bar_chart(chart_data, use_container_width=True)
             else:
-                st.info("Belum ada data penyelesaian (PJB) yang dapat dianalisa per Role.")
+                st.info("Belum ada data penyelesaian (PJB) pada filter ini untuk dianalisa per Role.")
 
 # ==========================================
 # PAGE 6: REPORT & AUTO PJB
