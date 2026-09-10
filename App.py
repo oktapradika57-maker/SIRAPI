@@ -515,6 +515,7 @@ if not st.session_state.is_authenticated:
                 st.session_state.is_authenticated = True
                 st.session_state.logged_in_user = selected_user
                 
+                # Check Absensi 1x sehari menggunakan zona waktu Indonesia
                 sudah_absen = False
                 if selected_user in ["OKTA PRDIKA", "MAWARDAH", "OKTA PRADIKA"]:
                     sudah_absen = True
@@ -524,13 +525,20 @@ if not st.session_state.is_authenticated:
                         if found_nop:
                             d_cek = fetch_spreadsheet_data(MASTER_DATA[found_nop]["spreadsheet_id"])
                             absen_data = d_cek.get(SHEET_ABSENSI, [])
-                            today_str = datetime.now().strftime("%d/%m/%Y")
-                            for r in absen_data[1:]:
+                            
+                            # KUNCI PERBAIKAN: Gunakan waktu lokal Indonesia (UTC+7) 
+                            now_indo = datetime.utcnow() + timedelta(hours=7)
+                            today_str = now_indo.strftime("%d/%m/%Y")
+                            
+                            # KUNCI PERBAIKAN: Gunakan 'reversed' agar langsung membaca absensi terbaru (dari bawah)
+                            for r in reversed(absen_data[1:]):
                                 if len(r) > 1 and str(r[1]).strip().upper() == selected_user.strip().upper():
-                                    if str(r[0]).split(" ")[0] == today_str:
+                                    tgl_record = str(r[0]).strip()
+                                    if tgl_record.startswith(today_str):
                                         sudah_absen = True
                                         break
                     except: pass
+                    
                 st.session_state.has_absent = sudah_absen
                 st.session_state.needs_routing = sudah_absen
                 st.success(f"✅ Login Berhasil! Selamat datang, {selected_user}.")
@@ -560,7 +568,9 @@ if st.session_state.is_authenticated and not st.session_state.has_absent:
                         found_nop_absen = next((k for k, v in MASTER_DATA.items() if st.session_state.logged_in_user in v["names"]), "")
                         if found_nop_absen:
                             try: 
-                                append_data(SHEET_ABSENSI, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), st.session_state.logged_in_user, status_absen, lokasi_absen, url_foto_absen], MASTER_DATA[found_nop_absen]["spreadsheet_id"])
+                                # Simpan data absensi menggunakan zona waktu lokal Indonesia
+                                ts_now_indo = (datetime.utcnow() + timedelta(hours=7)).strftime("%d/%m/%Y %H:%M:%S")
+                                append_data(SHEET_ABSENSI, [ts_now_indo, st.session_state.logged_in_user, status_absen, lokasi_absen, url_foto_absen], MASTER_DATA[found_nop_absen]["spreadsheet_id"])
                             except: pass
                         st.session_state.has_absent = True
                         st.session_state.needs_routing = True
