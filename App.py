@@ -2947,11 +2947,7 @@ elif st.session_state.page == "🧭 SiPLANING":
         # ---------------------------------------------------------
         # TAB 1: PLAN & CHECKLIST VISIT
         # ---------------------------------------------------------
-        with tab_plan1:
-            st.markdown("### 📝 Form Rencana Kunjungan & Checklist Lapangan")
-            st.info(f"💡 Data PIC terintegrasi dengan database {nop_plan} dan Site ID merujuk pada master data site.")
-            
-            with st.form("form_siplaning"):
+        with st.form("form_siplaning"):
                 c_p1, c_p2 = st.columns(2)
                 with c_p1:
                     tgl_plan = st.date_input("Tanggal Rencana Visit (Plan Date)")
@@ -2964,16 +2960,14 @@ elif st.session_state.page == "🧭 SiPLANING":
                         
                     sow_visit = st.selectbox("SOW Visit (Scope of Work)", ["Preventative Maintenance (PM)", "Troubleshoot (TS)", "BBM Drop / Genset", "CME Work", "Survey / Audit", "Support Material"])
                 
-                st.markdown("#### ✅ Checklist Pekerjaan Lapangan")
-                col_ck1, col_ck2 = st.columns(2)
-                with col_ck1:
-                    chk_pre = st.checkbox("1. Pre-Check Perangkat & Keamanan Lokasi")
-                    chk_exec = st.checkbox("2. Eksekusi Pekerjaan Sesuai SOW")
-                with col_ck2:
-                    chk_post = st.checkbox("3. Post-Check / Test Normalisasi Perangkat")
-                    chk_foto = st.checkbox("4. Dokumentasi Foto & Berita Acara (BA)")
-                    
-                catatan_plan = st.text_area("Catatan Tambahan / Kendala Plan")
+                st.markdown("#### ✅ Checklist & Status Pekerjaan")
+                manual_checklist = st.text_area("Uraian / Checklist Pekerjaan Lapangan (Manual)", placeholder="Ketik rincian apa saja yang dikerjakan di site...")
+                
+                c_stat1, c_stat2 = st.columns(2)
+                with c_stat1:
+                    status_pekerjaan = st.selectbox("Status Eksekusi SOW", ["IN PROGRESS", "COMPLETED"])
+                with c_stat2:
+                    catatan_plan = st.text_input("Catatan Tambahan / Kendala (Opsional)")
                 
                 submitted_plan = st.form_submit_button("💾 Simpan Rencana & Record Activity ke Sheets", use_container_width=True)
                 
@@ -2982,8 +2976,8 @@ elif st.session_state.page == "🧭 SiPLANING":
                         st.error("⚠️ Mohon lengkapi Nama PIC dan Site ID Plan dengan benar!")
                     else:
                         with st.spinner("Menyimpan record ke Google Spreadsheet..."):
-                            checklist_status = f"Pre:[{'V' if chk_pre else 'X'}], Exec:[{'V' if chk_exec else 'X'}], Post:[{'V' if chk_post else 'X'}], Dok:[{'V' if chk_foto else 'X'}]"
-                            status_pekerjaan = "COMPLETED" if (chk_pre and chk_exec and chk_post and chk_foto) else "IN PROGRESS"
+                            # Gunakan isian manual sebagai data checklist
+                            checklist_status = manual_checklist if manual_checklist.strip() else "-"
                             
                             row_data = [
                                 datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
@@ -2994,7 +2988,7 @@ elif st.session_state.page == "🧭 SiPLANING":
                                 sow_visit,
                                 checklist_status,
                                 status_pekerjaan,
-                                catatan_plan
+                                catatan_plan if catatan_plan.strip() else "-"
                             ]
                             
                             success_save = append_data("Record Activity", row_data, target_ss)
@@ -3004,24 +2998,6 @@ elif st.session_state.page == "🧭 SiPLANING":
                                 st.rerun()
                             else:
                                 st.error("⚠️ Gagal menyimpan ke sheet 'Record Activity'. Pastikan nama sheet tersebut sudah ada di Google Spreadsheet target.")
-
-            st.markdown("<hr>", unsafe_allow_html=True)
-            if len(record_act_rows) > 1:
-                df_act = pd.DataFrame(record_act_rows[1:], columns=record_act_rows[0] if len(record_act_rows) > 0 else [])
-                st.markdown("#### 📥 Download / Export Record Activity")
-                
-                csv_data = df_act.to_csv(index=False).encode('utf-8')
-                st.download_button(
-                    label="📥 Download Record Activity (.csv / Excel)",
-                    data=csv_data,
-                    file_name=f"Record_Activity_{nop_plan}.csv",
-                    mime="text/csv",
-                    use_container_width=True
-                )
-                st.dataframe(df_act, hide_index=True, use_container_width=True)
-            else:
-                st.info("Belum ada data tercatat di sheet 'Record Activity' untuk wilayah ini.")
-
         # ---------------------------------------------------------
         # TAB 2: AKTIVITAS & REKAP TIM
         # ---------------------------------------------------------
