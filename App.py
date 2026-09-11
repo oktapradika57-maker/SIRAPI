@@ -17,6 +17,7 @@ from PIL import Image, ExifTags
 import io
 import cv2
 import numpy as np
+import plotly.express as px
 
 # ==========================================
 # 0. KONFIGURASI HALAMAN & UI ELEGAN (FRESH & PROFESSIONAL)
@@ -242,7 +243,7 @@ def get_credentials():
 @st.cache_data(ttl=600)
 def fetch_spreadsheet_data(spreadsheet_id):
     client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
-    ws_names = [SHEET_REQUEST, SHEET_PJB, SHEET_UM, SHEET_DISTRIBUSI, SHEET_APP, "Rekap PJB", SHEET_TIKET_PM, SHEET_ABSENSI]
+    ws_names = [SHEET_REQUEST, SHEET_PJB, SHEET_UM, SHEET_DISTRIBUSI, SHEET_APP, "Rekap PJB", SHEET_TIKET_PM, SHEET_ABSENSI, "Record Activity"]
     data = {}
     for name in ws_names:
         try: data[name] = client.worksheet(name).get_all_values()
@@ -478,7 +479,7 @@ def load_user_credentials():
             st.error("⚠️ Kolom 'NAMA' dan 'NIK' tidak ditemukan di baris pertama Excel!")
         return creds
     except Exception as e:
-        st.error(f"⚠️ Gagal membaca file Excel 'pass and username.xlsx'. Pastikan file sudah terupload. Error: {e}")
+        st.error(f"⚠️ Gagal membaca file Excel 'pass and username.xlsx'. Error: {e}")
         return {}
 
 if 'is_authenticated' not in st.session_state: st.session_state.is_authenticated = False
@@ -504,9 +505,8 @@ if not st.session_state.is_authenticated:
         """, unsafe_allow_html=True)
         
         selected_user = st.selectbox("👤 Nama Karyawan:", list_users)
-        
         auto_nik = user_creds.get(selected_user, "") if selected_user != "-- Pilih Nama Anda --" else ""
-        st.text_input("🔑 Password (NIK):", value=auto_nik, type="password", disabled=True, help="Otomatis terisi untuk keamanan dan kemudahan.")
+        st.text_input("🔑 Password (NIK):", value=auto_nik, type="password", disabled=True)
 
         if st.button("🚀 MASUK KE SISTEM", use_container_width=True, type="primary"):
             if selected_user == "-- Pilih Nama Anda --":
@@ -515,7 +515,7 @@ if not st.session_state.is_authenticated:
                 st.session_state.is_authenticated = True
                 st.session_state.logged_in_user = selected_user
                 
-                # Check Absensi 1x sehari menggunakan konversi Pandas (Anti-Gagal Format)
+                # Check Absensi 1x sehari (Akurasi Format Tanggal Pandas & UTC+7)
                 sudah_absen = False
                 if selected_user in ["OKTA PRDIKA", "MAWARDAH", "OKTA PRADIKA"]:
                     sudah_absen = True
@@ -526,19 +526,14 @@ if not st.session_state.is_authenticated:
                             d_cek = fetch_spreadsheet_data(MASTER_DATA[found_nop]["spreadsheet_id"])
                             absen_data = d_cek.get(SHEET_ABSENSI, [])
                             
-                            # Ambil tanggal hari ini zona waktu Indonesia
                             now_indo = datetime.utcnow() + timedelta(hours=7)
                             today_date = now_indo.date()
                             
-                            # Baca dari bawah ke atas agar menemukan absen teraktual
                             for r in reversed(absen_data[1:]):
                                 if len(r) > 1 and str(r[1]).strip().upper() == selected_user.strip().upper():
                                     try:
-                                        # Pecah format "10/09/2026 08:30:00" ambil hanya "10/09/2026"
                                         tgl_record_str = str(r[0]).strip().split(" ")[0]
-                                        # Gunakan Pandas untuk menormalkan segala jenis format tanggal ke YYYY-MM-DD
                                         record_date = pd.to_datetime(tgl_record_str, dayfirst=True, errors='coerce').date()
-                                        
                                         if record_date == today_date:
                                             sudah_absen = True
                                             break
@@ -556,7 +551,7 @@ if not st.session_state.is_authenticated:
 # 0.6. INTERCEPTOR: ABSENSI HARIAN
 # ==========================================
 if st.session_state.is_authenticated and not st.session_state.has_absent:
-    st.markdown("<div class='header-card'><h2>📸 ABSENSI HARIAN TIM</h2><p>Anda wajib melakukan absensi (Selfie & Lokasi). Cukup 1x Sehari.</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='header-card'><h2>📸 ABSENSI HARIAN TIM</h2><p>Cukup 1x Sehari.</p></div>", unsafe_allow_html=True)
     c_ab1, c_ab2, c_ab3 = st.columns([1, 2, 1])
     with c_ab2:
         with st.form("form_absen"):
@@ -565,11 +560,11 @@ if st.session_state.is_authenticated and not st.session_state.has_absent:
             lokasi_absen = st.text_input("Ketik Lokasi Bekerja Saat Ini")
             foto_absen = st.file_uploader("Upload Foto Selfie Absen (WAJIB)", type=["jpg", "png", "jpeg"])
             
-            if st.form_submit_button("✅ Submit Absen & Masuk Ruang Kerja", use_container_width=True):
+            if st.form_submit_button("✅ Submit Absen", use_container_width=True):
                 if not lokasi_absen or not foto_absen:
-                    st.error("⚠️ Lokasi Pekerjaan dan Foto Selfie WAJIB diisi!")
+                    st.error("⚠️ Lokasi dan Foto WAJIB diisi!")
                 else:
-                    with st.spinner("Menyimpan absensi..."):
+                    with st.spinner("Menyimpan..."):
                         url_foto_absen = upload_foto_compressed(foto_absen)
                         found_nop_absen = next((k for k, v in MASTER_DATA.items() if st.session_state.logged_in_user in v["names"]), "")
                         if found_nop_absen:
@@ -579,11 +574,8 @@ if st.session_state.is_authenticated and not st.session_state.has_absent:
                             except: pass
                         st.session_state.has_absent = True
                         st.session_state.needs_routing = True
-                        
-                        # Clear cache otomatis agar data fetch terbaru langsung mengenali absen ini
                         st.cache_data.clear() 
-                        
-                        st.success("✅ Absensi Berhasil Disimpan!")
+                        st.success("✅ Berhasil!")
                         time.sleep(1)
                         st.rerun()
     st.stop()
@@ -659,11 +651,22 @@ if st.session_state.page == "🏠 Hub Menu Utama":
     st.markdown("<div class='section-title'>🚀 MENU OPERASIONAL TIM</div>", unsafe_allow_html=True)
     c1, c2 = st.columns(2)
     with c1:
-        if st.button("💸\nREQUEST DANA\n(Pengajuan Baru)", use_container_width=True): st.session_state.page = "📝 Form Request Dana"; st.rerun()
+        if st.button("💸\nREQUEST DANA\n(Pengajuan Baru)", use_container_width=True): 
+            st.session_state.page = "📝 Form Request Dana"
+            st.rerun()
     with c2:
-        if st.button("✅\nPJB OPERASIONAL\n(Nota Realisasi)", use_container_width=True): st.session_state.page = "✅ Form PJB Operasional"; st.rerun()
+        if st.button("✅\nPJB OPERASIONAL\n(Nota Realisasi)", use_container_width=True): 
+            st.session_state.page = "✅ Form PJB Operasional"
+            st.rerun()
         
-    if st.button("📝\nREPORT LAPANGAN\n(Update Progress & Generate WA)", use_container_width=True): st.session_state.page = "📝 Report Lapangan"; st.rerun()
+    if st.button("📝\nREPORT LAPANGAN\n(Update Progress & Generate WA)", use_container_width=True): 
+        st.session_state.page = "📝 Report Lapangan"
+        st.rerun()
+
+    # --- TOMBOL MENU BARU: SiPLANING ---
+    if st.button("🧭\nSiPLANING\n(Site Plan, Checklist & Progress)", use_container_width=True): 
+        st.session_state.page = "🧭 SiPLANING"
+        st.rerun()
 
     st.markdown("<div class='section-title'>🔍 CEK STATUS TIKET (PRIBADI & TIM)</div>", unsafe_allow_html=True)
     cek_nop = st.selectbox("Pilih Area Wilayah", ["-- Pilih Area --"] + list(MASTER_DATA.keys()), key="cek_area_hub")
@@ -732,16 +735,28 @@ if st.session_state.page == "🏠 Hub Menu Utama":
             
         st.markdown("<div class='btn-admin'>", unsafe_allow_html=True)
         
-        if st.button("🎫 MASTER TIKET PM (Input Data PM Bulanan)", use_container_width=True): st.session_state.page = "🎫 Master Tiket PM"; st.rerun()
+        if st.button("🎫 MASTER TIKET PM (Input Data PM Bulanan)", use_container_width=True): 
+            st.session_state.page = "🎫 Master Tiket PM"
+            st.rerun()
         
         c_a1, c_a2 = st.columns(2)
         with c_a1:
-            if st.button("🛡️ APPROVAL CENTER\n(Validasi PJB & Revisi)", use_container_width=True): st.session_state.page = "🛡️ Approval Center"; st.rerun()
-            if st.button("📈 LIVE MONITORING\n(Dashboard Analisa)", use_container_width=True): st.session_state.page = "📈 Live Monitoring"; st.rerun()
-            if st.button("👀 REQ & PJB MONITORING\n(Pantau Tim & Warning)", use_container_width=True): st.session_state.page = "👀 Request & PJB Monitoring"; st.rerun()
+            if st.button("🛡️ APPROVAL CENTER\n(Validasi PJB & Revisi)", use_container_width=True): 
+                st.session_state.page = "🛡️ Approval Center"
+                st.rerun()
+            if st.button("📈 LIVE MONITORING\n(Dashboard Analisa)", use_container_width=True): 
+                st.session_state.page = "📈 Live Monitoring"
+                st.rerun()
+            if st.button("👀 REQ & PJB MONITORING\n(Pantau Tim & Warning)", use_container_width=True): 
+                st.session_state.page = "👀 Request & PJB Monitoring"
+                st.rerun()
         with c_a2:
-            if st.button("🏦 MANAJEMEN KAS\n(Distribusi Dana)", use_container_width=True): st.session_state.page = "🏦 Manajemen Kas & Distribusi"; st.rerun()
-            if st.button("🖨️ REPORT & AUTO PJB\n(Export Laporan)", use_container_width=True): st.session_state.page = "🖨️ Auto PJB Report"; st.rerun()
+            if st.button("🏦 MANAJEMEN KAS\n(Distribusi Dana)", use_container_width=True): 
+                st.session_state.page = "🏦 Manajemen Kas & Distribusi"
+                st.rerun()
+            if st.button("🖨️ REPORT & AUTO PJB\n(Export Laporan)", use_container_width=True): 
+                st.session_state.page = "🖨️ Auto PJB Report"
+                st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown("<div style='text-align: center; color: #94a3b8; font-size: 0.8rem; margin-top:50px;'>Created by Okta Pradika<br>KUT SYSTEM - v8.7 Enterprise Mobile Edition (3D)</div>", unsafe_allow_html=True)
@@ -1890,7 +1905,7 @@ elif st.session_state.page == "📈 Live Monitoring":
                     all_periods.add(dt.strftime("%B %Y"))
                 except: pass
             if len(pjb) > 7 and pjb[7].strip():
-                all_keperluan.add(pjb[7].strip().title()) # Rapihkan format teks tahap
+                all_keperluan.add(pjb[7].strip().title())
                 
         list_periode_opt = ["-- Semua Periode --"] + sorted(list(all_periods), reverse=True)
         list_keperluan_opt = ["-- Semua Tahapan / Keperluan --"] + sorted(list(all_keperluan))
@@ -1901,19 +1916,15 @@ elif st.session_state.page == "📈 Live Monitoring":
         with cf_2:
             selected_keperluan_filter = st.selectbox("📌 Filter Tahapan / Keperluan:", list_keperluan_opt)
             
-        # Saring baris PJB berdasarkan filter yang dipilih
         filtered_pjb_rows = []
         for pjb in pjb_r[1:]:
             if len(pjb) > 11:
-                pass_p = True
-                pass_k = True
-                
+                pass_p, pass_k = True, True
                 if selected_periode_filter != "-- Semua Periode --":
                     try:
                         dt = datetime.strptime(pjb[1].strip(), "%d/%m/%Y")
                         if dt.strftime("%B %Y") != selected_periode_filter: pass_p = False
                     except: pass
-                    
                 if selected_keperluan_filter != "-- Semua Tahapan / Keperluan --":
                     if len(pjb) > 7 and pjb[7].strip().title() != selected_keperluan_filter: pass_k = False
                         
@@ -1939,7 +1950,6 @@ elif st.session_state.page == "📈 Live Monitoring":
                 df_pjb_all['Nominal_Clean'] = df_pjb_all['Nominal'].apply(clean_nominal)
                 df_pjb_all['Tanggal_PJB'] = pd.to_datetime(df_pjb_all['Tanggal'], format='%d/%m/%Y', errors='coerce')
                 df_daily = df_pjb_all.dropna(subset=['Tanggal_PJB']).groupby('Tanggal_PJB')['Nominal_Clean'].sum().reset_index().sort_values('Tanggal_PJB')
-                
                 if not df_daily.empty:
                     df_daily.columns = ['Tanggal PJB', 'Total Pengeluaran (Rp)']
                     st.area_chart(df_daily.set_index('Tanggal PJB')['Total Pengeluaran (Rp)'], use_container_width=True)
@@ -2020,7 +2030,6 @@ elif st.session_state.page == "📈 Live Monitoring":
 
         with t4:
             st.markdown("### 🚙 Analisa Performa & Efisiensi Mobil (Berdasarkan NOPOL)")
-            
             car_stats = {}
             for pjb in filtered_pjb_rows:
                 if len(pjb) > 24:
@@ -2034,7 +2043,6 @@ elif st.session_state.page == "📈 Live Monitoring":
                         km_awal = 0.0
                         req_match = next((x for x in req_r[1:] if len(x) > 13 and str(x[3]).strip().upper() == no_tiket), None)
                         if req_match: km_awal = float(clean_indicator(req_match[12]))
-                        
                         km_akhir = float(clean_indicator(pjb[10]))
                         jarak_trip = km_akhir - km_awal if km_akhir > km_awal else 0.0
                         
@@ -2064,10 +2072,10 @@ elif st.session_state.page == "📈 Live Monitoring":
             else:
                 st.info("Belum ada data PJB Mobil ber-NOPOL pada filter ini.")
 
-        # --- PERUBAHAN TAB 5: DIPISAH PER ROLE, PER TANGGAL, & ADA GARIS AVERAGE ---
+        # --- TAB 5: TREND HARIAN PER ROLE (LONJAKAN & AVERAGE) ---
         with t5:
             st.markdown("### 👥 Trend Pengeluaran Harian Per Role (Deteksi Lonjakan)")
-            st.info("💡 Grafik di bawah memisahkan pengeluaran berdasarkan **Tanggal**. Garis biru adalah pengeluaran aktual hari itu, dan garis abu-abu/oranye adalah **Batas Rata-Rata (Average)** untuk melihat hari apa yang melampaui batas normal.")
+            st.info("💡 Grafik dipisah per Role berdasarkan tanggal, dilengkapi garis Batas Average untuk mendeteksi lonjakan.")
             
             role_stats = []
             for pjb in filtered_pjb_rows:
@@ -2087,11 +2095,9 @@ elif st.session_state.page == "📈 Live Monitoring":
                         
             if role_stats:
                 df_role = pd.DataFrame(role_stats)
-                # Validasi & standarisasi format Tanggal untuk X-Axis grafik
                 df_role['Tanggal_Valid'] = pd.to_datetime(df_role['Tanggal'], format='%d/%m/%Y', errors='coerce')
                 df_role = df_role.dropna(subset=['Tanggal_Valid'])
                 
-                # Menampilkan Tabel Akumulasi Total per Kategori
                 st.markdown("#### 📋 Tabel Total (Akumulasi)")
                 pivot_role = df_role.pivot_table(index="Role", columns="Kategori Item", values="Nominal", aggfunc="sum", fill_value=0)
                 pivot_role['Total Keseluruhan'] = pivot_role.sum(axis=1)
@@ -2105,30 +2111,25 @@ elif st.session_state.page == "📈 Live Monitoring":
                 st.markdown("<hr>", unsafe_allow_html=True)
                 st.markdown("#### 📈 Deteksi Lonjakan Harian (Grafik Per Role)")
                 
-                # Memilah (Looping) grafik berdasarkan masing-masing Role yang terdeteksi
                 unique_roles = df_role['Role'].unique()
                 for r in unique_roles:
                     st.markdown(f"**🔹 Role: {r}**")
                     
-                    # Filter data hanya untuk Role ini, lalu group per tanggal
                     df_r = df_role[df_role['Role'] == r]
                     df_daily = df_r.groupby('Tanggal_Valid')['Nominal'].sum().reset_index().sort_values('Tanggal_Valid')
                     
-                    # Menghitung nilai Average pengeluaran harian Role ini
                     avg_val = df_daily['Nominal'].mean()
                     df_daily['Batas Average'] = avg_val
                     
-                    # Rename kolom untuk legenda grafik
                     df_daily = df_daily.rename(columns={'Nominal': 'Pengeluaran Aktual (Rp)'})
-                    
-                    # Set X-Axis sebagai tanggal
                     df_chart = df_daily.set_index('Tanggal_Valid')
                     
-                    # Plot Multi-line chart (Garis aktual vs Garis Average)
                     st.line_chart(df_chart[['Pengeluaran Aktual (Rp)', 'Batas Average']], use_container_width=True)
                     st.markdown("<br>", unsafe_allow_html=True)
             else:
                 st.info("Belum ada data penyelesaian (PJB) pada filter ini untuk dianalisa per Role.")
+
+
 # ==========================================
 # PAGE 6: REPORT & AUTO PJB
 # ==========================================
@@ -2924,3 +2925,191 @@ elif st.session_state.page == "📝 Report Lapangan":
                     mime="text/plain", 
                     use_container_width=True
                 )
+
+
+# ==========================================
+# PAGE 9: SiPLANING (Site Planning & Activity)
+# ==========================================
+elif st.session_state.page == "🧭 SiPLANING":
+    st.markdown("<div class='header-card'><h2>🧭 SiPLANING ENTERPRISE</h2><p>Sistem Perencanaan Kunjungan Site, Checklist Lapangan, Aktivitas & Project Progress SOW</p></div>", unsafe_allow_html=True)
+    
+    nop_plan = st.selectbox("📂 Pilih Area Wilayah (NOP) untuk Integrasi Data:", ["-- Pilih NOP --"] + list(MASTER_DATA.keys()), key="nop_plan_select")
+    
+    if nop_plan != "-- Pilih NOP --":
+        target_ss = MASTER_DATA[nop_plan]["spreadsheet_id"]
+        site_dict, site_list, tim_dict, list_nopol_csv, nik_dict = load_excel_data()
+        
+        data_all = fetch_spreadsheet_data(target_ss)
+        record_act_rows = data_all.get("Record Activity", [])
+        
+        tab_plan1, tab_plan2, tab_plan3 = st.tabs(["📋 1. Plan & Checklist Visit", "📊 2. Aktivitas & Rekap Tim", "📈 3. Planning Project & Progress SOW"])
+        
+        # ---------------------------------------------------------
+        # TAB 1: PLAN & CHECKLIST VISIT
+        # ---------------------------------------------------------
+        with tab_plan1:
+            st.markdown("### 📝 Form Rencana Kunjungan & Checklist Lapangan")
+            st.info(f"💡 Data PIC terintegrasi dengan database {nop_plan} dan Site ID merujuk pada master data site.")
+            
+            with st.form("form_siplaning"):
+                c_p1, c_p2 = st.columns(2)
+                with c_p1:
+                    tgl_plan = st.date_input("Tanggal Rencana Visit (Plan Date)")
+                    pic_visit = st.selectbox("PIC Visit (Petugas Lapangan)", ["-- Pilih PIC --"] + MASTER_DATA[nop_plan]["names"])
+                with c_p2:
+                    if nop_plan == "Palangkaraya" and len(site_list) > 0:
+                        site_id_plan = st.selectbox("Site ID Plan", ["-- Pilih Site ID --"] + site_list)
+                    else:
+                        site_id_plan = st.text_input("Site ID Plan (Ketik Manual)")
+                        
+                    sow_visit = st.selectbox("SOW Visit (Scope of Work)", ["Preventative Maintenance (PM)", "Troubleshoot (TS)", "BBM Drop / Genset", "CME Work", "Survey / Audit", "Support Material"])
+                
+                st.markdown("#### ✅ Checklist Pekerjaan Lapangan")
+                col_ck1, col_ck2 = st.columns(2)
+                with col_ck1:
+                    chk_pre = st.checkbox("1. Pre-Check Perangkat & Keamanan Lokasi")
+                    chk_exec = st.checkbox("2. Eksekusi Pekerjaan Sesuai SOW")
+                with col_ck2:
+                    chk_post = st.checkbox("3. Post-Check / Test Normalisasi Perangkat")
+                    chk_foto = st.checkbox("4. Dokumentasi Foto & Berita Acara (BA)")
+                    
+                catatan_plan = st.text_area("Catatan Tambahan / Kendala Plan")
+                
+                submitted_plan = st.form_submit_button("💾 Simpan Rencana & Record Activity ke Sheets", use_container_width=True)
+                
+                if submitted_plan:
+                    if pic_visit == "-- Pilih PIC --" or not site_id_plan or site_id_plan == "-- Pilih Site ID --":
+                        st.error("⚠️ Mohon lengkapi Nama PIC dan Site ID Plan dengan benar!")
+                    else:
+                        with st.spinner("Menyimpan record ke Google Spreadsheet..."):
+                            checklist_status = f"Pre:[{'V' if chk_pre else 'X'}], Exec:[{'V' if chk_exec else 'X'}], Post:[{'V' if chk_post else 'X'}], Dok:[{'V' if chk_foto else 'X'}]"
+                            status_pekerjaan = "COMPLETED" if (chk_pre and chk_exec and chk_post and chk_foto) else "IN PROGRESS"
+                            
+                            row_data = [
+                                datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                                tgl_plan.strftime("%d/%m/%Y"),
+                                nop_plan,
+                                pic_visit,
+                                site_id_plan,
+                                sow_visit,
+                                checklist_status,
+                                status_pekerjaan,
+                                catatan_plan
+                            ]
+                            
+                            success_save = append_data("Record Activity", row_data, target_ss)
+                            if success_save:
+                                st.success("✅ Berhasil! Data kunjungan dan checklist tersimpan otomatis di sheet 'Record Activity'.")
+                                time.sleep(1.5)
+                                st.rerun()
+                            else:
+                                st.error("⚠️ Gagal menyimpan ke sheet 'Record Activity'. Pastikan nama sheet tersebut sudah ada di Google Spreadsheet target.")
+
+            st.markdown("<hr>", unsafe_allow_html=True)
+            if len(record_act_rows) > 1:
+                df_act = pd.DataFrame(record_act_rows[1:], columns=record_act_rows[0] if len(record_act_rows) > 0 else [])
+                st.markdown("#### 📥 Download / Export Record Activity")
+                
+                csv_data = df_act.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="📥 Download Record Activity (.csv / Excel)",
+                    data=csv_data,
+                    file_name=f"Record_Activity_{nop_plan}.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+                st.dataframe(df_act, hide_index=True, use_container_width=True)
+            else:
+                st.info("Belum ada data tercatat di sheet 'Record Activity' untuk wilayah ini.")
+
+        # ---------------------------------------------------------
+        # TAB 2: AKTIVITAS & REKAP TIM
+        # ---------------------------------------------------------
+        with tab_plan2:
+            st.markdown("### 📊 Rangkuman Aktivitas Lapangan Tim")
+            if len(record_act_rows) > 1:
+                df_summary = pd.DataFrame(record_act_rows[1:], columns=record_act_rows[0] if len(record_act_rows) > 0 else [])
+                tot_activity = len(df_summary)
+                
+                # Asumsi kolom index ke-7 adalah Status Pekerjaan
+                if df_summary.shape[1] > 7:
+                    completed_count = len(df_summary[df_summary.iloc[:, 7].str.upper() == "COMPLETED"])
+                else:
+                    completed_count = 0
+                
+                mc1, mc2, mc3 = st.columns(3)
+                mc1.markdown(f"<div class='metric-3d'><div class='metric-title'>Total Aktivitas Tercatat</div><div class='metric-value'>{tot_activity}</div></div>", unsafe_allow_html=True)
+                mc2.markdown(f"<div class='metric-3d'><div class='metric-title'>Aktivitas Selesai (Completed)</div><div class='metric-value'>{completed_count}</div></div>", unsafe_allow_html=True)
+                mc3.markdown(f"<div class='metric-3d'><div class='metric-title'>Persentase Keberhasilan</div><div class='metric-value'>{(completed_count/tot_activity*100) if tot_activity>0 else 0:.1f}%</div></div>", unsafe_allow_html=True)
+                
+                st.markdown("#### 📋 Log Aktivitas Terkini")
+                st.dataframe(df_summary, hide_index=True, use_container_width=True)
+            else:
+                st.info("Belum ada aktivitas yang terangkum. Silakan lakukan input plan & checklist pada Tab 1.")
+
+        # ---------------------------------------------------------
+        # TAB 3: PROJECT PLANNING, PROGRESS & GANTT CHART
+        # ---------------------------------------------------------
+        with tab_plan3:
+            st.markdown("### 📈 Project Planning, SOW & Progress Persentase")
+            st.info("💡 Halaman ini memproyeksikan Target Planning Project menggunakan Gantt Chart / Timeline (Grafik) serta rasio persentase keberhasilan harian tim.")
+            
+            if len(record_act_rows) > 1:
+                df_proj = pd.DataFrame(record_act_rows[1:], columns=record_act_rows[0] if len(record_act_rows) > 0 else [])
+                
+                if df_proj.shape[1] > 7:
+                    # 1. Grafik Pie/Donut: Progress Keseluruhan (Berdasarkan Status COMPLETED / IN PROGRESS)
+                    st.markdown("#### 🎯 Status Progress Project (Overal)")
+                    status_counts = df_proj.iloc[:, 7].value_counts().reset_index()
+                    status_counts.columns = ['Status Pekerjaan', 'Jumlah']
+                    
+                    fig_pie = px.pie(status_counts, names='Status Pekerjaan', values='Jumlah', hole=0.4, color='Status Pekerjaan',
+                                     color_discrete_map={'COMPLETED': '#10B981', 'IN PROGRESS': '#F59E0B'})
+                    st.plotly_chart(fig_pie, use_container_width=True)
+                    
+                    st.markdown("<hr>", unsafe_allow_html=True)
+                    
+                    # 2. GANTT CHART (Timplan Project / Timeline)
+                    st.markdown("#### 📅 Timplan Project (Gantt Chart Harian)")
+                    
+                    # Bersihkan kolom Tanggal Plan dan buat Tanggal Selesai (End Date)
+                    df_proj['Plan_Date_Parsed'] = pd.to_datetime(df_proj.iloc[:, 1], format='%d/%m/%Y', errors='coerce')
+                    df_gantt = df_proj.dropna(subset=['Plan_Date_Parsed']).copy()
+                    
+                    if not df_gantt.empty:
+                        # Buat End Date buatan (misal +1 hari untuk menampilkan bar chart di plotly)
+                        df_gantt['End_Date'] = df_gantt['Plan_Date_Parsed'] + pd.Timedelta(days=1)
+                        # Buat nama Task (Gabungan PIC dan Site ID)
+                        df_gantt['Task_Name'] = df_gantt.iloc[:, 3].astype(str) + " - " + df_gantt.iloc[:, 4].astype(str)
+                        
+                        fig_gantt = px.timeline(
+                            df_gantt, 
+                            x_start="Plan_Date_Parsed", 
+                            x_end="End_Date", 
+                            y="Task_Name", 
+                            color=df_gantt.columns[7], # Diwarnai berdasarkan status COMPLETED/IN PROGRESS
+                            color_discrete_map={'COMPLETED': '#10B981', 'IN PROGRESS': '#F59E0B'},
+                            hover_data=[df_gantt.columns[5]] # Menampilkan info SOW saat di-hover
+                        )
+                        # Balik urutan agar tugas terbaru/pertama ada di atas
+                        fig_gantt.update_yaxes(autorange="reversed") 
+                        st.plotly_chart(fig_gantt, use_container_width=True)
+                    else:
+                        st.warning("⚠️ Data tanggal plan tidak terbaca untuk dirender sebagai Gantt Chart.")
+                    
+                    st.markdown("<hr>", unsafe_allow_html=True)
+                    
+                    # 3. Bar Chart: Distribusi Pekerjaan Berdasarkan SOW
+                    st.markdown("#### 📊 Distribusi Berdasarkan Kategori SOW")
+                    sow_counts = df_proj.iloc[:, 5].value_counts().reset_index()
+                    sow_counts.columns = ["Scope of Work (SOW)", "Total Plan / Executed"]
+                    st.bar_chart(sow_counts.set_index("Scope of Work (SOW)"), use_container_width=True)
+                else:
+                    st.warning("Struktur kolom pada Record Activity belum lengkap untuk membangun grafik Progress & Timplan.")
+            else:
+                st.markdown("""
+                    <div style='background-color:#F0F9FF; padding:20px; border-radius:10px; border-left:5px solid #0EA5E9;'>
+                        <h4>🎯 Panduan SOW & Project Planning</h4>
+                        <p>Belum ada data di dalam sheet <b>Record Activity</b> untuk merender Grafik dan Gantt Chart. Mulailah menginput rencana (Plan & Checklist) di tab pertama.</p>
+                    </div>
+                """, unsafe_allow_html=True)
