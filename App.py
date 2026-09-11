@@ -2072,10 +2072,10 @@ elif st.session_state.page == "📈 Live Monitoring":
             else:
                 st.info("Belum ada data PJB Mobil ber-NOPOL pada filter ini.")
 
-        # --- TAB 5: TREND HARIAN PER ROLE (LONJAKAN & AVERAGE) ---
+        # --- TAB 5: ANALISA PER ROLE DENGAN SUB-FILTER JENIS PENGELUARAN ---
         with t5:
-            st.markdown("### 👥 Trend Pengeluaran Harian Per Role (Deteksi Lonjakan)")
-            st.info("💡 Grafik dipisah per Role berdasarkan tanggal, dilengkapi garis Batas Average untuk mendeteksi lonjakan.")
+            st.markdown("### 👥 Analisa Pengeluaran Berdasarkan Role & Sub-Filter Jenis Pengeluaran")
+            st.info("💡 Gunakan sub-filter di bawah untuk memilah total dan grafik harian berdasarkan jenis pengeluaran tertentu (misal: BBM, Akomodasi, dll).")
             
             role_stats = []
             for pjb in filtered_pjb_rows:
@@ -2095,37 +2095,49 @@ elif st.session_state.page == "📈 Live Monitoring":
                         
             if role_stats:
                 df_role = pd.DataFrame(role_stats)
-                df_role['Tanggal_Valid'] = pd.to_datetime(df_role['Tanggal'], format='%d/%m/%Y', errors='coerce')
-                df_role = df_role.dropna(subset=['Tanggal_Valid'])
                 
-                st.markdown("#### 📋 Tabel Total (Akumulasi)")
-                pivot_role = df_role.pivot_table(index="Role", columns="Kategori Item", values="Nominal", aggfunc="sum", fill_value=0)
-                pivot_role['Total Keseluruhan'] = pivot_role.sum(axis=1)
-                pivot_role = pivot_role.sort_values('Total Keseluruhan', ascending=False)
+                # --- SUB-FILTER JENIS PENGELUARAN ---
+                list_kategori_opts = ["-- Semua Jenis Pengeluaran --"] + sorted(df_role['Kategori Item'].unique().tolist())
+                selected_sub_kategori = st.selectbox("📌 Sub-Filter Jenis Pengeluaran (Kategori Item):", list_kategori_opts)
                 
-                pivot_role_view = pivot_role.copy()
-                for col in pivot_role_view.columns:
-                    pivot_role_view[col] = pivot_role_view[col].apply(lambda x: f"Rp {x:,.0f}")
-                st.dataframe(pivot_role_view, use_container_width=True)
-                
-                st.markdown("<hr>", unsafe_allow_html=True)
-                st.markdown("#### 📈 Deteksi Lonjakan Harian (Grafik Per Role)")
-                
-                unique_roles = df_role['Role'].unique()
-                for r in unique_roles:
-                    st.markdown(f"**🔹 Role: {r}**")
+                # Terapkan penyaringan sub-filter jika dipilih
+                if selected_sub_kategori != "-- Semua Jenis Pengeluaran --":
+                    df_role = df_role[df_role['Kategori Item'] == selected_sub_kategori]
                     
-                    df_r = df_role[df_role['Role'] == r]
-                    df_daily = df_r.groupby('Tanggal_Valid')['Nominal'].sum().reset_index().sort_values('Tanggal_Valid')
+                if not df_role.empty:
+                    df_role['Tanggal_Valid'] = pd.to_datetime(df_role['Tanggal'], format='%d/%m/%Y', errors='coerce')
+                    df_role = df_role.dropna(subset=['Tanggal_Valid'])
                     
-                    avg_val = df_daily['Nominal'].mean()
-                    df_daily['Batas Average'] = avg_val
+                    st.markdown("#### 📋 Tabel Total (Akumulasi)")
+                    pivot_role = df_role.pivot_table(index="Role", columns="Kategori Item", values="Nominal", aggfunc="sum", fill_value=0)
+                    pivot_role['Total Keseluruhan'] = pivot_role.sum(axis=1)
+                    pivot_role = pivot_role.sort_values('Total Keseluruhan', ascending=False)
                     
-                    df_daily = df_daily.rename(columns={'Nominal': 'Pengeluaran Aktual (Rp)'})
-                    df_chart = df_daily.set_index('Tanggal_Valid')
+                    pivot_role_view = pivot_role.copy()
+                    for col in pivot_role_view.columns:
+                        pivot_role_view[col] = pivot_role_view[col].apply(lambda x: f"Rp {x:,.0f}")
+                    st.dataframe(pivot_role_view, use_container_width=True)
                     
-                    st.line_chart(df_chart[['Pengeluaran Aktual (Rp)', 'Batas Average']], use_container_width=True)
-                    st.markdown("<br>", unsafe_allow_html=True)
+                    st.markdown("<hr>", unsafe_allow_html=True)
+                    st.markdown("#### 📈 Deteksi Lonjakan Harian (Grafik Per Role)")
+                    
+                    unique_roles = df_role['Role'].unique()
+                    for r in unique_roles:
+                        st.markdown(f"**🔹 Role: {r}**")
+                        
+                        df_r = df_role[df_role['Role'] == r]
+                        df_daily = df_r.groupby('Tanggal_Valid')['Nominal'].sum().reset_index().sort_values('Tanggal_Valid')
+                        
+                        avg_val = df_daily['Nominal'].mean()
+                        df_daily['Batas Average'] = avg_val
+                        
+                        df_daily = df_daily.rename(columns={'Nominal': 'Pengeluaran Aktual (Rp)'})
+                        df_chart = df_daily.set_index('Tanggal_Valid')
+                        
+                        st.line_chart(df_chart[['Pengeluaran Aktual (Rp)', 'Batas Average']], use_container_width=True)
+                        st.markdown("<br>", unsafe_allow_html=True)
+                else:
+                    st.warning("⚠️ Tidak ada data pengeluaran yang cocok dengan sub-filter jenis pengeluaran tersebut.")
             else:
                 st.info("Belum ada data penyelesaian (PJB) pada filter ini untuk dianalisa per Role.")
 
