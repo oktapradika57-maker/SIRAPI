@@ -2967,7 +2967,6 @@ elif st.session_state.page == "🧭 SiPLANING":
                 c_p1, c_p2 = st.columns(2)
                 with c_p1:
                     tgl_plan = st.date_input("Tanggal Rencana Visit (Plan Date)")
-                    # PERUBAHAN: PIC Multi-select
                     pic_visit = st.multiselect("👥 PIC Visit (Bisa Pilih Banyak Tim)", MASTER_DATA[nop_plan]["names"])
                 with c_p2:
                     if nop_plan == "Palangkaraya" and len(site_list) > 0:
@@ -2993,7 +2992,6 @@ elif st.session_state.page == "🧭 SiPLANING":
                         st.error("⚠️ Mohon lengkapi Nama PIC dan Site ID Plan dengan benar!")
                     else:
                         with st.spinner("Menyimpan record ke Google Spreadsheet..."):
-                            # Gabungkan array nama menjadi 1 string dengan koma
                             pic_visit_str = ", ".join(pic_visit)
                             checklist_status = manual_checklist if manual_checklist.strip() else "-"
                             
@@ -3015,7 +3013,25 @@ elif st.session_state.page == "🧭 SiPLANING":
                                 time.sleep(1.5)
                                 st.rerun()
                             else:
-                                st.error("⚠️ Gagal menyimpan ke sheet 'Record Activity'. Pastikan nama sheet tersebut sudah ada di Google Spreadsheet target.")
+                                st.error("⚠️ Gagal menyimpan ke sheet 'Record Activity'.")
+
+            st.markdown("<hr>", unsafe_allow_html=True)
+            if len(record_act_rows) > 1:
+                df_act = pd.DataFrame(record_act_rows[1:], columns=record_act_rows[0] if len(record_act_rows) > 0 else [])
+                st.markdown("#### 📥 Download / Export Record Activity")
+                
+                csv_data = df_act.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="📥 Download Record Activity (.csv / Excel)",
+                    data=csv_data,
+                    file_name=f"Record_Activity_{nop_plan}.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+                st.dataframe(df_act, hide_index=True, use_container_width=True)
+            else:
+                st.info("Belum ada data tercatat di sheet 'Record Activity' untuk wilayah ini.")
+
         # ---------------------------------------------------------
         # TAB 2: AKTIVITAS & REKAP TIM
         # ---------------------------------------------------------
@@ -3025,7 +3041,6 @@ elif st.session_state.page == "🧭 SiPLANING":
                 df_summary = pd.DataFrame(record_act_rows[1:], columns=record_act_rows[0] if len(record_act_rows) > 0 else [])
                 tot_activity = len(df_summary)
                 
-                # Asumsi kolom index ke-7 adalah Status Pekerjaan
                 if df_summary.shape[1] > 7:
                     completed_count = len(df_summary[df_summary.iloc[:, 7].str.upper() == "COMPLETED"])
                 else:
@@ -3041,7 +3056,7 @@ elif st.session_state.page == "🧭 SiPLANING":
             else:
                 st.info("Belum ada aktivitas yang terangkum. Silakan lakukan input plan & checklist pada Tab 1.")
 
-# ---------------------------------------------------------
+        # ---------------------------------------------------------
         # TAB 3: PROJECT PLANNING, PROGRESS, GANTT & WA GENERATOR
         # ---------------------------------------------------------
         with tab_plan3:
@@ -3106,7 +3121,7 @@ elif st.session_state.page == "🧭 SiPLANING":
                             x_end="End_Date", 
                             y="Row_Name", 
                             color="Status",
-                            text="Task_Label", 
+                            text="Task_Label",
                             color_discrete_map={'COMPLETED': '#10B981', 'IN PROGRESS': '#0ea5e9'}
                         )
                         
@@ -3146,196 +3161,6 @@ elif st.session_state.page == "🧭 SiPLANING":
                     df_copyable = df_proj[['Plan_Date', 'NOP', 'PIC', 'Site_ID', 'SOW', 'Status', 'Checklist']].copy()
                     st.dataframe(df_copyable, use_container_width=True, hide_index=True)
                     
-                    if st.button("📱 Generate Format Laporan untuk WhatsApp", type="primary", use_container_width=True):
-                        wa_message = f"🚀 *LAPORAN TIMPLAN & PROGRESS PROJECT*\n"
-                        wa_message += f"📂 Area NOP: *{nop_plan}*\n"
-                        wa_message += f"📅 Dibuat: *{datetime.now().strftime('%d/%m/%Y %H:%M')}*\n\n"
-                        wa_message += "━━━━━━━━━━━━━━━━━━━━━━\n"
-                        
-                        for _, row in df_proj.iterrows():
-                            status_emoji = "✅" if str(row['Status']).upper() == "COMPLETED" else "⏳"
-                            wa_message += f"{status_emoji} *Site:* {row['Site_ID']}\n"
-                            wa_message += f"   • SOW: {row['SOW']}\n"
-                            wa_message += f"   • PIC: {row['PIC']}\n"
-                            wa_message += f"   • Tgl Plan: {row['Plan_Date']}\n"
-                            wa_message += f"   • Status: _{row['Status']}_\n\n"
-                            
-                        wa_message += "━━━━━━━━━━━━━━━━━━━━━━\n"
-                        wa_message += "_Generated via SiRAPI Enterprise System_"
-                        
-                        st.session_state.wa_project_report = wa_message
-                        
-                    if st.session_state.get("wa_project_report"):
-                        st.success("✨ Format WhatsApp berhasil digenerate! Silakan salin teks di bawah ini:")
-                        st.code(st.session_state.wa_project_report, language="markdown")
-                        st.download_button(
-                            label="📥 Download Teks Laporan (.txt)",
-                            data=st.session_state.wa_project_report,
-                            file_name=f"Laporan_Project_{nop_plan}.txt",
-                            mime="text/plain",
-                            use_container_width=True
-                        )
-                else:
-                    st.warning("Struktur kolom pada Record Activity belum lengkap.")
-            else:
-                st.info("Belum ada data tercatat di sheet 'Record Activity' untuk wilayah ini. Silakan input di Tab 1 terlebih dahulu.")                  
-                    # --- 2. GANTT CHART ELEGAN & BERTEKS ---
-                    st.markdown("#### 📅 Gantt Chart / Timeline Proyek (Elegan & Berteks)")
-                    
-                    df_gantt = df_proj.copy()
-                    df_gantt['Plan_Date_Parsed'] = pd.to_datetime(df_gantt['Plan_Date'], format='%d/%m/%Y', errors='coerce')
-                    df_gantt = df_gantt.dropna(subset=['Plan_Date_Parsed'])
-                    
-                    if not df_gantt.empty:
-                        df_gantt['End_Date'] = df_gantt['Plan_Date_Parsed'] + pd.Timedelta(days=1)
-                        # Membuat teks label yang akan muncul langsung di dalam balok chart
-                        df_gantt['Task_Label'] = "📍 " + df_gantt['Site_ID'].astype(str) + " (" + df_gantt['SOW'].astype(str) + ") - PIC: " + df_gantt['PIC'].astype(str)
-                        df_gantt['Row_Name'] = df_gantt['Site_ID'].astype(str) + " [" + df_gantt['SOW'].astype(str) + "]"
-                        
-                        fig_gantt = px.timeline(
-                            df_gantt, 
-                            x_start="Plan_Date_Parsed", 
-                            x_end="End_Date", 
-                            y="Row_Name", 
-                            color="Status",
-                            text="Task_Label", # Memunculkan teks langsung di dalam chart
-                            color_discrete_map={'COMPLETED': '#10B981', 'IN PROGRESS': '#0ea5e9'}
-                        )
-                        
-                        fig_gantt.update_layout(
-                            plot_bgcolor="rgba(248, 250, 252, 0.8)",
-                            paper_bgcolor="rgba(0,0,0,0)",
-                            font_family="'Plus Jakarta Sans', sans-serif",
-                            margin=dict(l=10, r=20, t=40, b=20),
-                            xaxis=dict(
-                                title="", showgrid=True, gridcolor="#e2e8f0", gridwidth=1,
-                                tickfont=dict(color="#64748b", size=11), side="top"
-                            ),
-                            yaxis=dict(title="", showgrid=False, tickfont=dict(color="#0f172a", size=11, weight="bold")),
-                            legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1, title="")
-                        )
-                        
-                        # Styling Teks di dalam balok agar kontras dan elegan
-                        fig_gantt.update_traces(
-                            textfont=dict(color='white', size=11, family="'Plus Jakarta Sans', sans-serif"),
-                            textposition='inside',
-                            insidetextanchor='middle',
-                            marker_line_color='rgb(255,255,255)', 
-                            marker_line_width=2,
-                            opacity=0.95
-                        )
-                        
-                        fig_gantt.update_yaxes(autorange="reversed") 
-                        st.plotly_chart(fig_gantt, use_container_width=True)
-                    else:
-                        st.warning("⚠️ Data tanggal plan tidak valid untuk dirender.")
-                        
-                    st.markdown("<hr style='margin: 20px 0;'>", unsafe_allow_html=True)
-                    
-                    # --- 3. TABEL DATA (BISA DICOPAS) & WHATSAPP REPORT GENERATOR ---
-                    st.markdown("#### 📋 Data Tabel & Generator Laporan WhatsApp")
-                    st.info("💡 Anda dapat menyalin data dari tabel di bawah, atau klik tombol di bawah untuk men-generate format teks siap kirim ke WhatsApp.")
-                    
-                    # Tampilkan dataframe bersih yang bisa disalin langsung
-                    df_copyable = df_proj[['Plan_Date', 'NOP', 'PIC', 'Site_ID', 'SOW', 'Status', 'Checklist']].copy()
-                    st.dataframe(df_copyable, use_container_width=True, hide_index=True)
-                    
-                    # --- GENERATOR WHATSAPP ---
-                    if st.button("📱 Generate Format Laporan untuk WhatsApp", type="primary", use_container_width=True):
-                        wa_message = f"🚀 *LAPORAN TIMPLAN & PROGRESS PROJECT*\n"
-                        wa_message += f"📂 Area NOP: *{nop_plan}*\n"
-                        wa_message += f"📅 Dibuat: *{datetime.now().strftime('%d/%m/%Y %H:%M')}*\n\n"
-                        wa_message += "━━━━━━━━━━━━━━━━━━━━━━\n"
-                        
-                        for _, row in df_proj.iterrows():
-                            status_emoji = "✅" if str(row['Status']).upper() == "COMPLETED" else "⏳"
-                            wa_message += f"{status_emoji} *Site:* {row['Site_ID']}\n"
-                            wa_message += f"   • SOW: {row['SOW']}\n"
-                            wa_message += f"   • PIC: {row['PIC']}\n"
-                            wa_message += f"   • Tgl Plan: {row['Plan_Date']}\n"
-                            wa_message += f"   • Status: _{row['Status']}_\n\n"
-                            
-                        wa_message += "━━━━━━━━━━━━━━━━━━━━━━\n"
-                        wa_message += "_Generated via SiRAPI Enterprise System_"
-                        
-                        st.session_state.wa_project_report = wa_message
-                        
-                    if st.session_state.get("wa_project_report"):
-                        st.success("✨ Format WhatsApp berhasil digenerate! Silakan salin teks di bawah ini:")
-                        st.code(st.session_state.wa_project_report, language="markdown")
-                        st.download_button(
-                            label="📥 Download Teks Laporan (.txt)",
-                            data=st.session_state.wa_project_report,
-                            file_name=f"Laporan_Project_{nop_plan}.txt",
-                            mime="text/plain",
-                            use_container_width=True
-                        )
-                else:
-                    st.warning("Struktur kolom pada Record Activity belum lengkap.")
-            else:
-                st.info("Belum ada data tercatat di sheet 'Record Activity' untuk wilayah ini. Silakan input di Tab 1 terlebih dahulu.")                  
-                    # --- 2. GANTT CHART ELEGAN & BERTEKS ---
-                    st.markdown("#### 📅 Gantt Chart / Timeline Proyek (Elegan & Berteks)")
-                    
-                    df_gantt = df_proj.copy()
-                    df_gantt['Plan_Date_Parsed'] = pd.to_datetime(df_gantt['Plan_Date'], format='%d/%m/%Y', errors='coerce')
-                    df_gantt = df_gantt.dropna(subset=['Plan_Date_Parsed'])
-                    
-                    if not df_gantt.empty:
-                        df_gantt['End_Date'] = df_gantt['Plan_Date_Parsed'] + pd.Timedelta(days=1)
-                        # Membuat teks label yang akan muncul langsung di dalam balok chart
-                        df_gantt['Task_Label'] = "📍 " + df_gantt['Site_ID'].astype(str) + " (" + df_gantt['SOW'].astype(str) + ") - PIC: " + df_gantt['PIC'].astype(str)
-                        df_gantt['Row_Name'] = df_gantt['Site_ID'].astype(str) + " [" + df_gantt['SOW'].astype(str) + "]"
-                        
-                        fig_gantt = px.timeline(
-                            df_gantt, 
-                            x_start="Plan_Date_Parsed", 
-                            x_end="End_Date", 
-                            y="Row_Name", 
-                            color="Status",
-                            text="Task_Label", # Memunculkan teks langsung di dalam chart
-                            color_discrete_map={'COMPLETED': '#10B981', 'IN PROGRESS': '#0ea5e9'}
-                        )
-                        
-                        fig_gantt.update_layout(
-                            plot_bgcolor="rgba(248, 250, 252, 0.8)",
-                            paper_bgcolor="rgba(0,0,0,0)",
-                            font_family="'Plus Jakarta Sans', sans-serif",
-                            margin=dict(l=10, r=20, t=40, b=20),
-                            xaxis=dict(
-                                title="", showgrid=True, gridcolor="#e2e8f0", gridwidth=1,
-                                tickfont=dict(color="#64748b", size=11), side="top"
-                            ),
-                            yaxis=dict(title="", showgrid=False, tickfont=dict(color="#0f172a", size=11, weight="bold")),
-                            legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1, title="")
-                        )
-                        
-                        # Styling Teks di dalam balok agar kontras dan elegan
-                        fig_gantt.update_traces(
-                            textfont=dict(color='white', size=11, family="'Plus Jakarta Sans', sans-serif"),
-                            textposition='inside',
-                            insidetextanchor='middle',
-                            marker_line_color='rgb(255,255,255)', 
-                            marker_line_width=2,
-                            opacity=0.95
-                        )
-                        
-                        fig_gantt.update_yaxes(autorange="reversed") 
-                        st.plotly_chart(fig_gantt, use_container_width=True)
-                    else:
-                        st.warning("⚠️ Data tanggal plan tidak valid untuk dirender.")
-                        
-                    st.markdown("<hr style='margin: 20px 0;'>", unsafe_allow_html=True)
-                    
-                    # --- 3. TABEL DATA (BISA DICOPAS) & WHATSAPP REPORT GENERATOR ---
-                    st.markdown("#### 📋 Data Tabel & Generator Laporan WhatsApp")
-                    st.info("💡 Anda dapat menyalin data dari tabel di bawah, atau klik tombol di bawah untuk men-generate format teks siap kirim ke WhatsApp.")
-                    
-                    # Tampilkan dataframe bersih yang bisa disalin langsung
-                    df_copyable = df_proj[['Plan_Date', 'NOP', 'PIC', 'Site_ID', 'SOW', 'Status', 'Checklist']].copy()
-                    st.dataframe(df_copyable, use_container_width=True, hide_index=True)
-                    
-                    # --- GENERATOR WHATSAPP ---
                     if st.button("📱 Generate Format Laporan untuk WhatsApp", type="primary", use_container_width=True):
                         wa_message = f"🚀 *LAPORAN TIMPLAN & PROGRESS PROJECT*\n"
                         wa_message += f"📂 Area NOP: *{nop_plan}*\n"
@@ -3369,85 +3194,3 @@ elif st.session_state.page == "🧭 SiPLANING":
                     st.warning("Struktur kolom pada Record Activity belum lengkap.")
             else:
                 st.info("Belum ada data tercatat di sheet 'Record Activity' untuk wilayah ini. Silakan input di Tab 1 terlebih dahulu.")
-
-                    
-                    # --- 2. GANTT CHART ESTETIK (TIMELINE PROFESIONAL) ---
-                    st.markdown("#### 📅 Timeline Pekerjaan (Project Plan)")
-                    
-                    df_gantt = df_proj.copy()
-                    df_gantt['Plan_Date_Parsed'] = pd.to_datetime(df_gantt['Plan_Date'], format='%d/%m/%Y', errors='coerce')
-                    df_gantt = df_gantt.dropna(subset=['Plan_Date_Parsed'])
-                    
-                    if not df_gantt.empty:
-                        # Setup durasi buatan (+1 Hari) agar grafis balok (bar) terlihat jelas
-                        df_gantt['End_Date'] = df_gantt['Plan_Date_Parsed'] + pd.Timedelta(days=1)
-                        # Nama Bar: Site ID digabung dengan Label SOW
-                        df_gantt['Task_Name'] = df_gantt['Site_ID'].astype(str) + " [" + df_gantt['SOW'].astype(str) + "]"
-                        
-                        fig_gantt = px.timeline(
-                            df_gantt, 
-                            x_start="Plan_Date_Parsed", 
-                            x_end="End_Date", 
-                            y="Task_Name", 
-                            color="Status", 
-                            color_discrete_map={'COMPLETED': '#10B981', 'IN PROGRESS': '#0ea5e9'},
-                            hover_data={"PIC": True, "SOW": True, "Status": True, "End_Date": False}
-                        )
-                        
-                        # --- STYLING PROFESIONAL & CLEAN ---
-                        fig_gantt.update_layout(
-                            plot_bgcolor="rgba(248, 250, 252, 0.5)",  # Soft background
-                            paper_bgcolor="rgba(0,0,0,0)",
-                            font_family="'Plus Jakarta Sans', sans-serif",
-                            margin=dict(l=10, r=20, t=50, b=20),
-                            xaxis=dict(
-                                title="",
-                                showgrid=True,
-                                gridcolor="#e2e8f0",
-                                gridwidth=1,
-                                tickfont=dict(color="#64748b", size=11),
-                                side="top" # Memindahkan tanggal ke bagian atas agar lebih mudah dibaca
-                            ),
-                            yaxis=dict(
-                                title="",
-                                showgrid=False,
-                                tickfont=dict(color="#0f172a", size=12, weight="bold")
-                            ),
-                            legend=dict(
-                                orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1, title=""
-                            ),
-                            hoverlabel=dict(bgcolor="white", font_size=13, font_family="'Plus Jakarta Sans', sans-serif")
-                        )
-                        
-                        # Menambahkan bingkai putih pada bar agar terlihat timbul / tegas
-                        fig_gantt.update_traces(
-                            marker_line_color='rgb(255,255,255)', 
-                            marker_line_width=2,
-                            opacity=0.9
-                        )
-                        
-                        fig_gantt.update_yaxes(autorange="reversed") 
-                        st.plotly_chart(fig_gantt, use_container_width=True)
-                    else:
-                        st.warning("⚠️ Data tanggal plan tidak terbaca untuk dirender sebagai Gantt Chart.")
-                    
-                    st.markdown("<hr>", unsafe_allow_html=True)
-                    
-                    # 3. Bar Chart: Distribusi Pekerjaan
-                    st.markdown("#### 📊 Distribusi Berdasarkan Kategori SOW")
-                    sow_counts = df_proj['SOW'].value_counts().reset_index()
-                    sow_counts.columns = ["Scope of Work (SOW)", "Total Plan / Executed"]
-                    
-                    fig_bar = px.bar(sow_counts, x="Total Plan / Executed", y="Scope of Work (SOW)", orientation='h', color="Total Plan / Executed", color_continuous_scale="Blues")
-                    fig_bar.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_family="'Plus Jakarta Sans', sans-serif", showlegend=False, xaxis_title="Total Pekerjaan", yaxis_title="")
-                    fig_bar.update_yaxes(autorange="reversed")
-                    st.plotly_chart(fig_bar, use_container_width=True)
-                else:
-                    st.warning("Struktur kolom pada Record Activity belum lengkap untuk membangun grafik Progress & Timplan.")
-            else:
-                st.markdown("""
-                    <div style='background-color:#F0F9FF; padding:20px; border-radius:10px; border-left:5px solid #0EA5E9;'>
-                        <h4>🎯 Panduan SOW & Project Planning</h4>
-                        <p>Belum ada data di dalam sheet <b>Record Activity</b> untuk merender Grafik dan Gantt Chart. Mulailah menginput rencana (Plan & Checklist) di tab pertama.</p>
-                    </div>
-                """, unsafe_allow_html=True)
