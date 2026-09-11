@@ -3041,38 +3041,149 @@ elif st.session_state.page == "🧭 SiPLANING":
             else:
                 st.info("Belum ada aktivitas yang terangkum. Silakan lakukan input plan & checklist pada Tab 1.")
 
-        # ---------------------------------------------------------
-        # TAB 3: PROJECT PLANNING, PROGRESS & GANTT CHART
+                # ---------------------------------------------------------
+        # TAB 3: PROJECT PLANNING, PROGRESS, GANTT & WA GENERATOR
         # ---------------------------------------------------------
         with tab_plan3:
-            st.markdown("### 📈 Project Planning, SOW & Progress Persentase")
-            st.info("💡 Halaman ini memproyeksikan Target Planning Project menggunakan Gantt Chart Estetik & Profesional serta rasio keberhasilan harian tim.")
+            st.markdown("### 📈 Project Timeline, SOW & WhatsApp Report Generator")
+            st.info("💡 Timeline di bawah didesain dengan gaya modern-elegan, teks tertera langsung di bar, dilengkapi tabel copy-paste dan generator laporan otomatis ke WhatsApp.")
             
             if len(record_act_rows) > 1:
                 df_proj = pd.DataFrame(record_act_rows[1:], columns=record_act_rows[0] if len(record_act_rows) > 0 else [])
                 
                 if df_proj.shape[1] > 7:
-                    # Rename columns to ensure robust mapping regardless of header in Google Sheets
                     df_proj.columns = ["Timestamp", "Plan_Date", "NOP", "PIC", "Site_ID", "SOW", "Checklist", "Status"] + list(df_proj.columns[8:])
                     
-                    st.markdown("#### 🎯 Status Progress Project (Keseluruhan)")
-                    status_counts = df_proj['Status'].value_counts().reset_index()
-                    status_counts.columns = ['Status Pekerjaan', 'Jumlah']
+                    # 1. STATUS PROGRESS PIE CHART
+                    col_p1, col_p2 = st.columns([1, 1])
+                    with col_p1:
+                        st.markdown("#### 🎯 Status Progress")
+                        status_counts = df_proj['Status'].value_counts().reset_index()
+                        status_counts.columns = ['Status Pekerjaan', 'Jumlah']
+                        
+                        fig_pie = px.pie(status_counts, names='Status Pekerjaan', values='Jumlah', hole=0.5, 
+                                         color='Status Pekerjaan',
+                                         color_discrete_map={'COMPLETED': '#10B981', 'IN PROGRESS': '#0ea5e9'})
+                        fig_pie.update_layout(
+                            plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+                            font_family="'Plus Jakarta Sans', sans-serif",
+                            margin=dict(t=10, b=10, l=10, r=10),
+                            legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5)
+                        )
+                        fig_pie.update_traces(textposition='inside', textinfo='percent+label', marker=dict(line=dict(color='#ffffff', width=2)))
+                        st.plotly_chart(fig_pie, use_container_width=True)
+                        
+                    with col_p2:
+                        st.markdown("#### 📊 Distribusi SOW")
+                        sow_counts = df_proj['SOW'].value_counts().reset_index()
+                        sow_counts.columns = ["Scope of Work", "Total"]
+                        fig_bar = px.bar(sow_counts, x="Total", y="Scope of Work", orientation='h', color="Total", color_continuous_scale="Blues")
+                        fig_bar.update_layout(
+                            plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", 
+                            font_family="'Plus Jakarta Sans', sans-serif", showlegend=False, 
+                            xaxis_title="", yaxis_title="", margin=dict(t=10, b=10, l=10, r=10)
+                        )
+                        fig_bar.update_yaxes(autorange="reversed")
+                        st.plotly_chart(fig_bar, use_container_width=True)
                     
-                    fig_pie = px.pie(status_counts, names='Status Pekerjaan', values='Jumlah', hole=0.45, 
-                                     color='Status Pekerjaan',
-                                     color_discrete_map={'COMPLETED': '#10B981', 'IN PROGRESS': '#F59E0B'})
+                    st.markdown("<hr style='margin: 20px 0;'>", unsafe_allow_html=True)
                     
-                    fig_pie.update_layout(
-                        plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-                        font_family="'Plus Jakarta Sans', sans-serif",
-                        margin=dict(t=10, b=10, l=10, r=10),
-                        legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5)
-                    )
-                    fig_pie.update_traces(textposition='inside', textinfo='percent+label', marker=dict(line=dict(color='#ffffff', width=2)))
-                    st.plotly_chart(fig_pie, use_container_width=True)
+                    # --- 2. GANTT CHART ELEGAN & BERTEKS ---
+                    st.markdown("#### 📅 Gantt Chart / Timeline Proyek (Elegan & Berteks)")
                     
-                    st.markdown("<hr>", unsafe_allow_html=True)
+                    df_gantt = df_proj.copy()
+                    df_gantt['Plan_Date_Parsed'] = pd.to_datetime(df_gantt['Plan_Date'], format='%d/%m/%Y', errors='coerce')
+                    df_gantt = df_gantt.dropna(subset=['Plan_Date_Parsed'])
+                    
+                    if not df_gantt.empty:
+                        df_gantt['End_Date'] = df_gantt['Plan_Date_Parsed'] + pd.Timedelta(days=1)
+                        # Membuat teks label yang akan muncul langsung di dalam balok chart
+                        df_gantt['Task_Label'] = "📍 " + df_gantt['Site_ID'].astype(str) + " (" + df_gantt['SOW'].astype(str) + ") - PIC: " + df_gantt['PIC'].astype(str)
+                        df_gantt['Row_Name'] = df_gantt['Site_ID'].astype(str) + " [" + df_gantt['SOW'].astype(str) + "]"
+                        
+                        fig_gantt = px.timeline(
+                            df_gantt, 
+                            x_start="Plan_Date_Parsed", 
+                            x_end="End_Date", 
+                            y="Row_Name", 
+                            color="Status",
+                            text="Task_Label", # Memunculkan teks langsung di dalam chart
+                            color_discrete_map={'COMPLETED': '#10B981', 'IN PROGRESS': '#0ea5e9'}
+                        )
+                        
+                        fig_gantt.update_layout(
+                            plot_bgcolor="rgba(248, 250, 252, 0.8)",
+                            paper_bgcolor="rgba(0,0,0,0)",
+                            font_family="'Plus Jakarta Sans', sans-serif",
+                            margin=dict(l=10, r=20, t=40, b=20),
+                            xaxis=dict(
+                                title="", showgrid=True, gridcolor="#e2e8f0", gridwidth=1,
+                                tickfont=dict(color="#64748b", size=11), side="top"
+                            ),
+                            yaxis=dict(title="", showgrid=False, tickfont=dict(color="#0f172a", size=11, weight="bold")),
+                            legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1, title="")
+                        )
+                        
+                        # Styling Teks di dalam balok agar kontras dan elegan
+                        fig_gantt.update_traces(
+                            textfont=dict(color='white', size=11, family="'Plus Jakarta Sans', sans-serif"),
+                            textposition='inside',
+                            insidetextanchor='middle',
+                            marker_line_color='rgb(255,255,255)', 
+                            marker_line_width=2,
+                            opacity=0.95
+                        )
+                        
+                        fig_gantt.update_yaxes(autorange="reversed") 
+                        st.plotly_chart(fig_gantt, use_container_width=True)
+                    else:
+                        st.warning("⚠️ Data tanggal plan tidak valid untuk dirender.")
+                        
+                    st.markdown("<hr style='margin: 20px 0;'>", unsafe_allow_html=True)
+                    
+                    # --- 3. TABEL DATA (BISA DICOPAS) & WHATSAPP REPORT GENERATOR ---
+                    st.markdown("#### 📋 Data Tabel & Generator Laporan WhatsApp")
+                    st.info("💡 Anda dapat menyalin data dari tabel di bawah, atau klik tombol di bawah untuk men-generate format teks siap kirim ke WhatsApp.")
+                    
+                    # Tampilkan dataframe bersih yang bisa disalin langsung
+                    df_copyable = df_proj[['Plan_Date', 'NOP', 'PIC', 'Site_ID', 'SOW', 'Status', 'Checklist']].copy()
+                    st.dataframe(df_copyable, use_container_width=True, hide_index=True)
+                    
+                    # --- GENERATOR WHATSAPP ---
+                    if st.button("📱 Generate Format Laporan untuk WhatsApp", type="primary", use_container_width=True):
+                        wa_message = f"🚀 *LAPORAN TIMPLAN & PROGRESS PROJECT*\n"
+                        wa_message += f"📂 Area NOP: *{nop_plan}*\n"
+                        wa_message += f"📅 Dibuat: *{datetime.now().strftime('%d/%m/%Y %H:%M')}*\n\n"
+                        wa_message += "━━━━━━━━━━━━━━━━━━━━━━\n"
+                        
+                        for _, row in df_proj.iterrows():
+                            status_emoji = "✅" if str(row['Status']).upper() == "COMPLETED" else "⏳"
+                            wa_message += f"{status_emoji} *Site:* {row['Site_ID']}\n"
+                            wa_message += f"   • SOW: {row['SOW']}\n"
+                            wa_message += f"   • PIC: {row['PIC']}\n"
+                            wa_message += f"   • Tgl Plan: {row['Plan_Date']}\n"
+                            wa_message += f"   • Status: _{row['Status']}_\n\n"
+                            
+                        wa_message += "━━━━━━━━━━━━━━━━━━━━━━\n"
+                        wa_message += "_Generated via SiRAPI Enterprise System_"
+                        
+                        st.session_state.wa_project_report = wa_message
+                        
+                    if st.session_state.get("wa_project_report"):
+                        st.success("✨ Format WhatsApp berhasil digenerate! Silakan salin teks di bawah ini:")
+                        st.code(st.session_state.wa_project_report, language="markdown")
+                        st.download_button(
+                            label="📥 Download Teks Laporan (.txt)",
+                            data=st.session_state.wa_project_report,
+                            file_name=f"Laporan_Project_{nop_plan}.txt",
+                            mime="text/plain",
+                            use_container_width=True
+                        )
+                else:
+                    st.warning("Struktur kolom pada Record Activity belum lengkap.")
+            else:
+                st.info("Belum ada data tercatat di sheet 'Record Activity' untuk wilayah ini. Silakan input di Tab 1 terlebih dahulu.")
+
                     
                     # --- 2. GANTT CHART ESTETIK (TIMELINE PROFESIONAL) ---
                     st.markdown("#### 📅 Timeline Pekerjaan (Project Plan)")
