@@ -2947,11 +2947,16 @@ elif st.session_state.page == "🧭 SiPLANING":
         # ---------------------------------------------------------
         # TAB 1: PLAN & CHECKLIST VISIT
         # ---------------------------------------------------------
-        with st.form("form_siplaning"):
+        with tab_plan1:
+            st.markdown("### 📝 Form Rencana Kunjungan & Checklist Lapangan")
+            st.info(f"💡 Data PIC terintegrasi dengan database {nop_plan}. Anda bisa memilih lebih dari 1 PIC untuk tugas yang sama.")
+            
+            with st.form("form_siplaning"):
                 c_p1, c_p2 = st.columns(2)
                 with c_p1:
                     tgl_plan = st.date_input("Tanggal Rencana Visit (Plan Date)")
-                    pic_visit = st.selectbox("PIC Visit (Petugas Lapangan)", ["-- Pilih PIC --"] + MASTER_DATA[nop_plan]["names"])
+                    # PERUBAHAN: PIC Multi-select
+                    pic_visit = st.multiselect("👥 PIC Visit (Bisa Pilih Banyak Tim)", MASTER_DATA[nop_plan]["names"])
                 with c_p2:
                     if nop_plan == "Palangkaraya" and len(site_list) > 0:
                         site_id_plan = st.selectbox("Site ID Plan", ["-- Pilih Site ID --"] + site_list)
@@ -2972,18 +2977,19 @@ elif st.session_state.page == "🧭 SiPLANING":
                 submitted_plan = st.form_submit_button("💾 Simpan Rencana & Record Activity ke Sheets", use_container_width=True)
                 
                 if submitted_plan:
-                    if pic_visit == "-- Pilih PIC --" or not site_id_plan or site_id_plan == "-- Pilih Site ID --":
+                    if not pic_visit or not site_id_plan or site_id_plan == "-- Pilih Site ID --":
                         st.error("⚠️ Mohon lengkapi Nama PIC dan Site ID Plan dengan benar!")
                     else:
                         with st.spinner("Menyimpan record ke Google Spreadsheet..."):
-                            # Gunakan isian manual sebagai data checklist
+                            # Gabungkan array nama menjadi 1 string dengan koma
+                            pic_visit_str = ", ".join(pic_visit)
                             checklist_status = manual_checklist if manual_checklist.strip() else "-"
                             
                             row_data = [
                                 datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
                                 tgl_plan.strftime("%d/%m/%Y"),
                                 nop_plan,
-                                pic_visit,
+                                pic_visit_str,
                                 site_id_plan,
                                 sow_visit,
                                 checklist_status,
@@ -2993,7 +2999,7 @@ elif st.session_state.page == "🧭 SiPLANING":
                             
                             success_save = append_data("Record Activity", row_data, target_ss)
                             if success_save:
-                                st.success("✅ Berhasil! Data kunjungan dan checklist tersimpan otomatis di sheet 'Record Activity'.")
+                                st.success("✅ Berhasil! Data kunjungan tersimpan otomatis di sheet 'Record Activity'.")
                                 time.sleep(1.5)
                                 st.rerun()
                             else:
@@ -3028,46 +3034,89 @@ elif st.session_state.page == "🧭 SiPLANING":
         # ---------------------------------------------------------
         with tab_plan3:
             st.markdown("### 📈 Project Planning, SOW & Progress Persentase")
-            st.info("💡 Halaman ini memproyeksikan Target Planning Project menggunakan Gantt Chart / Timeline (Grafik) serta rasio persentase keberhasilan harian tim.")
+            st.info("💡 Halaman ini memproyeksikan Target Planning Project menggunakan Gantt Chart Estetik & Profesional serta rasio keberhasilan harian tim.")
             
             if len(record_act_rows) > 1:
                 df_proj = pd.DataFrame(record_act_rows[1:], columns=record_act_rows[0] if len(record_act_rows) > 0 else [])
                 
                 if df_proj.shape[1] > 7:
-                    # 1. Grafik Pie/Donut: Progress Keseluruhan (Berdasarkan Status COMPLETED / IN PROGRESS)
-                    st.markdown("#### 🎯 Status Progress Project (Overal)")
-                    status_counts = df_proj.iloc[:, 7].value_counts().reset_index()
+                    # Rename columns to ensure robust mapping regardless of header in Google Sheets
+                    df_proj.columns = ["Timestamp", "Plan_Date", "NOP", "PIC", "Site_ID", "SOW", "Checklist", "Status"] + list(df_proj.columns[8:])
+                    
+                    st.markdown("#### 🎯 Status Progress Project (Keseluruhan)")
+                    status_counts = df_proj['Status'].value_counts().reset_index()
                     status_counts.columns = ['Status Pekerjaan', 'Jumlah']
                     
-                    fig_pie = px.pie(status_counts, names='Status Pekerjaan', values='Jumlah', hole=0.4, color='Status Pekerjaan',
+                    fig_pie = px.pie(status_counts, names='Status Pekerjaan', values='Jumlah', hole=0.45, 
+                                     color='Status Pekerjaan',
                                      color_discrete_map={'COMPLETED': '#10B981', 'IN PROGRESS': '#F59E0B'})
+                    
+                    fig_pie.update_layout(
+                        plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+                        font_family="'Plus Jakarta Sans', sans-serif",
+                        margin=dict(t=10, b=10, l=10, r=10),
+                        legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5)
+                    )
+                    fig_pie.update_traces(textposition='inside', textinfo='percent+label', marker=dict(line=dict(color='#ffffff', width=2)))
                     st.plotly_chart(fig_pie, use_container_width=True)
                     
                     st.markdown("<hr>", unsafe_allow_html=True)
                     
-                    # 2. GANTT CHART (Timplan Project / Timeline)
-                    st.markdown("#### 📅 Timplan Project (Gantt Chart Harian)")
+                    # --- 2. GANTT CHART ESTETIK (TIMELINE PROFESIONAL) ---
+                    st.markdown("#### 📅 Timeline Pekerjaan (Project Plan)")
                     
-                    # Bersihkan kolom Tanggal Plan dan buat Tanggal Selesai (End Date)
-                    df_proj['Plan_Date_Parsed'] = pd.to_datetime(df_proj.iloc[:, 1], format='%d/%m/%Y', errors='coerce')
-                    df_gantt = df_proj.dropna(subset=['Plan_Date_Parsed']).copy()
+                    df_gantt = df_proj.copy()
+                    df_gantt['Plan_Date_Parsed'] = pd.to_datetime(df_gantt['Plan_Date'], format='%d/%m/%Y', errors='coerce')
+                    df_gantt = df_gantt.dropna(subset=['Plan_Date_Parsed'])
                     
                     if not df_gantt.empty:
-                        # Buat End Date buatan (misal +1 hari untuk menampilkan bar chart di plotly)
+                        # Setup durasi buatan (+1 Hari) agar grafis balok (bar) terlihat jelas
                         df_gantt['End_Date'] = df_gantt['Plan_Date_Parsed'] + pd.Timedelta(days=1)
-                        # Buat nama Task (Gabungan PIC dan Site ID)
-                        df_gantt['Task_Name'] = df_gantt.iloc[:, 3].astype(str) + " - " + df_gantt.iloc[:, 4].astype(str)
+                        # Nama Bar: Site ID digabung dengan Label SOW
+                        df_gantt['Task_Name'] = df_gantt['Site_ID'].astype(str) + " [" + df_gantt['SOW'].astype(str) + "]"
                         
                         fig_gantt = px.timeline(
                             df_gantt, 
                             x_start="Plan_Date_Parsed", 
                             x_end="End_Date", 
                             y="Task_Name", 
-                            color=df_gantt.columns[7], # Diwarnai berdasarkan status COMPLETED/IN PROGRESS
-                            color_discrete_map={'COMPLETED': '#10B981', 'IN PROGRESS': '#F59E0B'},
-                            hover_data=[df_gantt.columns[5]] # Menampilkan info SOW saat di-hover
+                            color="Status", 
+                            color_discrete_map={'COMPLETED': '#10B981', 'IN PROGRESS': '#0ea5e9'},
+                            hover_data={"PIC": True, "SOW": True, "Status": True, "End_Date": False}
                         )
-                        # Balik urutan agar tugas terbaru/pertama ada di atas
+                        
+                        # --- STYLING PROFESIONAL & CLEAN ---
+                        fig_gantt.update_layout(
+                            plot_bgcolor="rgba(248, 250, 252, 0.5)",  # Soft background
+                            paper_bgcolor="rgba(0,0,0,0)",
+                            font_family="'Plus Jakarta Sans', sans-serif",
+                            margin=dict(l=10, r=20, t=50, b=20),
+                            xaxis=dict(
+                                title="",
+                                showgrid=True,
+                                gridcolor="#e2e8f0",
+                                gridwidth=1,
+                                tickfont=dict(color="#64748b", size=11),
+                                side="top" # Memindahkan tanggal ke bagian atas agar lebih mudah dibaca
+                            ),
+                            yaxis=dict(
+                                title="",
+                                showgrid=False,
+                                tickfont=dict(color="#0f172a", size=12, weight="bold")
+                            ),
+                            legend=dict(
+                                orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1, title=""
+                            ),
+                            hoverlabel=dict(bgcolor="white", font_size=13, font_family="'Plus Jakarta Sans', sans-serif")
+                        )
+                        
+                        # Menambahkan bingkai putih pada bar agar terlihat timbul / tegas
+                        fig_gantt.update_traces(
+                            marker_line_color='rgb(255,255,255)', 
+                            marker_line_width=2,
+                            opacity=0.9
+                        )
+                        
                         fig_gantt.update_yaxes(autorange="reversed") 
                         st.plotly_chart(fig_gantt, use_container_width=True)
                     else:
@@ -3075,11 +3124,15 @@ elif st.session_state.page == "🧭 SiPLANING":
                     
                     st.markdown("<hr>", unsafe_allow_html=True)
                     
-                    # 3. Bar Chart: Distribusi Pekerjaan Berdasarkan SOW
+                    # 3. Bar Chart: Distribusi Pekerjaan
                     st.markdown("#### 📊 Distribusi Berdasarkan Kategori SOW")
-                    sow_counts = df_proj.iloc[:, 5].value_counts().reset_index()
+                    sow_counts = df_proj['SOW'].value_counts().reset_index()
                     sow_counts.columns = ["Scope of Work (SOW)", "Total Plan / Executed"]
-                    st.bar_chart(sow_counts.set_index("Scope of Work (SOW)"), use_container_width=True)
+                    
+                    fig_bar = px.bar(sow_counts, x="Total Plan / Executed", y="Scope of Work (SOW)", orientation='h', color="Total Plan / Executed", color_continuous_scale="Blues")
+                    fig_bar.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_family="'Plus Jakarta Sans', sans-serif", showlegend=False, xaxis_title="Total Pekerjaan", yaxis_title="")
+                    fig_bar.update_yaxes(autorange="reversed")
+                    st.plotly_chart(fig_bar, use_container_width=True)
                 else:
                     st.warning("Struktur kolom pada Record Activity belum lengkap untuk membangun grafik Progress & Timplan.")
             else:
