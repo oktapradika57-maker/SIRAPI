@@ -743,6 +743,9 @@ if st.session_state.page == "🏠 Hub Menu Utama":
             if st.button("🏦 MANAJEMEN KAS\n(Distribusi Dana)", use_container_width=True): st.session_state.page = "🏦 Manajemen Kas & Distribusi"; st.rerun()
             if st.button("🖨️ REPORT & AUTO PJB\n(Export Laporan)", use_container_width=True): st.session_state.page = "🖨️ Auto PJB Report"; st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
+        if st.button("🧭\nSiPLANING\n(Site Plan, Checklist & Progress)", use_container_width=True): 
+        st.session_state.page = "🧭 SiPLANING"
+        st.rerun()
 
     st.markdown("<div style='text-align: center; color: #94a3b8; font-size: 0.8rem; margin-top:50px;'>Created by Okta Pradika<br>KUT SYSTEM - v8.7 Enterprise Mobile Edition (3D)</div>", unsafe_allow_html=True)
 
@@ -799,6 +802,166 @@ elif st.session_state.page == "🎫 Master Tiket PM":
                 st.dataframe(pd.DataFrame(avail_pm_view), hide_index=True, use_container_width=True)
             else:
                 st.info("Tidak ada tiket PM yang tersedia di NOP ini. Silakan input di form sebelah kiri.")
+
+# ==========================================
+# PAGE: SiPLANING (Site Planning & Activity)
+# ==========================================
+elif st.session_state.page == "🧭 SiPLANING":
+    st.markdown("<div class='header-card'><h2>🧭 SiPLANING ENTERPRISE</h2><p>Sistem Perencanaan Kunjungan Site, Checklist Lapangan, Aktivitas & Project Progress SOW</p></div>", unsafe_allow_html=True)
+    
+    # Pilih Area NOP untuk Integrasi Data PIC & Site ID
+    nop_plan = st.selectbox("📂 Pilih Area Wilayah (NOP) untuk Integrasi Data:", ["-- Pilih NOP --"] + list(MASTER_DATA.keys()), key="nop_plan_select")
+    
+    if nop_plan != "-- Pilih NOP --":
+        target_ss = MASTER_DATA[nop_plan]["spreadsheet_id"]
+        site_dict, site_list, tim_dict, list_nopol_csv, nik_dict = load_excel_data()
+        
+        # Tarik data dari Spreadsheet (termasuk sheet Record Activity jika sudah ada)
+        data_all = fetch_spreadsheet_data(target_ss)
+        record_act_rows = data_all.get("Record Activity", [])
+        
+        # Tab Menu SiPLANING
+        tab_plan1, tab_plan2, tab_plan3 = st.tabs(["📋 1. Plan & Checklist Visit", "📊 2. Aktivitas & Rekap Tim", "📈 3. Planning Project & Progress SOW"])
+        
+        # ---------------------------------------------------------
+        # TAB 1: PLAN & CHECKLIST VISIT (INPUT & SAVE KE GOOGLE SHEETS)
+        # ---------------------------------------------------------
+        with tab_plan1:
+            st.markdown("### 📝 Form Rencana Kunjungan & Checklist Lapangan")
+            st.info(f"💡 Data PIC terintegrasi dengan database {nop_plan} dan Site ID merujuk pada master data site.")
+            
+            with st.form("form_siplaning"):
+                c_p1, c_p2 = st.columns(2)
+                with c_p1:
+                    tgl_plan = st.date_input("Tanggal Rencana Visit (Plan Date)")
+                    # Integrasi PIC dari MASTER_DATA NOP yang dipilih
+                    pic_visit = st.selectbox("PIC Visit (Petugas Lapangan)", ["-- Pilih PIC --"] + MASTER_DATA[nop_plan]["names"])
+                with c_p2:
+                    # Integrasi Site ID dari file Excel site
+                    if nop_plan == "Palangkaraya" and len(site_list) > 0:
+                        site_id_plan = st.selectbox("Site ID Plan", ["-- Pilih Site ID --"] + site_list)
+                    else:
+                        site_id_plan = st.text_input("Site ID Plan (Ketik Manual)")
+                        
+                    sow_visit = st.selectbox("SOW Visit (Scope of Work)", ["Preventative Maintenance (PM)", "Troubleshoot (TS)", "BBM Drop / Genset", "CME Work", "Survey / Audit", "Support Material"])
+                
+                st.markdown("#### ✅ Checklist Pekerjaan Lapangan")
+                col_ck1, col_ck2 = st.columns(2)
+                with col_ck1:
+                    chk_pre = st.checkbox("1. Pre-Check Perangkat & Keamanan Lokasi")
+                    chk_exec = st.checkbox("2. Eksekusi Pekerjaan Sesuai SOW")
+                with col_ck2:
+                    chk_post = st.checkbox("3. Post-Check / Test Normalisasi Perangkat")
+                    chk_foto = st.checkbox("4. Dokumentasi Foto & Berita Acara (BA)")
+                    
+                catatan_plan = st.text_area("Catatan Tambahan / Kendala Plan")
+                
+                submitted_plan = st.form_submit_button("💾 Simpan Rencana & Record Activity ke Sheets", use_company_width=True if 'use_company_width' in globals() else True)
+                
+                if submitted_plan:
+                    if pic_visit == "-- Pilih PIC --" or not site_id_plan or site_id_plan == "-- Pilih Site ID --":
+                        st.error("⚠️ Mohon lengkapi Nama PIC dan Site ID Plan dengan benar!")
+                    else:
+                        with st.spinner("Menyimpan record ke Google Spreadsheet..."):
+                            # Format status checklist
+                            checklist_status = f"Pre:[{'V' if chk_pre else 'X'}], Exec:[{'V' if chk_exec else 'X'}], Post:[{'V' if chk_post else 'X'}], Dok:[{'V' if chk_foto else 'X'}]"
+                            status_pekerjaan = "COMPLETED" if (chk_pre and chk_exec and chk_post and chk_foto) else "IN PROGRESS"
+                            
+                            row_data = [
+                                datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                                tgl_plan.strftime("%d/%m/%Y"),
+                                nop_plan,
+                                pic_visit,
+                                site_id_plan,
+                                sow_visit,
+                                checklist_status,
+                                status_pekerjaan,
+                                catatan_plan
+                            ]
+                            
+                            # Append ke sheet "Record Activity" sesuai link Google Sheets Anda
+                            success_save = append_data("Record Activity", row_data, target_ss)
+                            if success_save:
+                                st.success("✅ Berhasil! Data kunjungan dan checklist tersimpan otomatis di sheet 'Record Activity'.")
+                                time.sleep(1.5)
+                                st.rerun()
+                            else:
+                                st.error("⚠️ Gagal menyimpan ke sheet 'Record Activity'. Pastikan nama sheet tersebut sudah ada di Google Spreadsheet target.")
+
+            # Tombol Export ke Excel / CSV dari data Record Activity yang ada
+            st.markdown("<hr>", unsafe_allow_html=True)
+            if len(record_act_rows) > 1:
+                df_act = pd.DataFrame(record_act_rows[1:], columns=record_act_rows[0] if len(record_act_rows) > 0 else [])
+                st.markdown("#### 📥 Download / Export Record Activity")
+                
+                csv_data = df_act.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="📥 Download Record Activity (.csv / Excel)",
+                    data=csv_data,
+                    file_name=f"Record_Activity_{nop_plan}.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+                st.dataframe(df_act, hide_index=True, use_container_width=True)
+            else:
+                st.info("Belum ada data tercatat di sheet 'Record Activity' untuk wilayah ini.")
+
+        # ---------------------------------------------------------
+        # TAB 2: AKTIVITAS & REKAP TIM (MERANGKUM ISIAN TIM)
+        # ---------------------------------------------------------
+        with tab_plan2:
+            st.markdown("### 📊 Rangkuman Aktivitas Lapangan Tim")
+            if len(record_act_rows) > 1:
+                df_summary = pd.DataFrame(record_act_rows[1:], columns=record_act_rows[0] if len(record_act_rows) > 0 else [])
+                
+                # Metrik Ringkasan
+                tot_activity = len(df_summary)
+                completed_count = len(df_summary[df_summary.iloc[:, 7].str.upper() == "COMPLETED"]) if df_summary.shape[1] > 7 else 0
+                
+                mc1, mc2, mc3 = st.columns(3)
+                mc1.markdown(f"<div class='metric-3d'><div class='metric-title'>Total Aktivitas Tercatat</div><div class='metric-value'>{tot_activity}</div></div>", unsafe_allow_html=True)
+                mc2.markdown(f"<div class='metric-3d'><div class='metric-title'>Aktivitas Selesai (Completed)</div><div class='metric-value'>{completed_count}</div></div>", unsafe_allow_html=True)
+                mc3.markdown(f"<div class='metric-3d'><div class='metric-title'>Persentase Keberhasilan</div><div class='metric-value'>{(completed_count/tot_activity*100) if tot_activity>0 else 0:.1f}%</div></div>", unsafe_allow_html=True)
+                
+                st.markdown("#### 📋 Log Aktivitas Terkini")
+                st.dataframe(df_summary, hide_index=True, use_container_width=True)
+            else:
+                st.info("Belum ada aktivitas yang terangkum. Silakan lakukan input plan & checklist pada Tab 1.")
+
+        # ---------------------------------------------------------
+        # TAB 3: PLANNING PROJECT & PROGRESS SOW
+        # ---------------------------------------------------------
+        with tab_plan3:
+            st.markdown("### 📈 Project Planning, SOW & Progress Persentase")
+            st.info("💡 Halaman ini memproyeksikan Target Planning Project berdasarkan SOW (*Scope of Work*) dan pencapaian aktual tim di lapangan.")
+            
+            # Simulasi / Pengelompokan SOW Berdasarkan Data Record Activity
+            if len(record_act_rows) > 1:
+                df_proj = pd.DataFrame(record_act_rows[1:], columns=record_act_rows[0] if len(record_act_rows) > 0 else [])
+                
+                # Cek kolom SOW (asumsi kolom index ke-5 adalah SOW)
+                if df_proj.shape[1] > 5:
+                    sow_counts = df_proj.iloc[:, 5].value_counts().reset_index()
+                    sow_counts.columns = ["Scope of Work (SOW)", "Total Plan / Executed"]
+                    
+                    st.markdown("#### 📊 Distribusi Pekerjaan Berdasarkan SOW")
+                    st.bar_chart(sow_counts.set_index("Scope of Work (SOW)"), use_container_width=True)
+                    
+                    st.markdown("#### 🎯 Rincian Target & Progress SOW")
+                    st.dataframe(sow_counts, hide_index=True, use_container_width=True)
+                else:
+                    st.warning("Struktur kolom pada Record Activity belum lengkap untuk pembagian SOW.")
+            else:
+                st.markdown("""
+                    <div style='background-color:#F0F9FF; padding:20px; border-radius:10px; border-left:5px solid #0EA5E9;'>
+                        <h4>🎯 Panduan SOW & Project Planning</h4>
+                        <ul>
+                            <b>Preventative Maintenance (PM):</b> Pemeliharaan rutin perangkat site. Target: 100% Selesai bulanan.<br>
+                            <b>Troubleshoot (TS):</b> Perbaikan kendala darurat. Target: Respon cepat & normalisasi.<br>
+                            <b>BBM Drop / Genset:</b> Penyuplaian bahan bakar base station.
+                        </ul>
+                    </div>
+                """, unsafe_allow_html=True)
 
 
 # ==========================================
