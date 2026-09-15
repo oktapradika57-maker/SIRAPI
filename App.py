@@ -1302,6 +1302,18 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                 elif status_verif_dict.get(req_tk_raw) == "REJECTED":
                     is_ready_to_pjb = True 
                     
+                # ---------------------------------------------------------
+                # LOGIKA PENAHAN TIKET TAHAP 2 (MENCEGAH SALAH CLOSING TIM)
+                # ---------------------------------------------------------
+                if is_ready_to_pjb:
+                    if "[MOTOR-2]" in req_tk_raw or "[MOBIL-2]" in req_tk_raw:
+                        # Identifikasi nama tiket tahap 1-nya
+                        tiket_tahap_1 = req_tk_raw.replace("-2]", "-1]")
+                        # Jika tiket tahap 1 BELUM masuk ke database PJB selesai, sembunyikan tahap 2!
+                        if tiket_tahap_1 not in pjb_tickets_all_set:
+                            is_ready_to_pjb = False
+                
+                # Masukkan ke daftar jika lolos verifikasi
                 if is_ready_to_pjb:
                     item = {"Tanggal": r[1], "Nama": r[5], "No Request": req_tk_raw, "Kategori Item": r[10] if len(r)>10 else "", "Keperluan": r[8] if len(r)>8 else ""}
                     if pass_nominal == "B0924649": item["Nominal Request"] = f"Rp {clean_nominal(r[9]):,.0f}" if len(r)>9 else "Rp 0"
