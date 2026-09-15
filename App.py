@@ -976,6 +976,9 @@ elif st.session_state.page == "📝 Form Request Dana":
             st.markdown("<div style='background-color:#F8FAFC; padding:15px; border-radius:10px; border-left: 5px solid #3B82F6; margin-bottom: 15px; box-shadow: 2px 2px 5px rgba(0,0,0,0.05);'>", unsafe_allow_html=True)
             jns_bbm_list = st.multiselect("BBM untuk Kendaraan/Peralatan apa saja?", ["Mobil", "Motor", "Genset"])
             
+            # ---------------------------------------------------------
+            # LOGIKA MOBIL (OPSI 1x ATAU 2x PENGISIAN)
+            # ---------------------------------------------------------
             if "Mobil" in jns_bbm_list:
                 is_mobil = True
                 with st.expander("🚙 Input Nominal & Indikator BBM Mobil", expanded=True):
@@ -984,10 +987,21 @@ elif st.session_state.page == "📝 Form Request Dana":
                         jb_mobil = st.selectbox("Jenis BBM Mobil", ["Pertalite", "Pertamax", "Dexlite", "Bio Solar", "Pertamina Dex"], key="b_mob")
                         est_liter_mob = round(jarak_km_pp / 9.0, 1) if jarak_km_pp > 0 else 5.0
                         est_harga_mob = 10000 if "Pertalite" in jb_mobil else (12500 if "Pertamax" in jb_mobil else (14500 if "Dexlite" in jb_mobil else 6800))
-                        default_est_dana_mob = int(est_liter_mob * est_harga_mob)
                         
-                        keb_mobil = st.number_input("Estimasi Dana BBM Mobil (Rp)", min_value=0, step=1000, value=default_est_dana_mob, key="k_mob")
-                        st.info(f"⛽ Estimasi ± **{est_liter_mob} Liter**.")
+                        opsi_pengisian_mob = st.radio("Opsi Pengisian Mobil:", ["1x Pengisian", "2x Pengisian (Kapasitas Tangki Kurang)"], key="opt_mob")
+                        
+                        if opsi_pengisian_mob == "1x Pengisian":
+                            keb_mobil = st.number_input("Estimasi Dana BBM Mobil (Rp)", min_value=0, step=1000, value=int(est_liter_mob * est_harga_mob), key="k_mob")
+                            st.info(f"⛽ Estimasi ± **{est_liter_mob} Liter**.")
+                        else:
+                            st.info("💡 Sistem otomatis memecah tiket ini jadi [MOBIL-1] & [MOBIL-2].")
+                            l_mob_1 = st.number_input("Liter Pengisian 1 (Wajib)", min_value=1.0, step=1.0, value=est_liter_mob / 2, key="lmob_1")
+                            l_mob_2 = st.number_input("Liter Pengisian 2 (Wajib)", min_value=1.0, step=1.0, value=est_liter_mob / 2, key="lmob_2")
+                            
+                            keb_mobil_1 = int(l_mob_1 * est_harga_mob)
+                            keb_mobil_2 = int(l_mob_2 * est_harga_mob)
+                            st.info(f"💰 Estimasi Total (Tahap 1+2): Rp {(keb_mobil_1 + keb_mobil_2):,.0f}")
+
                     with c_m2:
                         idx_mob = options_nopol.index(auto_nopol) if auto_nopol in options_nopol else 0
                         pilihan_mob = st.selectbox("Plat Mobil", options_nopol, index=idx_mob, key="p_mob")
@@ -997,8 +1011,15 @@ elif st.session_state.page == "📝 Form Request Dana":
                         last_km_mob = get_last_indicator(plat_mobil, "Mobil", pjb_r)
                         km_awal_mob = st.number_input(f"KM Awal Mobil (Last: {last_km_mob})", min_value=0.0, step=0.1, value=float(last_km_mob), key="km_mob")
                         
-                    sub_requests.append({"tiket": f"{base_tiket_clean} [MOBIL]", "kategori": f"Mobil - {jb_mobil}", "kebutuhan": keb_mobil, "plat": plat_mobil, "indikator": km_awal_mob, "last_ind": last_km_mob, "tipe": "Mobil"})
-                    
+                    if opsi_pengisian_mob == "1x Pengisian":
+                        sub_requests.append({"tiket": f"{base_tiket_clean} [MOBIL]", "kategori": f"Mobil - {jb_mobil}", "kebutuhan": keb_mobil, "plat": plat_mobil, "indikator": km_awal_mob, "last_ind": last_km_mob, "tipe": "Mobil"})
+                    else:
+                        sub_requests.append({"tiket": f"{base_tiket_clean} [MOBIL-1]", "kategori": f"Mobil - {jb_mobil} (Isi 1)", "kebutuhan": keb_mobil_1, "plat": plat_mobil, "indikator": km_awal_mob, "last_ind": last_km_mob, "tipe": "Mobil"})
+                        sub_requests.append({"tiket": f"{base_tiket_clean} [MOBIL-2]", "kategori": f"Mobil - {jb_mobil} (Isi 2)", "kebutuhan": keb_mobil_2, "plat": plat_mobil, "indikator": km_awal_mob, "last_ind": last_km_mob, "tipe": "Mobil"})
+
+            # ---------------------------------------------------------
+            # LOGIKA MOTOR (OPSI 1x ATAU 2x PENGISIAN)
+            # ---------------------------------------------------------
             if "Motor" in jns_bbm_list:
                 is_motor = True
                 with st.expander("🏍️ Input Nominal & Indikator BBM Motor", expanded=True):
@@ -1006,12 +1027,33 @@ elif st.session_state.page == "📝 Form Request Dana":
                     with c_mt1:
                         k_tangki = st.number_input("Kapasitas Tangki (Liter)", min_value=0.0, step=0.1, value=4.0, key="kt_mot")
                         h_satuan = st.number_input("Harga Satuan (Rp/Liter)", min_value=0, step=500, value=10000, key="hs_mot")
-                        
                         est_l_mot = round(jarak_km_pp / 35.0, 1) if jarak_km_pp > 0 else 2.0
-                        l_butuh = st.number_input("Liter Kebutuhan?", min_value=0.0, step=0.1, value=est_l_mot, key="lb_mot")
-                        keb_motor = int(l_butuh * h_satuan)
-                        st.info(f"💰 Estimasi Rp {keb_motor:,.0f}")
+                        
+                        opsi_pengisian = st.radio("Opsi Pengisian Motor:", ["1x Pengisian", "2x Pengisian (Kapasitas Tangki Kurang)"], key="opt_mot")
+                        
+                        if opsi_pengisian == "1x Pengisian":
+                            l_butuh = st.number_input("Liter Kebutuhan?", min_value=0.0, step=0.1, value=est_l_mot, key="lb_mot")
+                            keb_motor = int(l_butuh * h_satuan)
+                            st.info(f"💰 Estimasi Rp {keb_motor:,.0f}")
+                            if l_butuh > k_tangki and k_tangki > 0:
+                                st.error("🚨 Pengisian melebihi kapasitas tangki! Silakan pilih Opsi 2x Pengisian.")
+                                motor_limit_lock = True
+                        else:
+                            st.info("💡 Sistem otomatis memecah tiket ini jadi [MOTOR-1] & [MOTOR-2].")
+                            l_butuh_1 = st.number_input("Liter Pengisian 1 (Wajib)", min_value=0.1, step=0.1, value=k_tangki if k_tangki > 0 else 4.0, key="lmot_1")
+                            sisa_est = est_l_mot - l_butuh_1 if est_l_mot > l_butuh_1 else 1.0
+                            l_butuh_2 = st.number_input("Liter Pengisian 2 (Wajib)", min_value=0.1, step=0.1, value=sisa_est, key="lmot_2")
+                            
+                            keb_motor_1 = int(l_butuh_1 * h_satuan)
+                            keb_motor_2 = int(l_butuh_2 * h_satuan)
+                            st.info(f"💰 Estimasi Total (Tahap 1+2): Rp {(keb_motor_1 + keb_motor_2):,.0f}")
+                            
+                            if (l_butuh_1 > k_tangki and k_tangki > 0) or (l_butuh_2 > k_tangki and k_tangki > 0):
+                                st.error("🚨 Setiap pengisian per-tahap tidak boleh melebihi kapasitas tangki!")
+                                motor_limit_lock = True
+                                
                         jb_motor = st.selectbox("Jenis BBM Motor", ["Pertalite", "Pertamax"], key="b_mot")
+                    
                     with c_mt2:
                         idx_mot = options_nopol.index(auto_nopol) if auto_nopol in options_nopol else 0
                         pilihan_mot = st.selectbox("Plat Motor", options_nopol, index=idx_mot, key="p_mot")
@@ -1021,11 +1063,12 @@ elif st.session_state.page == "📝 Form Request Dana":
                         last_km_mot = get_last_indicator(plat_motor, "Motor", pjb_r)
                         km_awal_mot = st.number_input(f"KM Awal Motor (Last: {last_km_mot})", min_value=0.0, step=0.1, value=float(last_km_mot), key="km_mot")
                     
-                    if l_butuh > k_tangki and k_tangki > 0:
-                        st.error("🚨 Pengisian melebihi kapasitas tangki!")
-                        motor_limit_lock = True
-                        
-                    sub_requests.append({"tiket": f"{base_tiket_clean} [MOTOR]", "kategori": f"Motor - {jb_motor}", "kebutuhan": keb_motor, "plat": plat_motor, "indikator": km_awal_mot, "last_ind": last_km_mot, "tipe": "Motor"})
+                    if not motor_limit_lock:
+                        if opsi_pengisian == "1x Pengisian":
+                            sub_requests.append({"tiket": f"{base_tiket_clean} [MOTOR]", "kategori": f"Motor - {jb_motor}", "kebutuhan": keb_motor, "plat": plat_motor, "indikator": km_awal_mot, "last_ind": last_km_mot, "tipe": "Motor"})
+                        else:
+                            sub_requests.append({"tiket": f"{base_tiket_clean} [MOTOR-1]", "kategori": f"Motor - {jb_motor} (Isi 1)", "kebutuhan": keb_motor_1, "plat": plat_motor, "indikator": km_awal_mot, "last_ind": last_km_mot, "tipe": "Motor"})
+                            sub_requests.append({"tiket": f"{base_tiket_clean} [MOTOR-2]", "kategori": f"Motor - {jb_motor} (Isi 2)", "kebutuhan": keb_motor_2, "plat": plat_motor, "indikator": km_awal_mot, "last_ind": last_km_mot, "tipe": "Motor"})
                     
                     current_month_str = datetime.now().strftime("%m/%Y")
                     for r in req_r[1:]:
