@@ -25,6 +25,19 @@ import numpy as np
 # ==========================================
 st.set_page_config(page_title="SiRAPI Enterprise", page_icon="💸", layout="wide", initial_sidebar_state="collapsed")
 
+# --- SISTEM REMEMBER ME (TETAP LOGIN) ---
+cookie_controller = CookieController()
+saved_user = cookie_controller.get("user_sirapi")
+
+# Jika ada cookie tersimpan dan session belum ada, otomatiskan login!
+if saved_user and st.session_state.get("logged_in_user") is None:
+    st.session_state.logged_in_user = saved_user
+    # Pastikan variabel di bawah sesuai dengan nama state yang Anda gunakan saat login sukses
+    st.session_state.is_logged_in = True 
+    if st.session_state.get("page") == "Login":
+        st.session_state.page = "🏠 Hub Menu Utama"
+# ----------------------------------------
+
 st.markdown("""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
