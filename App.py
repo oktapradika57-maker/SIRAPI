@@ -1249,9 +1249,14 @@ elif st.session_state.page == "📝 Form Request Dana":
                         ]
                         pesan_semangat = random.choice(kata_motivasi)
                         
-                        # Menampilkan pesan motivasi sebagai notifikasi elegan di sudut layar
-                        st.toast(f"💡 {pesan_semangat}", icon="✨") st.success(f"🎉 Berhasil memecah {len(sub_requests)} tiket terpisah!"); time.sleep(3); st.session_state.page = "🏠 Hub Menu Utama"; st.rerun()
-
+                        # Menampilkan pesan motivasi
+                        st.toast(f"💡 {pesan_semangat}", icon="✨")
+                        
+                        # Notifikasi sukses dan pindah halaman
+                        st.success(f"🎉 Berhasil memecah {len(sub_requests)} tiket terpisah!")
+                        time.sleep(3)
+                        st.session_state.page = "🏠 Hub Menu Utama"
+                        st.rerun()
 
 # ==========================================
 # PAGE 2: FORM PJB OPERASIONAL 
