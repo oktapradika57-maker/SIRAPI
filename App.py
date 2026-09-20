@@ -546,12 +546,17 @@ if not st.session_state.is_authenticated:
                                         sudah_absen = True
                                         break
                     except: pass
-                st.session_state.has_absent = sudah_absen
-                st.session_state.needs_routing = sudah_absen
-                st.success(f"✅ Login Berhasil! Selamat datang, {selected_user}.")
-                time.sleep(1)
-                st.rerun()
-    st.stop() 
+               st.session_state.has_absent = sudah_absen
+            st.session_state.needs_routing = sudah_absen
+            
+            # --- MENYIMPAN DATA LOGIN DI HP (SELAMA 30 HARI) ---
+            cookie_controller.set("user_sirapi", selected_user, max_age=30*86400)
+            # ---------------------------------------------------
+            
+            st.success(f"✅ Login Berhasil! Selamat datang, {selected_user}.")
+            time.sleep(1)
+            st.rerun()
+    st.stop()
 
 # ==========================================
 # 0.6. INTERCEPTOR: ABSENSI HARIAN
