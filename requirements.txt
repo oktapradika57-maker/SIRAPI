@@ -7,3 +7,4 @@ opencv-python-headless
 numpy
 plotly
 streamlit>=1.38.0
+streamlit-cookies-controller
