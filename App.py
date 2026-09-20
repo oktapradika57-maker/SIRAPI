@@ -546,7 +546,7 @@ if not st.session_state.is_authenticated:
                                         sudah_absen = True
                                         break
                     except: pass
-               st.session_state.has_absent = sudah_absen
+            st.session_state.has_absent = sudah_absen
             st.session_state.needs_routing = sudah_absen
             
             # --- MENYIMPAN DATA LOGIN DI HP (SELAMA 30 HARI) ---
