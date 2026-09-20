@@ -1,4 +1,5 @@
 import streamlit as st
+import random
 import pandas as pd
 import gspread
 import base64
@@ -1238,7 +1239,18 @@ elif st.session_state.page == "📝 Form Request Dana":
                                 
                         if pm_selected_list: update_pm_ticket_status(target_ss, pm_selected_list, "REQUESTED")
                             
-                        st.balloons(); st.success(f"🎉 Berhasil memecah {len(sub_requests)} tiket terpisah!"); time.sleep(3); st.session_state.page = "🏠 Hub Menu Utama"; st.rerun()
+                       # Daftar kata motivasi (bisa Anda tambah/ubah sendiri)
+                        kata_motivasi = [
+                            "Kejujuran adalah kunci keberhasilan. Terima kasih atas kerja kerasmu hari ini! 💪",
+                            "Jujur dalam bekerja demi senyum keluarga di rumah. Keringatmu adalah ibadah! 🏡✨",
+                            "Satu kejujuran bernilai lebih dari seribu kebohongan. Lanjutkan dedikasimu! 🌟",
+                            "Tetap semangat! Hasil yang berkah berasal dari proses yang jujur dan transparan. 🤝",
+                            "Keringat di lapangan adalah pahlawan keluarga. Jaga integritas dan pulanglah dengan bangga! 💼"
+                        ]
+                        pesan_semangat = random.choice(kata_motivasi)
+                        
+                        # Menampilkan pesan motivasi sebagai notifikasi elegan di sudut layar
+                        st.toast(f"💡 {pesan_semangat}", icon="✨") st.success(f"🎉 Berhasil memecah {len(sub_requests)} tiket terpisah!"); time.sleep(3); st.session_state.page = "🏠 Hub Menu Utama"; st.rerun()
 
 
 # ==========================================
