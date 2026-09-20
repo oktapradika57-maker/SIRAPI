@@ -1681,7 +1681,19 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                         
                         if sukses_pjb: 
                             append_data(SHEET_APP, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), d["Nama"], valid_cari_tiket, "Verifikasi PJB", nominal_pjb, "PENDING", "-"], target_ss)
-                            st.balloons()
+                            
+                            # --- PESAN MOTIVASI PENGGANTI BALON ---
+                            import random
+                            kata_motivasi = [
+                                "Kejujuran adalah kunci keberhasilan. Terima kasih atas kerja kerasmu hari ini! 💪",
+                                "Jujur dalam bekerja demi senyum keluarga di rumah. Keringatmu adalah ibadah! 🏡✨",
+                                "Satu kejujuran bernilai lebih dari seribu kebohongan. Lanjutkan dedikasimu! 🌟",
+                                "Tetap semangat! Hasil yang berkah berasal dari proses yang jujur dan transparan. 🤝",
+                                "Keringat di lapangan adalah pahlawan keluarga. Jaga integritas dan pulanglah dengan bangga! 💼"
+                            ]
+                            st.toast(f"💡 {random.choice(kata_motivasi)}", icon="✨")
+                            # --------------------------------------
+                            
                             st.success(f"🎉 PJB Berhasil Dikirim untuk Verifikasi Admin!")
                             st.session_state.pjb_data = None
                             if "Operational" in jns_pjb:
