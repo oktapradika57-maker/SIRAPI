@@ -6,4 +6,3 @@ openpyxl
 opencv-python-headless
 numpy
 plotly
-import random
