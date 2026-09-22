@@ -25,25 +25,18 @@ import numpy as np
 # ==========================================
 st.set_page_config(page_title="SiRAPI Enterprise", page_icon="💸", layout="wide", initial_sidebar_state="collapsed")
 
-# --- SISTEM REMEMBER ME (LEBIH STABIL & INSTAN) ---
-import extra_streamlit_components as stx
+# --- SISTEM REMEMBER ME (TETAP LOGIN) ---
+cookie_controller = CookieController()
+saved_user = cookie_controller.get("user_sirapi")
 
-@st.cache_resource
-def get_cookie_manager():
-    return stx.CookieManager(key="cookie_manager")
-
-cookie_manager = get_cookie_manager()
-# Memaksa sistem membaca memori browser sebelum halaman memuat tampilan
-cookie_manager.get_all() 
-
-saved_user = cookie_manager.get(cookie="user_sirapi")
-
+# Jika ada cookie tersimpan dan session belum ada, otomatiskan login!
 if saved_user and st.session_state.get("logged_in_user") is None:
     st.session_state.logged_in_user = saved_user
-    st.session_state.is_logged_in = True
+    # Pastikan variabel di bawah sesuai dengan nama state yang Anda gunakan saat login sukses
+    st.session_state.is_logged_in = True 
     if st.session_state.get("page") == "Login":
         st.session_state.page = "🏠 Hub Menu Utama"
-# ---------------------------------------------------
+# ----------------------------------------
 
 st.markdown("""
     <style>
@@ -553,17 +546,12 @@ if not st.session_state.is_authenticated:
                                         sudah_absen = True
                                         break
                     except: pass
-            st.session_state.has_absent = sudah_absen
-            st.session_state.needs_routing = sudah_absen
-            
-            # Menyimpan cookie dengan extra-streamlit-components
-            cookie_manager.set("user_sirapi", selected_user, max_age=30*86400)
-            # ---------------------------------------------------
-            
-            st.success(f"✅ Login Berhasil! Selamat datang, {selected_user}.")
-            time.sleep(1)
-            st.rerun()
-    st.stop()
+                st.session_state.has_absent = sudah_absen
+                st.session_state.needs_routing = sudah_absen
+                st.success(f"✅ Login Berhasil! Selamat datang, {selected_user}.")
+                time.sleep(1)
+                st.rerun()
+    st.stop() 
 
 # ==========================================
 # 0.6. INTERCEPTOR: ABSENSI HARIAN
