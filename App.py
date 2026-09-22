@@ -25,18 +25,25 @@ import numpy as np
 # ==========================================
 st.set_page_config(page_title="SiRAPI Enterprise", page_icon="💸", layout="wide", initial_sidebar_state="collapsed")
 
-# --- SISTEM REMEMBER ME (TETAP LOGIN) ---
-cookie_controller = CookieController()
-saved_user = cookie_controller.get("user_sirapi")
+# --- SISTEM REMEMBER ME (LEBIH STABIL & INSTAN) ---
+import extra_streamlit_components as stx
 
-# Jika ada cookie tersimpan dan session belum ada, otomatiskan login!
+@st.cache_resource(experimental_allow_widgets=True)
+def get_cookie_manager():
+    return stx.CookieManager()
+
+cookie_manager = get_cookie_manager()
+# Memaksa sistem membaca memori browser sebelum halaman memuat tampilan
+cookie_manager.get_all() 
+
+saved_user = cookie_manager.get(cookie="user_sirapi")
+
 if saved_user and st.session_state.get("logged_in_user") is None:
     st.session_state.logged_in_user = saved_user
-    # Pastikan variabel di bawah sesuai dengan nama state yang Anda gunakan saat login sukses
-    st.session_state.is_logged_in = True 
+    st.session_state.is_logged_in = True
     if st.session_state.get("page") == "Login":
         st.session_state.page = "🏠 Hub Menu Utama"
-# ----------------------------------------
+# ---------------------------------------------------
 
 st.markdown("""
     <style>
