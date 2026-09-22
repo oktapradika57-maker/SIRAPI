@@ -25,12 +25,10 @@ import numpy as np
 # ==========================================
 st.set_page_config(page_title="SiRAPI Enterprise", page_icon="💸", layout="wide", initial_sidebar_state="collapsed")
 
-# --- SISTEM REMEMBER ME (LEBIH STABIL & INSTAN) ---
 import extra_streamlit_components as stx
 
-@st.cache_resource
-def get_cookie_manager():
-    return stx.CookieManager(key="cookie_manager")
+# Inisialisasi langsung tanpa fungsi dan tanpa cache
+cookie_manager = stx.CookieManager(key="cookie_manager")
 
 cookie_manager = get_cookie_manager()
 # Memaksa sistem membaca memori browser sebelum halaman memuat tampilan
