@@ -556,8 +556,8 @@ if not st.session_state.is_authenticated:
             st.session_state.has_absent = sudah_absen
             st.session_state.needs_routing = sudah_absen
             
-            # --- MENYIMPAN DATA LOGIN DI HP (SELAMA 30 HARI) ---
-            cookie_controller.set("user_sirapi", selected_user, max_age=30*86400)
+            # Menyimpan cookie dengan extra-streamlit-components
+            cookie_manager.set("user_sirapi", selected_user, max_age=30*86400)
             # ---------------------------------------------------
             
             st.success(f"✅ Login Berhasil! Selamat datang, {selected_user}.")
