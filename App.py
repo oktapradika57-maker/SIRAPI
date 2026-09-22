@@ -27,14 +27,17 @@ st.set_page_config(page_title="SiRAPI Enterprise", page_icon="💸", layout="wid
 
 import extra_streamlit_components as stx
 
+# --- SISTEM REMEMBER ME (LEBIH STABIL & INSTAN) ---
+import extra_streamlit_components as stx
+
 # Inisialisasi langsung tanpa fungsi dan tanpa cache
 cookie_manager = stx.CookieManager(key="cookie_manager")
 
-cookie_manager = get_cookie_manager()
 # Memaksa sistem membaca memori browser sebelum halaman memuat tampilan
 cookie_manager.get_all() 
 
 saved_user = cookie_manager.get(cookie="user_sirapi")
+# ... (dan seterusnya)
 
 if saved_user and st.session_state.get("logged_in_user") is None:
     st.session_state.logged_in_user = saved_user
