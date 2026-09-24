@@ -1,11 +1,11 @@
 streamlit
+streamlit-cookies-controller
 pandas
 gspread
 cloudinary
-openpyxl
+requests
+google-auth
+Pillow
 opencv-python-headless
 numpy
-plotly
-streamlit>=1.38.0
-streamlit-cookies-controller
-extra-streamlit-components
+pytesseract
