@@ -139,7 +139,7 @@ LIST_KEPERLUAN = ["", "Tshoot", "Backup", "Support", "PM", "Program BCP", "Progr
 # ==========================================
 # 2. FUNGSI INTI & CACHING
 # ==========================================
-ddef ai_nota_checker(uploaded_file, expected_nominal, expected_date=None):
+def ai_nota_checker(uploaded_file, expected_nominal, expected_date=None):
     if uploaded_file is None: return True, "Tidak ada file"
     try:
         img = Image.open(uploaded_file)
