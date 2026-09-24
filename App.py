@@ -712,7 +712,7 @@ if st.session_state.page == "🏠 Hub Menu Utama":
                     
         with tab_tim_pending:
             st.info("Fitur ini menampilkan daftar tiket tim yang masih gantung (belum disubmit) mulai dari Agustus 2026 dan seterusnya ke depan.")
-    if st.button("🔍 Tarik Data Tim Belum PJB", use_container_width=True, type="primary"):
+            if st.button("🔍 Tarik Data Tim Belum PJB", use_container_width=True, type="primary"):
                 with st.spinner("Memindai seluruh data tim wilayah ini..."):
                     data_cek = fetch_spreadsheet_data(MASTER_DATA[cek_nop]["spreadsheet_id"])
                     req_r, pjb_r, app_r = data_cek[SHEET_REQUEST], data_cek[SHEET_PJB], data_cek[SHEET_APP]
