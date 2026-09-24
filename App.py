@@ -1,5 +1,5 @@
 import streamlit as st
-import extra_streamlit_components as stx
+from streamlit_cookies_controller import CookieController
 import random
 import pandas as pd
 import gspread
@@ -19,14 +19,19 @@ from PIL import Image, ExifTags
 import io
 import cv2
 import numpy as np
+import pytesseract
 
 # ==========================================
 # 0. KONFIGURASI HALAMAN & UI ELEGAN (FRESH & PROFESSIONAL)
 # ==========================================
 st.set_page_config(page_title="SiRAPI Enterprise", page_icon="💸", layout="wide", initial_sidebar_state="collapsed")
 
-saved_user = cookie_manager.get(cookie="user_sirapi")
-saved_date = cookie_manager.get(cookie="login_date")
+# --- SISTEM REMEMBER ME (LEBIH STABIL & INSTAN) ---
+cookie_manager = CookieController()
+
+# Membaca cookie secara aman tanpa menimbulkan NameError
+saved_user = cookie_manager.get("user_sirapi")
+saved_date = cookie_manager.get("login_date")
 today_date = datetime.now().strftime("%Y-%m-%d")
 
 if saved_user and saved_date == today_date and st.session_state.get("logged_in_user") is None:
@@ -131,8 +136,9 @@ MASTER_DATA = {
 }
 LIST_KEPERLUAN = ["", "Tshoot", "Backup", "Support", "PM", "Program BCP", "Program Quikwin", "Program G348T", "Pengiriman Material SPMS", "Pembelian Material","Transportasi Air"]
 
-import pytesseract # Wajib tambahkan 'pytesseract' di requirements.txt dan 'tesseract-ocr' di packages.txt (jika pakai Streamlit Cloud)
-
+# ==========================================
+# 2. FUNGSI INTI & CACHING
+# ==========================================
 def ai_nota_checker(uploaded_file, expected_nominal, expected_date=None):
     if uploaded_file is None: return True, "Tidak ada file"
     try:
@@ -152,9 +158,6 @@ def ai_nota_checker(uploaded_file, expected_nominal, expected_date=None):
         uploaded_file.seek(0)
         return True, "Bypass AI (Tesseract belum siap)"
 
-# ==========================================
-# 2. FUNGSI INTI & CACHING
-# ==========================================
 def ai_image_checker(uploaded_file, file_name_label):
     if uploaded_file is None:
         return True, "Tidak ada file"
@@ -496,13 +499,24 @@ def save_new_nopol_to_csv(new_plat):
 # ==========================================
 # 0.5. SISTEM KEAMANAN, AUTO LOGIN & ABSENSI
 # ==========================================
-# Menyimpan cookie dengan extra-streamlit-components (Masa aktif 24 Jam)
-cookie_manager.set("user_sirapi", selected_user, max_age=86400)
-cookie_manager.set("login_date", datetime.now().strftime("%Y-%m-%d"), max_age=86400)
-# ---------------------------------------------------            
-st.success(f"✅ Login Berhasil! Selamat datang, {selected_user}.")
-time.sleep(1)
-st.rerun()
+@st.cache_data(ttl=60)
+def load_user_credentials():
+    try:
+        df = pd.read_excel("pass and username.xlsx")
+        df.columns = df.columns.astype(str).str.strip().str.upper() 
+        creds = {}
+        if 'NAMA' in df.columns and 'NIK' in df.columns:
+            for _, row in df.iterrows():
+                nama = str(row['NAMA']).strip().upper()
+                nik = str(row['NIK']).replace('.0', '').strip() 
+                if nama != 'NAN' and nik != 'NAN' and nama != '':
+                    creds[nama] = nik
+        else:
+            st.error("⚠️ Kolom 'NAMA' dan 'NIK' tidak ditemukan di baris pertama Excel!")
+        return creds
+    except Exception as e:
+        st.error(f"⚠️ Gagal membaca file Excel 'pass and username.xlsx'. Pastikan file sudah terupload. Error: {e}")
+        return {}
 
 if 'is_authenticated' not in st.session_state: st.session_state.is_authenticated = False
 if 'logged_in_user' not in st.session_state: st.session_state.logged_in_user = ""
@@ -547,18 +561,19 @@ if not st.session_state.is_authenticated:
                         if found_nop:
                             d_cek = fetch_spreadsheet_data(MASTER_DATA[found_nop]["spreadsheet_id"])
                             absen_data = d_cek.get(SHEET_ABSENSI, [])
-                            today_str = datetime.now().strftime("%d/%m/%Y")
+                            today_str_abs = datetime.now().strftime("%d/%m/%Y")
                             for r in absen_data[1:]:
                                 if len(r) > 1 and str(r[1]).strip().upper() == selected_user.strip().upper():
-                                    if str(r[0]).split(" ")[0] == today_str:
+                                    if str(r[0]).split(" ")[0] == today_str_abs:
                                         sudah_absen = True
                                         break
                     except: pass
             st.session_state.has_absent = sudah_absen
             st.session_state.needs_routing = sudah_absen
             
-            # Menyimpan cookie dengan extra-streamlit-components
-            cookie_manager.set("user_sirapi", selected_user, max_age=30*86400)
+            # Menyimpan cookie dengan controller (Masa aktif 24 Jam = 86400 detik)
+            cookie_manager.set("user_sirapi", selected_user, max_age=86400)
+            cookie_manager.set("login_date", datetime.now().strftime("%Y-%m-%d"), max_age=86400)
             # ---------------------------------------------------
             
             st.success(f"✅ Login Berhasil! Selamat datang, {selected_user}.")
@@ -1266,7 +1281,7 @@ elif st.session_state.page == "📝 Form Request Dana":
                                 
                         if pm_selected_list: update_pm_ticket_status(target_ss, pm_selected_list, "REQUESTED")
                             
-                        import random
+                       # Daftar kata motivasi (bisa Anda tambah/ubah sendiri)
                         kata_motivasi = [
                             "Kejujuran adalah kunci keberhasilan. Terima kasih atas kerja kerasmu hari ini! 💪",
                             "Jujur dalam bekerja demi senyum keluarga di rumah. Keringatmu adalah ibadah! 🏡✨",
@@ -1276,7 +1291,10 @@ elif st.session_state.page == "📝 Form Request Dana":
                         ]
                         pesan_semangat = random.choice(kata_motivasi)
                         
+                        # Menampilkan pesan motivasi
                         st.toast(f"💡 {pesan_semangat}", icon="✨")
+                        
+                        # Notifikasi sukses dan pindah halaman
                         st.success(f"🎉 Berhasil memecah {len(sub_requests)} tiket terpisah!")
                         time.sleep(3)
                         st.session_state.page = "🏠 Hub Menu Utama"
@@ -1348,10 +1366,13 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                 # ---------------------------------------------------------
                 if is_ready_to_pjb:
                     if "[MOTOR-2]" in req_tk_raw or "[MOBIL-2]" in req_tk_raw:
+                        # Identifikasi nama tiket tahap 1-nya
                         tiket_tahap_1 = req_tk_raw.replace("-2]", "-1]")
+                        # Jika tiket tahap 1 BELUM masuk ke database PJB selesai, sembunyikan tahap 2!
                         if tiket_tahap_1 not in pjb_tickets_all_set:
                             is_ready_to_pjb = False
                 
+                # Masukkan ke daftar jika lolos verifikasi
                 if is_ready_to_pjb:
                     item = {"Tanggal": r[1], "Nama": r[5], "No Request": req_tk_raw, "Kategori Item": r[10] if len(r)>10 else "", "Keperluan": r[8] if len(r)>8 else ""}
                     if pass_nominal == "B0924649": item["Nominal Request"] = f"Rp {clean_nominal(r[9]):,.0f}" if len(r)>9 else "Rp 0"
@@ -1469,8 +1490,19 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                 is_vehicle = "mobil" in str(d["BBM"]).lower() or "motor" in str(d["BBM"]).lower() or is_genset
                 label_akhir = "RH Genset Akhir" if is_genset else "KM Akhir Kendaraan"
                 
+                jam_mulai_gen, jam_akhir_gen = None, None
+                f_tiket_genset = None
+                
                 if "Operational" in jns_pjb:
                     st.markdown("<div class='section-title'>📝 Realisasi Lapangan & Nominal (Fisik)</div>", unsafe_allow_html=True)
+                    
+                    if is_genset:
+                        st.markdown("<div style='background-color:#FFFBEB; padding:15px; border-radius:10px; border-left: 5px solid #F59E0B; margin-bottom: 15px;'><b>⚡ Validasi Wajib Genset MBP</b></div>", unsafe_allow_html=True)
+                        c_g1, c_g2, c_g3 = st.columns(3)
+                        with c_g1: jam_mulai_gen = st.time_input("Jam Mulai Backup", value=None)
+                        with c_g2: jam_akhir_gen = st.time_input("Jam Berakhir Backup", value=None)
+                        with c_g3: f_tiket_genset = st.file_uploader("Screenshot Tiket WAJIB", type=['jpg','png'])
+
                     if is_vehicle:
                         c_c1, c_d1 = st.columns(2)
                         with c_c1:
@@ -1478,7 +1510,7 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                             default_km_akhir = float(d.get("km_akhir_lama", real_km_awal))
                             km_akhir = st.number_input(f"{label_akhir} AKTUAL", min_value=0.0, value=default_km_akhir, step=0.1)
                             total_km_tempuh = km_akhir - real_km_awal
-                            if km_akhir > 0 and total_km_tempuh >= 0: st.info(f"Kalkulasi Trip: **{total_km_tempuh:.2f}**")
+                            if km_akhir > 0 and total_km_tempuh >= 0: st.info(f"Kalkulasi {'Total RH' if is_genset else 'Trip'}: **{total_km_tempuh:.2f}**")
                         with c_d1:
                             tot_liter = st.text_input("Total Liter BBM", value=d.get("liter_lama", "0"))
                             harga_satuan = st.number_input("Harga Satuan (BBM)", min_value=0, step=500, value=d.get("harga_lama", 0))
@@ -1525,6 +1557,14 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                 st.markdown("<br>", unsafe_allow_html=True)
                 if st.button("🚀 Sahkan Pelaporan PJB", type="primary", use_container_width=True):
 
+                    # --- AI CHECKER NOTA MULAI ---
+                    if "Operational" in jns_pjb and (f_nota_bbm is not None or f_km is not None) and tot_nilai_nota > 0:
+                        is_valid_nota, msg_nota = ai_nota_checker(f_nota_bbm if f_nota_bbm else f_km, tot_nilai_nota)
+                        if not is_valid_nota:
+                            st.error(msg_nota)
+                            st.stop()
+                    # --- AI CHECKER NOTA SELESAI ---
+
                     if "Operational" in jns_pjb and is_vehicle:
                         if km_akhir <= 0 or km_akhir < real_km_awal:
                             st.error("❌ PENGIRIMAN DITOLAK: KM/RH Akhir bermasalah!")
@@ -1547,11 +1587,15 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                         url_mat = upload_foto(f_mat) if f_mat else ""                  
                         url_notamat = upload_foto(f_notamat) if f_notamat else ""      
                         url_inap = upload_foto(f_inap) if f_inap else ""               
-                        url_kerja = upload_foto(f_kerja) if f_kerja else ""            
+                        url_kerja = upload_foto(f_kerja) if f_kerja else ""
+                        url_tiket_gen = upload_foto(f_tiket_genset) if f_tiket_genset else ""            
                         
                         tgl_berangkat_str = tgl_berangkat.strftime("%d/%m/%Y") if "Akomodasi" in jns_pjb else ""
                         lama_hari_str = str(lama_hari) if "Akomodasi" in jns_pjb else ""
                         nom_um_harian_str = str(nom_um_harian) if "Akomodasi" in jns_pjb else ""
+                        
+                        str_mulai_gen = jam_mulai_gen.strftime("%H:%M") if jam_mulai_gen else ""
+                        str_akhir_gen = jam_akhir_gen.strftime("%H:%M") if jam_akhir_gen else ""
                         
                         pdf_link_cloud = ""
                         b64_html = ""
@@ -1695,14 +1739,18 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                             st.session_state.pdf_html = b64_html
                             st.session_state.pdf_filename = f"Surat_PJB_{valid_cari_tiket[:10]}.html"
                             
-                        data_pjb = [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), tgl_pjb.strftime("%d/%m/%Y"), d["NOP"], d["Cluster"], d["Nama"], d["Role"], d["Site"], d["Keperluan"], d["BBM"], d["Desc"], str(km_akhir), nominal_pjb, d["Plat"], url_isi, url_notabbm, url_km, url_mat, url_notamat, url_inap, url_kerja, tot_nilai_nota, valid_cari_tiket, tot_liter, harga_satuan, str(round(total_km_tempuh, 2)), "", "", upload_foto(f_transfer), url_um1, url_um2, url_um3, url_um4, tgl_berangkat_str, lama_hari_str, nom_um_harian_str, pdf_link_cloud, specific_pm_tickets]
+                        data_pjb = [
+                            datetime.now().strftime("%d/%m/%Y %H:%M:%S"), tgl_pjb.strftime("%d/%m/%Y"), d["NOP"], d["Cluster"], d["Nama"], d["Role"], d["Site"], d["Keperluan"], d["BBM"], d["Desc"], str(km_akhir), nominal_pjb, d["Plat"], url_isi, url_notabbm, url_km, url_mat, url_notamat, url_inap, url_kerja, tot_nilai_nota, valid_cari_tiket, tot_liter, harga_satuan, str(round(total_km_tempuh, 2)), "", "", upload_foto(f_transfer), url_um1, url_um2, url_um3, url_um4, tgl_berangkat_str, lama_hari_str, nom_um_harian_str, pdf_link_cloud, specific_pm_tickets, 
+                            str_mulai_gen, str_akhir_gen, url_tiket_gen
+                        ]
                         
-                        data_pjb_padded = (data_pjb + [""] * 37)[:37]
+                        data_pjb_padded = (data_pjb + [""] * 40)[:40]
                         sukses_pjb = append_data(SHEET_PJB, data_pjb_padded, target_ss)
                         
                         if sukses_pjb: 
                             append_data(SHEET_APP, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), d["Nama"], valid_cari_tiket, "Verifikasi PJB", nominal_pjb, "PENDING", "-"], target_ss)
                             
+                            # --- PESAN MOTIVASI PENGGANTI BALON ---
                             import random
                             kata_motivasi = [
                                 "Kejujuran adalah kunci keberhasilan. Terima kasih atas kerja kerasmu hari ini! 💪",
@@ -1712,6 +1760,7 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                                 "Keringat di lapangan adalah pahlawan keluarga. Jaga integritas dan pulanglah dengan bangga! 💼"
                             ]
                             st.toast(f"💡 {random.choice(kata_motivasi)}", icon="✨")
+                            # --------------------------------------
                             
                             st.success(f"🎉 PJB Berhasil Dikirim untuk Verifikasi Admin!")
                             st.session_state.pjb_data = None
@@ -1962,7 +2011,7 @@ elif st.session_state.page == "📈 Live Monitoring":
         data_all = fetch_spreadsheet_data(MASTER_DATA[nop_live]["spreadsheet_id"])
         um_r, rekap_r, pjb_r, req_r, app_r = data_all[SHEET_UM], data_all["Rekap PJB"], data_all[SHEET_PJB], data_all[SHEET_REQUEST], data_all[SHEET_APP]
         
-        t1, t2, t3, t4 = st.tabs(["💰 1. Sisa Kas", "🚨 2. Anomali", "🕵️ 3. Evaluasi Satelit", "🚗 4. Performa Mobil (NOPOL)"])
+        t1, t2, t3, t4, t5 = st.tabs(["💰 1. Sisa Kas", "🚨 2. Anomali", "🕵️ 3. Evaluasi Satelit", "🚗 4. Performa Mobil (NOPOL)", "⚡ 5. Datalog Genset"])
         
         with t1:
             total_um = sum([clean_nominal(r[3]) for r in um_r[1:] if len(r)>3]) if len(um_r)>1 else 0
@@ -1974,7 +2023,7 @@ elif st.session_state.page == "📈 Live Monitoring":
             m3.markdown(f"<div class='metric-3d'><div class='metric-title'>Sisa Kas</div><div class='metric-value'>Rp {sisa_kas:,.0f}</div></div>", unsafe_allow_html=True)
             
             if len(pjb_r) > 1:
-                df_pjb_all = pd.DataFrame([(r + [""] * 37)[:37] for r in pjb_r[1:]], columns=["Waktu","Tanggal","N","C","Nama","R","S","Keperluan","BBM","D","KMAkhir","Nominal","Pl","u1","u2","u3","u4","u5","u6","u7","NN","NoTiket","Lt","Hs","TKM_RH","u8","u9","BuktiTF","UM1","UM2","UM3","UM4", "TglB", "LmHr", "NomH", "PDFLink", "PMMulti"])
+                df_pjb_all = pd.DataFrame([(r + [""] * 40)[:40] for r in pjb_r[1:]], columns=["Waktu","Tanggal","N","C","Nama","R","S","Keperluan","BBM","D","KMAkhir","Nominal","Pl","u1","u2","u3","u4","u5","u6","u7","NN","NoTiket","Lt","Hs","TKM_RH","u8","u9","BuktiTF","UM1","UM2","UM3","UM4", "TglB", "LmHr", "NomH", "PDFLink", "PMMulti", "JamMulai", "JamAkhir", "LinkTiket"])
                 df_pjb_all['Nominal_Clean'] = df_pjb_all['Nominal'].apply(clean_nominal)
                 df_pjb_all['Tanggal_PJB'] = pd.to_datetime(df_pjb_all['Tanggal'], format='%d/%m/%Y', errors='coerce')
                 df_daily = df_pjb_all.dropna(subset=['Tanggal_PJB']).groupby('Tanggal_PJB')['Nominal_Clean'].sum().reset_index().sort_values('Tanggal_PJB')
@@ -2059,50 +2108,88 @@ elif st.session_state.page == "📈 Live Monitoring":
 
         with t4:
             st.markdown("### 🚙 Analisa Performa & Efisiensi Mobil (Berdasarkan NOPOL)")
-            st.info("💡 **ANALISA KENDARAAN (FIXED):** Tabel ini menghitung jarak tempuh **TOTAL (Akumulasi)** dari selisih `KM Akhir - KM Awal` untuk setiap perjalanan yang dilakukan mobil bersangkutan. Menjadikan rasio Konsumsi Mesin (KM/L) sangat valid.")
+            st.info("💡 **AKURAT:** Tabel ini mengambil perhitungan absolut dari Plat Nopol langsung (mengabaikan salah ketik di form awal).")
             
             car_stats = {}
             for pjb in pjb_r[1:]:
                 if len(pjb) > 24:
                     kategori = str(pjb[8]).lower()
                     plat = str(pjb[12]).strip().upper()
-                    no_tiket = str(pjb[21]).strip().upper()
+                    
                     if "mobil" in kategori and plat and plat not in ["", "0", "NONE", "NAN"]:
                         if plat not in car_stats:
-                            car_stats[plat] = {"Total Jarak Trip (KM)": 0.0, "Total Liter": 0.0, "Total Dana (Rp)": 0}
+                            car_stats[plat] = {"Total KM": 0.0, "Total Liter": 0.0, "Total Dana": 0}
                         
-                        km_awal = 0.0
-                        req_match = next((x for x in req_r[1:] if len(x) > 13 and str(x[3]).strip().upper() == no_tiket), None)
-                        if req_match: km_awal = float(clean_indicator(req_match[12]))
-                        
-                        km_akhir = float(clean_indicator(pjb[10]))
-                        jarak_trip = km_akhir - km_awal if km_akhir > km_awal else 0.0
-                        
-                        try: liter = float(str(pjb[22]).replace(',', '.'))
-                        except: liter = 0.0
-                        try: nominal = clean_nominal(pjb[11])
-                        except: nominal = 0
-                        
-                        car_stats[plat]["Total Jarak Trip (KM)"] += jarak_trip
-                        car_stats[plat]["Total Liter"] += liter
-                        car_stats[plat]["Total Dana (Rp)"] += nominal
+                        try:
+                            # Hitung absolut trip dari sistem PJB langsung
+                            trip = float(pjb[24]) if len(pjb)>24 and str(pjb[24]).strip() else 0.0
+                            liter = float(str(pjb[22]).replace(',', '.')) if len(pjb)>22 else 0.0
+                            nominal = clean_nominal(pjb[11]) if len(pjb)>11 else 0
+                            
+                            car_stats[plat]["Total KM"] += trip
+                            car_stats[plat]["Total Liter"] += liter
+                            car_stats[plat]["Total Dana"] += nominal
+                        except: pass
             
             car_list = []
             for plat, data in car_stats.items():
-                eff = data["Total Jarak Trip (KM)"] / data["Total Liter"] if data["Total Liter"] > 0 else 0.0
+                eff = data["Total KM"] / data["Total Liter"] if data["Total Liter"] > 0 else 0.0
                 car_list.append({
                     "NOPOL Kendaraan": plat,
-                    "Total Akumulasi Jarak (KM)": round(data["Total Jarak Trip (KM)"], 2),
+                    "Total Akumulasi Jarak (KM)": round(data["Total KM"], 2),
                     "Total Pengisian BBM (Liter)": round(data["Total Liter"], 2),
-                    "Total Dana Dikeluarkan": f"Rp {data['Total Dana (Rp)']:,.0f}",
-                    "Konstanta Mesin / Efisiensi": f"{eff:.2f} KM / Liter"
+                    "Total Dana Dikeluarkan": f"Rp {data['Total Dana']:,.0f}",
+                    "Efisiensi Mesin": f"{eff:.2f} KM / Liter"
                 })
                 
             if car_list:
                 df_cars = pd.DataFrame(car_list).sort_values("Total Akumulasi Jarak (KM)", ascending=False)
                 st.dataframe(df_cars, hide_index=True, use_container_width=True)
+                st.download_button("📥 Export Data Mobil", data=df_cars.to_csv(index=False), file_name="Data_Mobil.csv")
             else:
-                st.info("Belum ada data PJB Mobil ber-NOPOL yang tercatat di database untuk dianalisa.")
+                st.info("Belum ada data perjalanan Mobil.")
+
+        with t5:
+            st.markdown("### ⚡ Datalog Rekapitulasi Performa Genset")
+            st.info("Log riwayat operasi Genset, validasi RH, dan bukti capturan tiket untuk tim MBP.")
+            
+            datalog_genset = []
+            for pjb in pjb_r[1:]:
+                if len(pjb) > 24 and "genset" in str(pjb[8]).lower():
+                    # Membaca data Jam Mulai/Akhir dari kolom 37, 38, 39
+                    jam_mulai = pjb[37] if len(pjb) > 37 else "-"
+                    jam_akhir = pjb[38] if len(pjb) > 38 else "-"
+                    link_tiket = pjb[39] if len(pjb) > 39 else ""
+                    
+                    try:
+                        no_tiket_gen = str(pjb[21]).strip().upper()
+                        req_match = next((x for x in req_r[1:] if len(x) > 13 and str(x[3]).strip().upper() == no_tiket_gen), None)
+                        rh_awal = float(clean_indicator(req_match[12])) if req_match else 0.0
+                        
+                        rh_akhir = float(clean_indicator(pjb[10]))
+                        total_rh = float(pjb[24]) if len(pjb)>24 and str(pjb[24]).strip() else (rh_akhir - rh_awal)
+                    except:
+                        rh_awal, rh_akhir, total_rh = 0.0, 0.0, 0.0
+
+                    datalog_genset.append({
+                        "Tanggal PJB": pjb[1],
+                        "No Tiket / Site": pjb[21],
+                        "Nama MBP": pjb[4],
+                        "ID Genset": pjb[12],
+                        "Jam Mulai": jam_mulai,
+                        "Jam Selesai": jam_akhir,
+                        "RH Awal": rh_awal,
+                        "RH Akhir": rh_akhir,
+                        "Total Run (RH)": round(total_rh, 2),
+                        "Bukti Tiket": link_tiket
+                    })
+            
+            if datalog_genset:
+                df_genset = pd.DataFrame(datalog_genset)
+                st.dataframe(df_genset, hide_index=True, use_container_width=True)
+                st.download_button("📥 Export Datalog Genset (CSV)", data=df_genset.to_csv(index=False), file_name="Datalog_Genset.csv")
+            else:
+                st.info("Belum ada datalog PJB Genset yang divalidasi.")
 
 
 # ==========================================
