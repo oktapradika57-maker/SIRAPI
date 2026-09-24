@@ -1,5 +1,5 @@
 import streamlit as st
-from streamlit_cookies_controller import CookieController
+import extra_streamlit_components as stx
 import random
 import pandas as pd
 import gspread
@@ -25,11 +25,7 @@ import numpy as np
 # ==========================================
 st.set_page_config(page_title="SiRAPI Enterprise", page_icon="💸", layout="wide", initial_sidebar_state="collapsed")
 
-import extra_streamlit_components as stx
-
 # --- SISTEM REMEMBER ME (LEBIH STABIL & INSTAN) ---
-import extra_streamlit_components as stx
-
 # Inisialisasi langsung tanpa fungsi dan tanpa cache
 cookie_manager = stx.CookieManager(key="cookie_manager")
 
@@ -37,11 +33,10 @@ cookie_manager = stx.CookieManager(key="cookie_manager")
 cookie_manager.get_all() 
 
 saved_user = cookie_manager.get(cookie="user_sirapi")
-# ... (dan seterusnya)
 
 if saved_user and st.session_state.get("logged_in_user") is None:
     st.session_state.logged_in_user = saved_user
-    st.session_state.is_logged_in = True
+    st.session_state.is_authenticated = True
     if st.session_state.get("page") == "Login":
         st.session_state.page = "🏠 Hub Menu Utama"
 # ---------------------------------------------------
@@ -1266,7 +1261,7 @@ elif st.session_state.page == "📝 Form Request Dana":
                                 
                         if pm_selected_list: update_pm_ticket_status(target_ss, pm_selected_list, "REQUESTED")
                             
-                       # Daftar kata motivasi (bisa Anda tambah/ubah sendiri)
+                        import random
                         kata_motivasi = [
                             "Kejujuran adalah kunci keberhasilan. Terima kasih atas kerja kerasmu hari ini! 💪",
                             "Jujur dalam bekerja demi senyum keluarga di rumah. Keringatmu adalah ibadah! 🏡✨",
@@ -1276,10 +1271,7 @@ elif st.session_state.page == "📝 Form Request Dana":
                         ]
                         pesan_semangat = random.choice(kata_motivasi)
                         
-                        # Menampilkan pesan motivasi
                         st.toast(f"💡 {pesan_semangat}", icon="✨")
-                        
-                        # Notifikasi sukses dan pindah halaman
                         st.success(f"🎉 Berhasil memecah {len(sub_requests)} tiket terpisah!")
                         time.sleep(3)
                         st.session_state.page = "🏠 Hub Menu Utama"
@@ -1351,13 +1343,10 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                 # ---------------------------------------------------------
                 if is_ready_to_pjb:
                     if "[MOTOR-2]" in req_tk_raw or "[MOBIL-2]" in req_tk_raw:
-                        # Identifikasi nama tiket tahap 1-nya
                         tiket_tahap_1 = req_tk_raw.replace("-2]", "-1]")
-                        # Jika tiket tahap 1 BELUM masuk ke database PJB selesai, sembunyikan tahap 2!
                         if tiket_tahap_1 not in pjb_tickets_all_set:
                             is_ready_to_pjb = False
                 
-                # Masukkan ke daftar jika lolos verifikasi
                 if is_ready_to_pjb:
                     item = {"Tanggal": r[1], "Nama": r[5], "No Request": req_tk_raw, "Kategori Item": r[10] if len(r)>10 else "", "Keperluan": r[8] if len(r)>8 else ""}
                     if pass_nominal == "B0924649": item["Nominal Request"] = f"Rp {clean_nominal(r[9]):,.0f}" if len(r)>9 else "Rp 0"
@@ -1709,7 +1698,6 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                         if sukses_pjb: 
                             append_data(SHEET_APP, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), d["Nama"], valid_cari_tiket, "Verifikasi PJB", nominal_pjb, "PENDING", "-"], target_ss)
                             
-                            # --- PESAN MOTIVASI PENGGANTI BALON ---
                             import random
                             kata_motivasi = [
                                 "Kejujuran adalah kunci keberhasilan. Terima kasih atas kerja kerasmu hari ini! 💪",
@@ -1719,7 +1707,6 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                                 "Keringat di lapangan adalah pahlawan keluarga. Jaga integritas dan pulanglah dengan bangga! 💼"
                             ]
                             st.toast(f"💡 {random.choice(kata_motivasi)}", icon="✨")
-                            # --------------------------------------
                             
                             st.success(f"🎉 PJB Berhasil Dikirim untuk Verifikasi Admin!")
                             st.session_state.pjb_data = None
