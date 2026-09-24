@@ -139,7 +139,7 @@ LIST_KEPERLUAN = ["", "Tshoot", "Backup", "Support", "PM", "Program BCP", "Progr
 # ==========================================
 # 2. FUNGSI INTI & CACHING
 # ==========================================
-def ai_nota_checker(uploaded_file, expected_nominal, expected_date=None):
+ddef ai_nota_checker(uploaded_file, expected_nominal, expected_date=None):
     if uploaded_file is None: return True, "Tidak ada file"
     try:
         img = Image.open(uploaded_file)
@@ -151,7 +151,7 @@ def ai_nota_checker(uploaded_file, expected_nominal, expected_date=None):
         
         # Validasi Nominal
         if str(expected_nominal) not in angka_ditemukan:
-            return False, f"🚨 AI REJECT: Nominal Rp {expected_nominal:,.0f} tidak ditemukan pada foto Nota. Harap upload nota yang benar/sesuai!"
+            return False, f"Nominal Rp {expected_nominal:,.0f} tidak terdeteksi sempurna oleh AI OCR."
             
         return True, "Valid"
     except Exception as e:
@@ -1555,14 +1555,15 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                     with c_um4: f_um4 = ui_image_uploader("Foto Aktivitas 4", key="um4")
 
                 st.markdown("<br>", unsafe_allow_html=True)
-                if st.button("🚀 Sahkan Pelaporan PJB", type="primary", use_container_width=True):
+               if st.button("🚀 Sahkan Pelaporan PJB", type="primary", use_container_width=True):
 
                     # --- AI CHECKER NOTA MULAI ---
+                    ai_mismatch_flag = False
+                    msg_nota = ""
                     if "Operational" in jns_pjb and (f_nota_bbm is not None or f_km is not None) and tot_nilai_nota > 0:
                         is_valid_nota, msg_nota = ai_nota_checker(f_nota_bbm if f_nota_bbm else f_km, tot_nilai_nota)
                         if not is_valid_nota:
-                            st.error(msg_nota)
-                            st.stop()
+                            ai_mismatch_flag = True # Hanya flag penanda, tidak lagi menggunakan st.stop()
                     # --- AI CHECKER NOTA SELESAI ---
 
                     if "Operational" in jns_pjb and is_vehicle:
@@ -1575,6 +1576,11 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                             st.stop()
                             
                     with st.spinner("Mengupload foto dan men-generate laporan ke sistem..."):
+                        
+                        # ==============================================================
+                        # (KODE UPLOAD FOTO DAN HTML PDF TETAP SAMA SEPERTI SEBELUMNYA)
+                        # Biarkan baris ini apa adanya sesuai aslinya
+                        # ==============================================================
                         if "Akomodasi" in jns_pjb: nominal_pjb = total_um_calc 
                             
                         url_um1 = upload_foto(f_um1) if f_um1 else ""
@@ -1599,6 +1605,50 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                         
                         pdf_link_cloud = ""
                         b64_html = ""
+                        
+                        # (Abaikan jika ada PDF generation di dalam sini, lanjutkan ke data_pjb)
+
+                        data_pjb = [
+                            datetime.now().strftime("%d/%m/%Y %H:%M:%S"), tgl_pjb.strftime("%d/%m/%Y"), d["NOP"], d["Cluster"], d["Nama"], d["Role"], d["Site"], d["Keperluan"], d["BBM"], d["Desc"], str(km_akhir), nominal_pjb, d["Plat"], url_isi, url_notabbm, url_km, url_mat, url_notamat, url_inap, url_kerja, tot_nilai_nota, valid_cari_tiket, tot_liter, harga_satuan, str(round(total_km_tempuh, 2)), "", "", upload_foto(f_transfer), url_um1, url_um2, url_um3, url_um4, tgl_berangkat_str, lama_hari_str, nom_um_harian_str, pdf_link_cloud, specific_pm_tickets, 
+                            str_mulai_gen, str_akhir_gen, url_tiket_gen
+                        ]
+                        
+                        data_pjb_padded = (data_pjb + [""] * 40)[:40]
+                        sukses_pjb = append_data(SHEET_PJB, data_pjb_padded, target_ss)
+                        
+                        if sukses_pjb: 
+                            # Jika terkena flag AI, tulis catatan khusus di kolom keterangan Approval
+                            remark_app = "⚠️ AI Mismatch OCR (Butuh Cek Manual)" if ai_mismatch_flag else "-"
+                            append_data(SHEET_APP, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), d["Nama"], valid_cari_tiket, "Verifikasi PJB", nominal_pjb, "PENDING", remark_app], target_ss)
+                            
+                            import random
+                            kata_motivasi = [
+                                "Kejujuran adalah kunci keberhasilan. Terima kasih atas kerja kerasmu hari ini! 💪",
+                                "Jujur dalam bekerja demi senyum keluarga di rumah. Keringatmu adalah ibadah! 🏡✨",
+                                "Satu kejujuran bernilai lebih dari seribu kebohongan. Lanjutkan dedikasimu! 🌟",
+                                "Tetap semangat! Hasil yang berkah berasal dari proses yang jujur dan transparan. 🤝",
+                                "Keringat di lapangan adalah pahlawan keluarga. Jaga integritas dan pulanglah dengan bangga! 💼"
+                            ]
+                            st.toast(f"💡 {random.choice(kata_motivasi)}", icon="✨")
+                            
+                            # Logika Pengalihan Tampilan Ke WhatsApp
+                            if ai_mismatch_flag:
+                                st.warning(f"🚨 **PERINGATAN AI:** {msg_nota}")
+                                st.error("PJB Anda tetap berhasil disubmit, namun dengan status **TERKUNCI (Membutuhkan Approval Manual)** karena tulisan nota sulit dibaca AI.")
+                                st.info("📲 **Harap konfirmasi ke Koordinator via WA untuk persetujuan PJB:** [Klik Disini (08115251515)](https://wa.me/628115251515)")
+                                st.session_state.pjb_data = None
+                                if "Operational" in jns_pjb:
+                                    time.sleep(8) # Jeda panjang (8 detik) agar tim punya waktu klik link WA
+                                    st.session_state.page = "🏠 Hub Menu Utama"
+                                    st.rerun()
+                            else:
+                                st.success(f"🎉 PJB Berhasil Dikirim untuk Verifikasi Admin!")
+                                st.session_state.pjb_data = None
+                                if "Operational" in jns_pjb:
+                                    time.sleep(2.5) # Jeda normal (2.5 detik) jika nota lolos AI
+                                    st.session_state.page = "🏠 Hub Menu Utama"
+                                    st.rerun()
+                        else: st.error("🚨 Gagal mengirim ke Google Sheet.")
                         
                         if "Akomodasi" in jns_pjb:
                             bulan_romawi = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"]
