@@ -697,7 +697,7 @@ if st.session_state.page == "🏠 Hub Menu Utama":
         
         with tab_pribadi:
             cek_nama = st.selectbox("Nama Petugas", ["-- Pilih Nama --"] + MASTER_DATA[cek_nop]["names"], key="cek_nama_hub")
-    if st.button("Cari Status Saya", use_container_width=True):
+            if st.button("Cari Status Saya", use_container_width=True):
                 if cek_nama != "-- Pilih Nama --" and cek_nama != "":
                     with st.spinner("Menarik data server..."):
                         data_cek = fetch_spreadsheet_data(MASTER_DATA[cek_nop]["spreadsheet_id"])
