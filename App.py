@@ -655,7 +655,7 @@ with c_nav3:
 
 if st.session_state.page != "🏠 Hub Menu Utama":
     with c_nav1:
-        if st.button("⬅️ KEMBALI KE MENU UTAMA", use_container_width=True):
+    if st.button("⬅️ KEMBALI KE MENU UTAMA", use_container_width=True):
             st.session_state.page = "🏠 Hub Menu Utama"
             st.session_state.pdf_ready = False
             st.rerun()
@@ -683,9 +683,9 @@ if st.session_state.page == "🏠 Hub Menu Utama":
     st.markdown("<div class='section-title'>🚀 MENU OPERASIONAL TIM</div>", unsafe_allow_html=True)
     c1, c2 = st.columns(2)
     with c1:
-        if st.button("💸\nREQUEST DANA\n(Pengajuan Baru)", use_container_width=True): st.session_state.page = "📝 Form Request Dana"; st.rerun()
+    if st.button("💸\nREQUEST DANA\n(Pengajuan Baru)", use_container_width=True): st.session_state.page = "📝 Form Request Dana"; st.rerun()
     with c2:
-        if st.button("✅\nPJB OPERASIONAL\n(Nota Realisasi)", use_container_width=True): st.session_state.page = "✅ Form PJB Operasional"; st.rerun()
+    if st.button("✅\nPJB OPERASIONAL\n(Nota Realisasi)", use_container_width=True): st.session_state.page = "✅ Form PJB Operasional"; st.rerun()
         
     if st.button("📝\nREPORT LAPANGAN\n(Update Progress & Generate WA)", use_container_width=True): st.session_state.page = "📝 Report Lapangan"; st.rerun()
 
@@ -697,7 +697,7 @@ if st.session_state.page == "🏠 Hub Menu Utama":
         
         with tab_pribadi:
             cek_nama = st.selectbox("Nama Petugas", ["-- Pilih Nama --"] + MASTER_DATA[cek_nop]["names"], key="cek_nama_hub")
-            if st.button("Cari Status Saya", use_container_width=True):
+    if st.button("Cari Status Saya", use_container_width=True):
                 if cek_nama != "-- Pilih Nama --" and cek_nama != "":
                     with st.spinner("Menarik data server..."):
                         data_cek = fetch_spreadsheet_data(MASTER_DATA[cek_nop]["spreadsheet_id"])
@@ -712,7 +712,7 @@ if st.session_state.page == "🏠 Hub Menu Utama":
                     
         with tab_tim_pending:
             st.info("Fitur ini menampilkan daftar tiket tim yang masih gantung (belum disubmit) mulai dari Agustus 2026 dan seterusnya ke depan.")
-            if st.button("🔍 Tarik Data Tim Belum PJB", use_container_width=True, type="primary"):
+    if st.button("🔍 Tarik Data Tim Belum PJB", use_container_width=True, type="primary"):
                 with st.spinner("Memindai seluruh data tim wilayah ini..."):
                     data_cek = fetch_spreadsheet_data(MASTER_DATA[cek_nop]["spreadsheet_id"])
                     req_r, pjb_r, app_r = data_cek[SHEET_REQUEST], data_cek[SHEET_PJB], data_cek[SHEET_APP]
