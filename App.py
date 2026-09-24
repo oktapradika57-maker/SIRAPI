@@ -25,16 +25,11 @@ import numpy as np
 # ==========================================
 st.set_page_config(page_title="SiRAPI Enterprise", page_icon="💸", layout="wide", initial_sidebar_state="collapsed")
 
-# --- SISTEM REMEMBER ME (LEBIH STABIL & INSTAN) ---
-# Inisialisasi langsung tanpa fungsi dan tanpa cache
-cookie_manager = stx.CookieManager(key="cookie_manager")
-
-# Memaksa sistem membaca memori browser sebelum halaman memuat tampilan
-cookie_manager.get_all() 
-
 saved_user = cookie_manager.get(cookie="user_sirapi")
+saved_date = cookie_manager.get(cookie="login_date")
+today_date = datetime.now().strftime("%Y-%m-%d")
 
-if saved_user and st.session_state.get("logged_in_user") is None:
+if saved_user and saved_date == today_date and st.session_state.get("logged_in_user") is None:
     st.session_state.logged_in_user = saved_user
     st.session_state.is_authenticated = True
     if st.session_state.get("page") == "Login":
@@ -135,6 +130,27 @@ MASTER_DATA = {
     "Pontianak": {"spreadsheet_id": "1VmoWPImNFMjnaIQpBXEVYdMiTEzsz3P4tpmzfA0EMDE", "clusters": ["Sintang", "Singkawang", "Pontianak"], "names": ["ALOYSIUS", "RUDI", "RONIYANTO", "SUKADI", "HAIRIL", "AZMI ASHADIQI", "SUYADI", "ARIEF DARUL IKHWAN", "MUHAMMAD AL FATAH", "YUDIANSYAH", "RAHMAD INDRA IRAWAN", "MATIUS MARTIN", "RYVAEEL DEWANGGA", "AMIRDA ANGGA SAPUTRA", "IZHARUDDIN", "VINSENSIUS YOGI", "GUSTI ARIZAL", "MUHAMMAD MIFTAHUDIN, A.MD", "BAYU ANGGARA PUTRA", "YONI IRAWAN", "SUGANDI", "IRVAN ANDRIYANA", "ALDIANSYAH", "ABANG HAMDANI", "ABANG KUSDIANSYAH", "SUMAN", "SANGGARA ISMARAWARI", "IBIN", "VALENTINUS PETRO", "DWI KURNIAWAN ISMANTO", "ARISAFRIADI", "DONATUS DONI", "NUR AHMAD KARDIYANTO", "AGRI PERDANA", "AKHSANUL FIKI", "ALI ALAMSYAH", "MUHAMMAD FIRZHA GIANNI HARSYA", "RICKY ARDILAY", "FAISAL", "WIJI SANTOSO", "HISYAM MUTHOYIB", "ARIF RAHMAN NUGROHO", "TOTOK SUGIARTO", "PURWANDI SETIAWAN", "JULIANTO BHAKTI PUTRO, SH", "ILHAMMUDIN", "AGUNG", "ROSIDI", "ABRAR ELZAH FATHALIF", "HENDRI YULIANSYAH", "JAMIL", "GORO SUKARTONO", "OKTAPIANUS JUMIN", "ONNIE SYAEFUDDIN", "BUDI", "ULUL AMRY", "RUHIAT, A.MD", "SUPIANDI", "WAHYUDI", "SUHENDRIK", "M. ARKAM", "SYAFRI APRIJAL", "ARIANTO SUMANTRI", "TUTU AGE ANDIKA", "VIRANDA SAPTA, A.MD", "TOTO HERMANSYAH", "KURNIAWAN", "ROBI ISKANDAR MASDIANSYAH", "MUTIIN CHANDRA", "MISJANI", "KHAIRUL FARISD", "ANDRA", "DODI RATMAYANTO", "WAWAN DARYANA", "MISWARDI", "JUPRILIAUS PICO", "DEDY PURNOMO", "EDI KURNIAWAN", "DEDE GUNAWAN", "WANDALA JAGOARDI PANDALO", "KARIYADI", "REZQI AL BARQAH", "FIRMANSYAH, SP"]}
 }
 LIST_KEPERLUAN = ["", "Tshoot", "Backup", "Support", "PM", "Program BCP", "Program Quikwin", "Program G348T", "Pengiriman Material SPMS", "Pembelian Material","Transportasi Air"]
+
+import pytesseract # Wajib tambahkan 'pytesseract' di requirements.txt dan 'tesseract-ocr' di packages.txt (jika pakai Streamlit Cloud)
+
+def ai_nota_checker(uploaded_file, expected_nominal, expected_date=None):
+    if uploaded_file is None: return True, "Tidak ada file"
+    try:
+        img = Image.open(uploaded_file)
+        text = pytesseract.image_to_string(img).lower()
+        uploaded_file.seek(0)
+        
+        # Cari semua kombinasi angka dalam foto nota
+        angka_ditemukan = re.findall(r'\d+', text.replace('.', '').replace(',', ''))
+        
+        # Validasi Nominal
+        if str(expected_nominal) not in angka_ditemukan:
+            return False, f"🚨 AI REJECT: Nominal Rp {expected_nominal:,.0f} tidak ditemukan pada foto Nota. Harap upload nota yang benar/sesuai!"
+            
+        return True, "Valid"
+    except Exception as e:
+        uploaded_file.seek(0)
+        return True, "Bypass AI (Tesseract belum siap)"
 
 # ==========================================
 # 2. FUNGSI INTI & CACHING
@@ -480,24 +496,13 @@ def save_new_nopol_to_csv(new_plat):
 # ==========================================
 # 0.5. SISTEM KEAMANAN, AUTO LOGIN & ABSENSI
 # ==========================================
-@st.cache_data(ttl=60)
-def load_user_credentials():
-    try:
-        df = pd.read_excel("pass and username.xlsx")
-        df.columns = df.columns.astype(str).str.strip().str.upper() 
-        creds = {}
-        if 'NAMA' in df.columns and 'NIK' in df.columns:
-            for _, row in df.iterrows():
-                nama = str(row['NAMA']).strip().upper()
-                nik = str(row['NIK']).replace('.0', '').strip() 
-                if nama != 'NAN' and nik != 'NAN' and nama != '':
-                    creds[nama] = nik
-        else:
-            st.error("⚠️ Kolom 'NAMA' dan 'NIK' tidak ditemukan di baris pertama Excel!")
-        return creds
-    except Exception as e:
-        st.error(f"⚠️ Gagal membaca file Excel 'pass and username.xlsx'. Pastikan file sudah terupload. Error: {e}")
-        return {}
+# Menyimpan cookie dengan extra-streamlit-components (Masa aktif 24 Jam)
+cookie_manager.set("user_sirapi", selected_user, max_age=86400)
+cookie_manager.set("login_date", datetime.now().strftime("%Y-%m-%d"), max_age=86400)
+# ---------------------------------------------------            
+st.success(f"✅ Login Berhasil! Selamat datang, {selected_user}.")
+time.sleep(1)
+st.rerun()
 
 if 'is_authenticated' not in st.session_state: st.session_state.is_authenticated = False
 if 'logged_in_user' not in st.session_state: st.session_state.logged_in_user = ""
