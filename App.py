@@ -683,9 +683,9 @@ if st.session_state.page == "🏠 Hub Menu Utama":
     st.markdown("<div class='section-title'>🚀 MENU OPERASIONAL TIM</div>", unsafe_allow_html=True)
     c1, c2 = st.columns(2)
     with c1:
-    if st.button("💸\nREQUEST DANA\n(Pengajuan Baru)", use_container_width=True): st.session_state.page = "📝 Form Request Dana"; st.rerun()
+        if st.button("💸\nREQUEST DANA\n(Pengajuan Baru)", use_container_width=True): st.session_state.page = "📝 Form Request Dana"; st.rerun()
     with c2:
-    if st.button("✅\nPJB OPERASIONAL\n(Nota Realisasi)", use_container_width=True): st.session_state.page = "✅ Form PJB Operasional"; st.rerun()
+        if st.button("✅\nPJB OPERASIONAL\n(Nota Realisasi)", use_container_width=True): st.session_state.page = "✅ Form PJB Operasional"; st.rerun()
         
     if st.button("📝\nREPORT LAPANGAN\n(Update Progress & Generate WA)", use_container_width=True): st.session_state.page = "📝 Report Lapangan"; st.rerun()
 
