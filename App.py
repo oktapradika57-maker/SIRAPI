@@ -655,7 +655,7 @@ with c_nav3:
 
 if st.session_state.page != "🏠 Hub Menu Utama":
     with c_nav1:
-         if st.button("⬅️ KEMBALI KE MENU UTAMA", use_container_width=True):
+        if st.button("⬅️ KEMBALI KE MENU UTAMA", use_container_width=True):
             st.session_state.page = "🏠 Hub Menu Utama"
             st.session_state.pdf_ready = False
             st.rerun()
