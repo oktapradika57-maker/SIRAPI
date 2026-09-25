@@ -29,14 +29,17 @@ st.set_page_config(page_title="SiRAPI Enterprise", page_icon="💸", layout="wid
 # --- SISTEM REMEMBER ME (LEBIH STABIL & INSTAN) ---
 cookie_manager = CookieController()
 
-# Membaca cookie secara aman tanpa menimbulkan NameError
 saved_user = cookie_manager.get("user_sirapi")
 saved_date = cookie_manager.get("login_date")
+saved_absen = cookie_manager.get("absent_date") # Tambahan Cookie Absen
 today_date = datetime.now().strftime("%Y-%m-%d")
 
 if saved_user and saved_date == today_date and st.session_state.get("logged_in_user") is None:
     st.session_state.logged_in_user = saved_user
     st.session_state.is_authenticated = True
+    if saved_absen == today_date:
+        st.session_state.has_absent = True
+        st.session_state.needs_routing = True
     if st.session_state.get("page") == "Login":
         st.session_state.page = "🏠 Hub Menu Utama"
 # ---------------------------------------------------
@@ -146,18 +149,35 @@ def ai_nota_checker(uploaded_file, expected_nominal, expected_date=None):
         text = pytesseract.image_to_string(img).lower()
         uploaded_file.seek(0)
         
-        # Cari semua kombinasi angka dalam foto nota
+        # 1. Validasi Nominal
         angka_ditemukan = re.findall(r'\d+', text.replace('.', '').replace(',', ''))
+        valid_nom = str(expected_nominal) in angka_ditemukan
         
-        # Validasi Nominal
-        if str(expected_nominal) not in angka_ditemukan:
-            return False, f"Nominal Rp {expected_nominal:,.0f} tidak terdeteksi sempurna oleh AI OCR."
+        # 2. Validasi Tanggal
+        msg_tgl = ""
+        valid_date = True
+        if expected_date:
+            try:
+                d_obj = datetime.strptime(str(expected_date), "%d/%m/%Y") if isinstance(expected_date, str) else expected_date
+                tgl1, tgl2, tgl3 = d_obj.strftime("%d/%m"), d_obj.strftime("%d-%m"), d_obj.strftime("%d")
+                
+                if tgl1 not in text and tgl2 not in text and tgl3 not in text:
+                    valid_date = False
+                    msg_tgl = f" (Tanggal {d_obj.strftime('%d/%m/%Y')} tidak terbaca AI pada Nota)"
+            except: pass
+            
+        # 3. Keputusan AI
+        if not valid_nom and not valid_date:
+            return False, f"Nominal Rp {expected_nominal:,.0f} & Tanggal tidak sesuai.{msg_tgl} Harap perbaiki nota!"
+        elif not valid_nom:
+            return False, f"Nominal Rp {expected_nominal:,.0f} tidak ditemukan pada foto Nota."
+        elif not valid_date:
+            return False, f"Peringatan AI:{msg_tgl}. Harap gunakan nota dengan tanggal yang valid & jelas."
             
         return True, "Valid"
     except Exception as e:
         uploaded_file.seek(0)
         return True, "Bypass AI (Tesseract belum siap)"
-
 def ai_image_checker(uploaded_file, file_name_label):
     if uploaded_file is None:
         return True, "Tidak ada file"
@@ -355,13 +375,17 @@ def load_excel_data():
         
     return site_dict, site_list, tim_dict, list_nopol_csv, nik_dict
 
-def get_last_indicator(plat_clean, jns, pjb_r):
-    if not plat_clean: return 0.0
+def get_last_indicator(plat_raw, jns, pjb_r):
+    if not plat_raw: return 0.0
+    # Bersihkan spasi secara total agar sinkron
+    plat_clean = str(plat_raw).strip().replace(" ", "").upper()
+    if plat_clean in ["", "0", "NAN", "NONE"]: return 0.0
+    
     for r in reversed(pjb_r[1:]):
         if len(r) > 12:
             h_plat = str(r[12]).strip().replace(" ", "").upper()
             if h_plat == plat_clean and (jns.lower() in str(r[8]).lower()):
-                return clean_indicator(r[10])
+                return clean_indicator(r[10]) # Mengambil KM/RH Akhir sebelumnya
     return 0.0
 
 def get_user_tickets_status(nama, req_rows, pjb_rows, app_rows):
@@ -1561,7 +1585,7 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                     ai_mismatch_flag = False
                     msg_nota = ""
                     if "Operational" in jns_pjb and (f_nota_bbm is not None or f_km is not None) and tot_nilai_nota > 0:
-                        is_valid_nota, msg_nota = ai_nota_checker(f_nota_bbm if f_nota_bbm else f_km, tot_nilai_nota)
+                        is_valid_nota, msg_nota = ai_nota_checker(f_nota_bbm if f_nota_bbm else f_km, tot_nilai_nota, tgl_pjb)
                         if not is_valid_nota:
                             ai_mismatch_flag = True # Hanya flag penanda, tidak lagi menggunakan st.stop()
                     # --- AI CHECKER NOTA SELESAI ---
@@ -2194,6 +2218,11 @@ elif st.session_state.page == "📈 Live Monitoring":
                 
             if car_list:
                 df_cars = pd.DataFrame(car_list).sort_values("Total Akumulasi Jarak (KM)", ascending=False)
+                
+                # --- TAMBAHAN GRAFIK MOBIL ---
+                st.bar_chart(df_cars.set_index("NOPOL Kendaraan")["Total Akumulasi Jarak (KM)"])
+                # -----------------------------
+                
                 st.dataframe(df_cars, hide_index=True, use_container_width=True)
                 st.download_button("📥 Export Data Mobil", data=df_cars.to_csv(index=False), file_name="Data_Mobil.csv")
             else:
@@ -2214,10 +2243,12 @@ elif st.session_state.page == "📈 Live Monitoring":
                     try:
                         no_tiket_gen = str(pjb[21]).strip().upper()
                         req_match = next((x for x in req_r[1:] if len(x) > 13 and str(x[3]).strip().upper() == no_tiket_gen), None)
-                        rh_awal = float(clean_indicator(req_match[12])) if req_match else 0.0
+                        rh_awal = float(clean_indicator(req_match[12])) if req_match else float(pjb[10]) # Fallback
                         
                         rh_akhir = float(clean_indicator(pjb[10]))
-                        total_rh = float(pjb[24]) if len(pjb)>24 and str(pjb[24]).strip() else (rh_akhir - rh_awal)
+                        
+                        # --- PERHITUNGAN AKTUAL TOTAL RUNNING GENSET ---
+                        total_rh = rh_akhir - rh_awal 
                     except:
                         rh_awal, rh_akhir, total_rh = 0.0, 0.0, 0.0
 
