@@ -1620,7 +1620,7 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                     3. Saya tidak dengan sadar merugikan perusahaan dengan tiket anomali dan mark up operasional.
                     4. Saya pribadi yang berintegritas dan jujur.
                     """)
-                    cek_integritas = st.checkbox("✅ Saya sudah membaca", key="cek_int_mbp")
+                    cek_integritas = st.checkbox("✅ Saya sudah membaca", key=f"cek_mbp_{tiket}")
                     if cek_integritas:
                         st.success("Terima kasih telah jujur. Perusahaan tidak akan menyulitkan karyawan, uang makan dan lain sudah ada aturan main. Jika pekerjaan dengan jarak >80km adalah 60.000, jika dekat dan backup >8 jam adalah 30.000. Jadi tidak harus berbisnis dengan rumah kita sendiri tempat kita cari makan.\n\n**Semangat Rekan!**")
                     st.markdown("</div>", unsafe_allow_html=True)
@@ -1634,14 +1634,14 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                     3. Kejujuran adalah kunci untuk segala hal.
                     4. Saya pribadi yang beriman dan tidak mungkin melakukan ketidakjujuran dalam permintaan operasional yang sesuai.
                     """)
-                    cek_integritas = st.checkbox("✅ Saya sudah membaca", key="cek_int_te")
+                    cek_integritas = st.checkbox("✅ Saya sudah membaca", key=f"cek_te_{tiket}")
                     if cek_integritas:
                         st.success("Saya bekerja demi orang rumah dan pribadi saya, saya memberi makan mereka dengan cara yang halal.\n\n**Tetap semangat!**")
                     st.markdown("</div>", unsafe_allow_html=True)
                 # --- TAMBAHAN PAKTA INTEGRITAS PJB (SELESAI) ---
 
                 # Tombol Submit Asli Anda
-                if st.button("🚀 Sahkan Pelaporan PJB", type="primary", use_container_width=True):
+                if st.button("🚀 Sahkan Pelaporan PJB", type="primary", use_container_width=True, key=f"submit_pjb_{tiket}"):
                     
                     # --- LOGIKA BLOKIR JIKA TIDAK DICENTANG ---
                     if not cek_integritas:
@@ -1651,7 +1651,6 @@ elif st.session_state.page == "✅ Form PJB Operasional":
 
                     # --- AI CHECKER NOTA MULAI ---
                     # (Lanjutan kode Anda yang ada di bawahnya...)
-                if st.button("🚀 Sahkan Pelaporan PJB", type="primary", use_container_width=True):
 
                     # --- AI CHECKER NOTA MULAI ---
                     ai_mismatch_flag = False
