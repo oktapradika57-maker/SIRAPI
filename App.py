@@ -1598,21 +1598,35 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                 # --- ULTIMATE FIX: PAKTA INTEGRITAS & TOMBOL PJB ---
                 # ====================================================
                 
-                # 1. Deteksi Role Otomatis Anti-Error
+                # 1. Deteksi Role Berdasarkan Tiket Saat Ini (Akurat 100%)
                 role_pjb = ""
                 try:
-                    nama_petugas = nama.strip().upper() if 'nama' in locals() else st.session_state.logged_in_user.strip().upper()
+                    nama_petugas = st.session_state.logged_in_user.strip().upper()
+                    
+                    # Mencari nama variabel tiket yang sedang diproses di halaman PJB
+                    tiket_aktif = ""
+                    if 'target_tiket' in locals(): tiket_aktif = target_tiket
+                    elif 'tiket_pjb' in locals(): tiket_aktif = tiket_pjb
+                    elif 'tiket' in locals(): tiket_aktif = tiket
+                    elif 'pilih_tiket' in locals(): tiket_aktif = pilih_tiket
+
                     for r in reversed(req_r[1:]):
                         if len(r) > 6 and str(r[5]).strip().upper() == nama_petugas:
-                            role_pjb = str(r[6]).strip().upper()
-                            break
+                            # Mengunci pencarian spesifik pada tiket yang sedang dikerjakan
+                            if tiket_aktif != "" and len(r) > 3 and tiket_aktif.upper() in str(r[3]).strip().upper():
+                                role_pjb = str(r[6]).strip().upper()
+                                break
+                            # Fallback jika nama variabel tiket tidak terbaca
+                            elif tiket_aktif == "":
+                                role_pjb = str(r[6]).strip().upper()
+                                break
                 except:
                     pass
                 
-                # 2. Kotak Pakta Integritas (Dengan Key Paten)
+                # 2. Kotak Pakta Integritas (Kebal Spasi)
                 cek_integritas = True 
                 
-                if role_pjb in ["MBP", "CME"]:
+                if "MBP" in role_pjb or "CME" in role_pjb:
                     st.markdown("<div style='background-color:#FEF2F2; padding:15px; border-radius:10px; border-left: 5px solid #EF4444; margin-bottom: 20px;'>", unsafe_allow_html=True)
                     st.write("⚠️ **WAJIB DIBACA SEBELUM SUBMIT PJB (Khusus Tim MBP & CME):**")
                     st.markdown("""
@@ -1621,13 +1635,12 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                     3. Saya tidak dengan sadar merugikan perusahaan dengan tiket anomali dan mark up operasional.
                     4. Saya pribadi yang berintegritas dan jujur.
                     """)
-                    # Key menggunakan ID Teks Statis
                     cek_integritas = st.checkbox("✅ Saya sudah membaca", key="chk_mbp_final_vip")
                     if cek_integritas:
                         st.success("Terima kasih telah jujur. Perusahaan tidak akan menyulitkan karyawan, uang makan dan lain sudah ada aturan main. Jika pekerjaan dengan jarak >80km adalah 60.000, jika dekat dan backup >8 jam adalah 30.000. Jadi tidak harus berbisnis dengan rumah kita sendiri tempat kita cari makan.\n\n**Semangat Rekan!**")
                     st.markdown("</div>", unsafe_allow_html=True)
                     
-                elif role_pjb == "TE":
+                elif "TE" in role_pjb:
                     st.markdown("<div style='background-color:#F0FDF4; padding:15px; border-radius:10px; border-left: 5px solid #22C55E; margin-bottom: 20px;'>", unsafe_allow_html=True)
                     st.write("⚠️ **WAJIB DIBACA SEBELUM SUBMIT PJB (Khusus Tim TE):**")
                     st.markdown("""
@@ -1636,7 +1649,6 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                     3. Kejujuran adalah kunci untuk segala hal.
                     4. Saya pribadi yang beriman dan tidak mungkin melakukan ketidakjujuran dalam permintaan operasional yang sesuai.
                     """)
-                    # Key menggunakan ID Teks Statis
                     cek_integritas = st.checkbox("✅ Saya sudah membaca", key="chk_te_final_vip")
                     if cek_integritas:
                         st.success("Saya bekerja demi orang rumah dan pribadi saya, saya memberi makan mereka dengan cara yang halal.\n\n**Tetap semangat!**")
@@ -1650,8 +1662,6 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                         st.stop()
                         
                     # --- AI CHECKER NOTA MULAI ---
-                    # (Biarkan kode AI Anda yang lama berjalan di bawah sini)
-                    # ------------------------------------------
 
                     # --- AI CHECKER NOTA MULAI ---
                     # (Lanjutan kode Anda yang ada di bawahnya...)
