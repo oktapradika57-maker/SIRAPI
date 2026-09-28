@@ -1594,6 +1594,51 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                     with c_um4: f_um4 = ui_image_uploader("Foto Aktivitas 4", key="um4")
 
                 st.markdown("<br>", unsafe_allow_html=True)
+                # --- TAMBAHAN PAKTA INTEGRITAS PJB (MULAI) ---
+                # Mengambil role dari data tiket awal (req_match index ke-6 adalah Role)
+                role_pjb = str(req_match[6]).strip().upper() if req_match and len(req_match) > 6 else ""
+                cek_integritas = True  # Default True untuk lolos jika role Admin/PM
+                
+                if role_pjb in ["MBP", "CME"]:
+                    st.markdown("<div style='background-color:#FEF2F2; padding:15px; border-radius:10px; border-left: 5px solid #EF4444; margin-bottom: 20px;'>", unsafe_allow_html=True)
+                    st.write("⚠️ **WAJIB DIBACA SEBELUM SUBMIT PJB (Khusus Tim MBP & CME):**")
+                    st.markdown("""
+                    1. Saya tidak melakukan kecurangan dengan perusahaan, apa yang saya pertanggungjawabkan adalah benar.
+                    2. Saya tidak mark up harga BBM mobil dan Solar.
+                    3. Saya tidak dengan sadar merugikan perusahaan dengan tiket anomali dan mark up operasional.
+                    4. Saya pribadi yang berintegritas dan jujur.
+                    """)
+                    cek_integritas = st.checkbox("✅ Saya sudah membaca", key="cek_int_mbp")
+                    if cek_integritas:
+                        st.success("Terima kasih telah jujur. Perusahaan tidak akan menyulitkan karyawan, uang makan dan lain sudah ada aturan main. Jika pekerjaan dengan jarak >80km adalah 60.000, jika dekat dan backup >8 jam adalah 30.000. Jadi tidak harus berbisnis dengan rumah kita sendiri tempat kita cari makan.\n\n**Semangat Rekan!**")
+                    st.markdown("</div>", unsafe_allow_html=True)
+                    
+                elif role_pjb == "TE":
+                    st.markdown("<div style='background-color:#F0FDF4; padding:15px; border-radius:10px; border-left: 5px solid #22C55E; margin-bottom: 20px;'>", unsafe_allow_html=True)
+                    st.write("⚠️ **WAJIB DIBACA SEBELUM SUBMIT PJB (Khusus Tim TE):**")
+                    st.markdown("""
+                    1. Saya tidak melakukan pengisian BBM dengan tidak wajar dan tidak terukur.
+                    2. Saya pribadi yang jujur dan berintegritas karena apa yang saya kerjakan untuk keluarga saya di rumah.
+                    3. Kejujuran adalah kunci untuk segala hal.
+                    4. Saya pribadi yang beriman dan tidak mungkin melakukan ketidakjujuran dalam permintaan operasional yang sesuai.
+                    """)
+                    cek_integritas = st.checkbox("✅ Saya sudah membaca", key="cek_int_te")
+                    if cek_integritas:
+                        st.success("Saya bekerja demi orang rumah dan pribadi saya, saya memberi makan mereka dengan cara yang halal.\n\n**Tetap semangat!**")
+                    st.markdown("</div>", unsafe_allow_html=True)
+                # --- TAMBAHAN PAKTA INTEGRITAS PJB (SELESAI) ---
+
+                # Tombol Submit Asli Anda
+                if st.button("🚀 Sahkan Pelaporan PJB", type="primary", use_container_width=True):
+                    
+                    # --- LOGIKA BLOKIR JIKA TIDAK DICENTANG ---
+                    if not cek_integritas:
+                        st.error("❌ PENGIRIMAN DITOLAK: Anda WAJIB membaca dan mencentang Pakta Integritas di atas sebelum melakukan Submit PJB!")
+                        st.stop()
+                    # ------------------------------------------
+
+                    # --- AI CHECKER NOTA MULAI ---
+                    # (Lanjutan kode Anda yang ada di bawahnya...)
                 if st.button("🚀 Sahkan Pelaporan PJB", type="primary", use_container_width=True):
 
                     # --- AI CHECKER NOTA MULAI ---
