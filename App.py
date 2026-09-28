@@ -854,6 +854,22 @@ elif st.session_state.page == "🎫 Master Tiket PM":
 # ==========================================
 # PAGE 1: FORM REQUEST DANA
 # ==========================================
+st.markdown("<div class='section-title'>📸 Lampiran (Forensik AI)</div>", unsafe_allow_html=True)
+        c_up1, c_up2 = st.columns(2)
+        with c_up1: foto_km = ui_image_uploader("1. Foto KM / RH Genset Awal", key="req_km")
+        with c_up2: foto_evidance = ui_image_uploader("2. Foto Evidance Request", key="req_ev")
+        
+        # --- TAMBAHAN CHECKLIST KOMITMEN (MULAI) ---
+        st.markdown("<div class='section-title'>✅ 6. Checklist Persiapan & Komitmen Tim</div>", unsafe_allow_html=True)
+        st.markdown("<div style='background-color:#FFFBEB; padding:15px; border-radius:10px; border-left: 5px solid #F59E0B; margin-bottom: 20px;'>", unsafe_allow_html=True)
+        st.write("⚠️ **WAJIB DICENTANG:** Pastikan Anda telah memeriksa kelengkapan sebelum berangkat!")
+        cek_tools = st.checkbox("🔧 Saya memastikan seluruh **TOOLS (Splicer, OTDR, Kunci-kunci, dll)** LENGKAP dan BERFUNGSI.")
+        cek_material = st.checkbox("📦 Saya memastikan **MATERIAL** yang dibutuhkan sudah disiapkan / dibawa sepenuhnya.")
+        cek_komitmen = st.checkbox("🤝 Saya **BERKOMITMEN** menyelesaikan pekerjaan ini dengan tuntas & siap bertanggung jawab jika gagal akibat kurang tools/material.")
+        st.markdown("</div>", unsafe_allow_html=True)
+        # --- TAMBAHAN CHECKLIST KOMITMEN (SELESAI) ---
+        
+        form_invalid = (nama == "" or cluster == "" or role == "-- Pilih Role --" or keperluan == "" or not base_tiket_clean)
 elif st.session_state.page == "📝 Form Request Dana":
     st.markdown("<div class='header-card'><h2>📝 PORTAL PENGAJUAN DANA</h2><p>Operational System - Input Pengajuan Baru / Revisi (Multi-Split Engine)</p></div>", unsafe_allow_html=True)
     
