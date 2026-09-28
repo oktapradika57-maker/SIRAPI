@@ -1282,6 +1282,15 @@ elif st.session_state.page == "📝 Form Request Dana":
             
             if not motor_limit_lock:
                 if st.button("📤 Submit Request Dana", type="primary", use_container_width=True):
+                    # --- LOGIKA PENOLAKAN JIKA CHECKLIST TIDAK DICENTANG ---
+                    if not (cek_tools and cek_material and cek_komitmen):
+                        st.error("❌ PENGIRIMAN DITOLAK: Anda WAJIB mencentang ketiga Checklist Persiapan & Komitmen Tim di atas sebelum submit!")
+                        st.stop()
+                    # -------------------------------------------------------
+                    
+                    if form_invalid or not sub_requests or nominal_tf <= 0:
+                        st.error("❌ Mohon lengkapi formulir dan pastikan nominal valid!")
+                        st.stop()
                     
                     if form_invalid or not sub_requests or nominal_tf <= 0:
                         st.error("❌ Mohon lengkapi formulir dan pastikan nominal valid!")
