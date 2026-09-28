@@ -1594,22 +1594,23 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                     with c_um4: f_um4 = ui_image_uploader("Foto Aktivitas 4", key="um4")
 
                 st.markdown("<br>", unsafe_allow_html=True)
-                # --- TAMBAHAN PAKTA INTEGRITAS PJB (MULAI) ---
-                # Mengambil role dari data tiket awal (req_match index ke-6 adalah Role)
-                # --- PENCARIAN ROLE OTOMATIS AMAN ---
+               # ====================================================
+                # --- ULTIMATE FIX: PAKTA INTEGRITAS & TOMBOL PJB ---
+                # ====================================================
+                
+                # 1. Deteksi Role Otomatis Anti-Error
                 role_pjb = ""
                 try:
-                    # Ambil nama petugas yang sedang login / dipilih
                     nama_petugas = nama.strip().upper() if 'nama' in locals() else st.session_state.logged_in_user.strip().upper()
-                    
-                    # Cari riwayat request terakhir milik orang ini untuk mengetahui jabatannya (TE/MBP/CME)
                     for r in reversed(req_r[1:]):
                         if len(r) > 6 and str(r[5]).strip().upper() == nama_petugas:
                             role_pjb = str(r[6]).strip().upper()
                             break
                 except:
                     pass
-                cek_integritas = True  # Default True untuk lolos jika role Admin/PM
+                
+                # 2. Kotak Pakta Integritas (Dengan Key Paten)
+                cek_integritas = True 
                 
                 if role_pjb in ["MBP", "CME"]:
                     st.markdown("<div style='background-color:#FEF2F2; padding:15px; border-radius:10px; border-left: 5px solid #EF4444; margin-bottom: 20px;'>", unsafe_allow_html=True)
@@ -1620,7 +1621,8 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                     3. Saya tidak dengan sadar merugikan perusahaan dengan tiket anomali dan mark up operasional.
                     4. Saya pribadi yang berintegritas dan jujur.
                     """)
-                    cek_integritas = st.checkbox("✅ Saya sudah membaca", key=f"cek_int_mbp_{idx}")
+                    # Key menggunakan ID Teks Statis
+                    cek_integritas = st.checkbox("✅ Saya sudah membaca", key="chk_mbp_final_vip")
                     if cek_integritas:
                         st.success("Terima kasih telah jujur. Perusahaan tidak akan menyulitkan karyawan, uang makan dan lain sudah ada aturan main. Jika pekerjaan dengan jarak >80km adalah 60.000, jika dekat dan backup >8 jam adalah 30.000. Jadi tidak harus berbisnis dengan rumah kita sendiri tempat kita cari makan.\n\n**Semangat Rekan!**")
                     st.markdown("</div>", unsafe_allow_html=True)
@@ -1634,19 +1636,21 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                     3. Kejujuran adalah kunci untuk segala hal.
                     4. Saya pribadi yang beriman dan tidak mungkin melakukan ketidakjujuran dalam permintaan operasional yang sesuai.
                     """)
-                    cek_integritas = st.checkbox("✅ Saya sudah membaca", key=f"cek_int_te_{idx}")
+                    # Key menggunakan ID Teks Statis
+                    cek_integritas = st.checkbox("✅ Saya sudah membaca", key="chk_te_final_vip")
                     if cek_integritas:
                         st.success("Saya bekerja demi orang rumah dan pribadi saya, saya memberi makan mereka dengan cara yang halal.\n\n**Tetap semangat!**")
                     st.markdown("</div>", unsafe_allow_html=True)
-                # --- TAMBAHAN PAKTA INTEGRITAS PJB (SELESAI) ---
 
-                # Tombol Submit Asli Anda
-                if st.button("🚀 Sahkan Pelaporan PJB", type="primary", use_container_width=True, key=f"btn_sahkan_pjb_{idx}"):
+                # 3. Tombol Submit (Dengan Key Paten)
+                if st.button("🚀 Sahkan Pelaporan PJB", type="primary", use_container_width=True, key="btn_submit_pjb_final_vip"):
                     
-                    # --- LOGIKA BLOKIR JIKA TIDAK DICENTANG ---
                     if not cek_integritas:
                         st.error("❌ PENGIRIMAN DITOLAK: Anda WAJIB membaca dan mencentang Pakta Integritas di atas sebelum melakukan Submit PJB!")
                         st.stop()
+                        
+                    # --- AI CHECKER NOTA MULAI ---
+                    # (Biarkan kode AI Anda yang lama berjalan di bawah sini)
                     # ------------------------------------------
 
                     # --- AI CHECKER NOTA MULAI ---
