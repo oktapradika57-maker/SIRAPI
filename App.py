@@ -1862,9 +1862,6 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                 st.rerun()
 
 
-# ==========================================
-# PAGE 3: APPROVAL CENTER (KHUSUS ADMIN)
-# ==========================================
 elif st.session_state.page == "🛡️ Approval Center":
     st.markdown("<div class='header-card'><h2>🛡️ APPROVAL CENTER</h2><p>Pusat Verifikasi PJB, Izin Revisi, & Harga BBM Anomali</p></div>", unsafe_allow_html=True)
     
@@ -1872,15 +1869,29 @@ elif st.session_state.page == "🛡️ Approval Center":
     if nop_admin != "-- Pilih NOP --":
         target_ss = MASTER_DATA[nop_admin]["spreadsheet_id"]
         data_all = fetch_spreadsheet_data(target_ss)
-        app_r, pjb_r = data_all[SHEET_APP], data_all[SHEET_PJB]
+        
+        # Tambahkan req_r untuk mencari norek
+        app_r = data_all.get(SHEET_APP, [])
+        pjb_r = data_all.get(SHEET_PJB, [])
+        req_r = data_all.get(SHEET_REQUEST, [])
         
         pending_anomali, pending_pjb = [], []
         if len(app_r) > 0:
             for idx, r in enumerate(app_r):
                 if len(r) > 5 and str(r[5]).strip() == "PENDING":
+                    
+                    # --- CARI REKENING BERDASARKAN TIKET ---
+                    target_tiket = str(r[2]).strip().upper()
+                    rek_tim = "-"
+                    for req in reversed(req_r[1:]):
+                        if len(req) > 18 and str(req[3]).strip().upper() == target_tiket:
+                            rek_tim = f"{req[17]} - {req[18]}"
+                            break
+                            
                     item = {
-                        "Row Index": idx, "Waktu": str(r[0]), "Nama": str(r[1]), "Request Ref / Tiket": str(r[2]), 
+                        "Row Index": idx, "Waktu": str(r[0]), "Nama": str(r[1]), "Request Ref / Tiket": target_tiket, 
                         "Jenis Pengajuan": str(r[3]), "Nominal": f"Rp {clean_nominal(r[4]):,.0f}", 
+                        "Rekening Tim": rek_tim,
                         "Status": str(r[5]).strip(), "Keterangan": str(r[6]) if len(r) > 6 else "-"
                     }
                     if r[3] == "Verifikasi PJB": pending_pjb.append(item)
