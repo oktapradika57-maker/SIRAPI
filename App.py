@@ -646,7 +646,9 @@ if st.session_state.get('needs_routing'):
         st.session_state.auto_nop = found_nop
         
         if user_now in ["OKTA PRADIKA", "MAWARDAH", "OKTA PRDIKA"]:
-            st.session_state.page = "🏠 Hub Menu Utama"
+            # --- JALUR VIP BOSS / ADMIN ---
+            st.session_state.admin_logged_in = True # Buka kunci akses Admin otomatis
+            st.session_state.page = "👀 Request & PJB Monitoring" # Langsung arahkan ke halaman Request Dana Tim
         else:
             if found_nop:
                 try:
