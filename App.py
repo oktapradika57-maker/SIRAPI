@@ -1238,9 +1238,9 @@ elif st.session_state.page == "📝 Form Request Dana":
         st.markdown("<div class='section-title'>✅ 6. Checklist Persiapan & Komitmen Tim</div>", unsafe_allow_html=True)
         st.markdown("<div style='background-color:#FFFBEB; padding:15px; border-radius:10px; border-left: 5px solid #F59E0B; margin-bottom: 20px;'>", unsafe_allow_html=True)
         st.write("⚠️ **WAJIB DICENTANG:** Pastikan Anda telah memeriksa kelengkapan sebelum berangkat!")
-        cek_tools = st.checkbox("🔧 Saya memastikan seluruh **TOOLS (Splicer, OTDR, Kunci-kunci, dll)** LENGKAP dan BERFUNGSI.")
-        cek_material = st.checkbox("📦 Saya memastikan **MATERIAL** yang dibutuhkan sudah disiapkan / dibawa sepenuhnya.")
-        cek_komitmen = st.checkbox("🤝 Saya **BERKOMITMEN** menyelesaikan pekerjaan ini dengan tuntas & siap bertanggung jawab jika gagal akibat kurang tools/material.")
+        cek_tools = st.checkbox("🔧 Saya memastikan seluruh **TOOLS (Tang Amper pastikan Bagus Kejar admin part kalo rusak eskalasi sampai atas jika belum terfu, JSA Wajib clearing saat PM pastikan selalu call RTS dan pihak terkait jika ada bloking issue , Kunci-kunci,Mandatory tools wajib dibawa, dll)** LENGKAP dan BERFUNGSI.")
+        cek_material = st.checkbox("📦 Saya memastikan **MATERIAL** yang dibutuhkan sudah disiapkan / dibawa sepenuhnya, Abaiakan jika tidak ada bawa material dan hanya tshoot biasa tapi tetap centang.")
+        cek_komitmen = st.checkbox("🤝 Saya **BERKOMITMEN** menyelesaikan pekerjaan ini dengan tuntas & siap bertanggung jawab jika gagal akibat kurang tools/material/JSA tidak valid, WAJIB PASTIKAN RTS APPROV DAN CALL UNTUK MENVALIDASI PEKERJAAN PM/JSA.")
         st.markdown("</div>", unsafe_allow_html=True)
         # --- TAMBAHAN CHECKLIST KOMITMEN (SELESAI) ---
 
