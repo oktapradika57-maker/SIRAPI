@@ -2758,10 +2758,16 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
                         
                     nom = clean_nominal(r[9])
                     tot_req_daily += nom
+                    
+                    # --- AMBIL DATA BANK & NOREK ---
+                    bank_info = str(r[17]).strip() if len(r) > 17 else "-"
+                    norek_info = str(r[18]).strip() if len(r) > 18 else "-"
+                    rek_tim = f"{bank_info} - {norek_info}"
+                    
                     daily_req.append({
                         "Waktu": r[0], "Nama": r[5], "Sub-Tiket (Split)": r[3], "Role": r[6],
                         "Keperluan": r[8], "Kategori Item": r[10], 
-                        "Jarak/Info": r[13], "Nominal Request": nom
+                        "Jarak/Info": r[13], "Rekening Tim": rek_tim, "Nominal Request": nom
                     })
             
             if daily_req:
