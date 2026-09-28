@@ -1596,7 +1596,19 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                 st.markdown("<br>", unsafe_allow_html=True)
                 # --- TAMBAHAN PAKTA INTEGRITAS PJB (MULAI) ---
                 # Mengambil role dari data tiket awal (req_match index ke-6 adalah Role)
-                role_pjb = str(req_match[6]).strip().upper() if req_match and len(req_match) > 6 else ""
+                # --- PENCARIAN ROLE OTOMATIS AMAN ---
+                role_pjb = ""
+                try:
+                    # Ambil nama petugas yang sedang login / dipilih
+                    nama_petugas = nama.strip().upper() if 'nama' in locals() else st.session_state.logged_in_user.strip().upper()
+                    
+                    # Cari riwayat request terakhir milik orang ini untuk mengetahui jabatannya (TE/MBP/CME)
+                    for r in reversed(req_r[1:]):
+                        if len(r) > 6 and str(r[5]).strip().upper() == nama_petugas:
+                            role_pjb = str(r[6]).strip().upper()
+                            break
+                except:
+                    pass
                 cek_integritas = True  # Default True untuk lolos jika role Admin/PM
                 
                 if role_pjb in ["MBP", "CME"]:
