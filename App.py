@@ -855,9 +855,9 @@ elif st.session_state.page == "🎫 Master Tiket PM":
 # PAGE 1: FORM REQUEST DANA
 # ==========================================
 st.markdown("<div class='section-title'>📸 Lampiran (Forensik AI)</div>", unsafe_allow_html=True)
-        c_up1, c_up2 = st.columns(2)
-        with c_up1: foto_km = ui_image_uploader("1. Foto KM / RH Genset Awal", key="req_km")
-        with c_up2: foto_evidance = ui_image_uploader("2. Foto Evidance Request", key="req_ev")
+c_up1, c_up2 = st.columns(2)
+with c_up1: foto_km = ui_image_uploader("1. Foto KM / RH Genset Awal", key="req_km")
+with c_up2: foto_evidance = ui_image_uploader("2. Foto Evidance Request", key="req_ev")
         
         # --- TAMBAHAN CHECKLIST KOMITMEN (MULAI) ---
         st.markdown("<div class='section-title'>✅ 6. Checklist Persiapan & Komitmen Tim</div>", unsafe_allow_html=True)
