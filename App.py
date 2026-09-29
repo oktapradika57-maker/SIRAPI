@@ -1333,13 +1333,46 @@ elif st.session_state.page == "📝 Form Request Dana":
                 jml_org = 1 + len(tim_bareng)
                 
             if "Uang Makan" in kebutuhan_dana_list:
-                with c_um2:
-                    max_um_nominal = 60000 * jml_org
-                    nom_req_um = st.number_input(f"Nominal UM/Hari (Rekomendasi Rp 60.000 x {jml_org} org)", min_value=0, step=5000, value=max_um_nominal)
+                st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
+                st.markdown("<b style='color:#0369A1;'>📋 Klasifikasi Jenis Pekerjaan (Wajib untuk Uang Makan)</b>", unsafe_allow_html=True)
+                
+                list_berat = [
+                    "Pekerjaan Ganti RRU", "Tshoot Rectifier", "Backup > 3 jam", 
+                    "Pembersihan Solar Panel", "Relokasi Batterai Lumsump", 
+                    "Ganti Optik", "Tshoot Genset", "Outomasi Genset (Diluar SVA)"
+                ]
+                list_ringan = [
+                    "Onkan MCB PLN yang trip", "Pengecekan biasa", "BCP biasa (Input data)"
+                ]
+                
+                kategori_kerja = st.selectbox(
+                    "Pilih Jenis Pekerjaan Aktual di Lapangan:", 
+                    ["-- Pilih Kategori Pekerjaan --"] + list_berat + list_ringan
+                )
+                
+                um_invalid = False
+                if kategori_kerja == "-- Pilih Kategori Pekerjaan --":
+                    st.warning("⚠️ Anda WAJIB memilih kategori pekerjaan di atas untuk memunculkan nominal Uang Makan.")
+                    um_invalid = True
+                else:
+                    # Logika Penentuan Harga
+                    if kategori_kerja in list_berat:
+                        base_um = 60000
+                        alasan = f"✅ **Kategori Pekerjaan Berat:** Jarak tempuh >80 KM dan pekerjaan bersifat teknikal berat. Tim berhak mendapatkan Uang Makan maksimal **Rp 60.000/orang**."
+                    else:
+                        base_um = 30000
+                        alasan = f"⚠️ **Kategori Pekerjaan Ringan:** Walaupun jarak tempuh >80 KM, pekerjaan ini bersifat ringan/pengecekan. Tim hanya berhak mendapatkan Uang Makan maksimal **Rp 30.000/orang**."
                     
-                tot_um = hari_req * nom_req_um
-                st.success(f"💰 Total Estimasi Uang Makan: **Rp {tot_um:,.0f}**")
-                sub_requests.append({"tiket": f"{base_tiket_clean} [UM]", "kategori": "Akomodasi", "kebutuhan": tot_um, "plat": "", "indikator": 0.0, "last_ind": 0.0, "tipe": "UM", "hari": hari_req, "nom_um": nom_req_um})
+                    st.info(alasan)
+                    
+                    with c_um2:
+                        max_um_nominal = base_um * jml_org
+                        # Tampilkan input nominal tapi dikunci maksimal nilainya berdasarkan jenis kerja
+                        nom_req_um = st.number_input(f"Nominal UM/Hari (Maks Rp {base_um:,} x {jml_org} org)", min_value=0, max_value=max_um_nominal, step=5000, value=max_um_nominal)
+                        
+                    tot_um = hari_req * nom_req_um
+                    st.success(f"💰 Total Estimasi Uang Makan (Berdasarkan {jml_org} Orang): **Rp {tot_um:,.0f}**")
+                    sub_requests.append({"tiket": f"{base_tiket_clean} [UM]", "kategori": f"Akomodasi - {kategori_kerja}", "kebutuhan": tot_um, "plat": "", "indikator": 0.0, "last_ind": 0.0, "tipe": "UM", "hari": hari_req, "nom_um": nom_req_um})
                 
             if "Penginapan" in kebutuhan_dana_list:
                 with c_um1:
@@ -1443,6 +1476,12 @@ elif st.session_state.page == "📝 Form Request Dana":
                 
                 # Fitur 'disabled' akan membuat tombol tetap TAMPIL tapi tidak bisa diklik jika belum dicentang
                 if st.button("📤 Submit Request Dana", type="primary", use_container_width=True, disabled=not all_checked):
+                    
+                    # --- BLOKADE JIKA UANG MAKAN BELUM DIPILIH ---
+                    if "Uang Makan" in kebutuhan_dana_list and ('kategori_kerja' not in locals() or kategori_kerja == "-- Pilih Kategori Pekerjaan --"):
+                        st.error("❌ PENGIRIMAN DITOLAK: Anda memilih Uang Makan tetapi belum menentukan Jenis Pekerjaan Aktual di atas!")
+                        st.stop()
+                    # ---------------------------------------------
                     
                     if form_invalid or not sub_requests or nominal_tf <= 0:
                         st.error("❌ Mohon lengkapi formulir (Rincian Dana, Nominal, dan Tiket wajib diisi)!")
