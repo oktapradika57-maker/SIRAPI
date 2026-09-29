@@ -53,8 +53,8 @@ st.markdown("""
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
     }
 
-    /* 5. Warna Teks Global - Navy Super Gelap agar mudah dibaca */
-    p, div, span, label, h1, h2, h3, h4, h5, h6, li {
+    /* 5. Warna Teks Global - Diperbaiki agar tidak merusak banner */
+    p, label, h1, h2, h3, h4, h5, h6, li {
         color: #1E293B !important;
     }
 
@@ -76,13 +76,13 @@ st.markdown("""
     }
     .stTextInput>div>div>input:focus, 
     .stSelectbox>div>div>select:focus {
-        border-color: #2563EB !important; /* Garis Biru Tegas saat diklik */
+        border-color: #2563EB !important;
         box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
     }
 
     /* 7. TOMBOL AKSI UTAMA (SUBMIT) - DIJAMIN JELAS TERBACA */
     button[kind="primary"] {
-        background-color: #0F172A !important; /* Warna Hitam/Navy Solid */
+        background-color: #0F172A !important;
         border: none !important;
         border-radius: 8px !important;
         padding: 0.75rem 1.5rem !important;
@@ -90,7 +90,6 @@ st.markdown("""
         box-shadow: 0 4px 6px rgba(15, 23, 42, 0.2) !important;
         transition: all 0.2s ease !important;
     }
-    /* Mengunci paksa teks di dalam tombol UTAMA menjadi putih */
     button[kind="primary"] * {
         color: #FFFFFF !important; 
         font-weight: 600 !important;
@@ -98,7 +97,7 @@ st.markdown("""
         letter-spacing: 0.5px !important;
     }
     button[kind="primary"]:hover {
-        background-color: #2563EB !important; /* Berubah Biru menyala saat disentuh */
+        background-color: #2563EB !important;
         transform: translateY(-2px) !important;
     }
     button[kind="primary"]:disabled {
@@ -112,14 +111,13 @@ st.markdown("""
         background-color: #F8FAFC !important;
         border: 1.5px solid #E2E8F0 !important;
         border-radius: 12px !important;
-        min-height: 120px !important; /* MENGUNCI TINGGI KOTAK MENU AGAR SAMA RATA */
+        min-height: 120px !important;
         display: flex !important;
         flex-direction: column !important;
         justify-content: center !important;
         align-items: center !important;
         transition: all 0.2s ease !important;
     }
-    /* Memastikan teks di dalam menu rapi di tengah dan tidak terpotong */
     button[kind="secondary"] * {
         color: #334155 !important;
         font-weight: 700 !important;
@@ -135,38 +133,52 @@ st.markdown("""
         transform: translateY(-3px) !important;
     }
     button[kind="secondary"]:hover * {
-        color: #1D4ED8 !important; /* Teks berubah biru saat disorot */
+        color: #1D4ED8 !important;
     }
 
     /* 9. HEADER CARD PORTAL (Tampilan Khusus Judul Halaman) */
     .header-card {
-        background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%);
-        padding: 25px 30px;
-        border-radius: 12px;
-        margin-bottom: 30px;
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-        border-left: 6px solid #3B82F6;
+        background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%) !important;
+        padding: 30px !important;
+        border-radius: 12px !important;
+        margin-bottom: 30px !important;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important;
+        border-left: 6px solid #3B82F6 !important;
+        text-align: center !important;
     }
-    .header-card h2, .header-card p { 
-        color: #FFFFFF !important; /* Memaksa teks header menjadi putih */
+    /* Mengunci paksa SEMUA teks di dalam header menjadi putih terang */
+    .header-card,
+    .header-card p,
+    .header-card h1,
+    .header-card h2,
+    .header-card h3,
+    .header-card span,
+    .header-card div {
+        color: #FFFFFF !important;
     }
-    .header-card h2 { font-weight: 700; margin-bottom: 5px; font-size: 24px; }
-    .header-card p { opacity: 0.8; font-size: 15px; margin: 0; }
+    .header-card h1, .header-card h2 { 
+        font-weight: 800 !important; 
+        margin-bottom: 5px !important; 
+        font-size: 26px !important;
+    }
+    .header-card p { 
+        opacity: 0.9 !important; 
+        font-size: 15px !important; 
+        margin: 0 !important; 
+        font-weight: 400 !important;
+    }
 
-    /* 10. Sidebar Rapih */
+    /* 10. Sidebar & Alert */
     [data-testid="stSidebar"] {
         background-color: #F8FAFC !important;
         border-right: 1px solid #E2E8F0 !important;
     }
-    
-    /* 11. Kotak Warning/Info/Error (Alerts) */
     .stAlert {
         border-radius: 8px !important;
         border: none !important;
     }
 </style>
 """, unsafe_allow_html=True)
-
 # ==========================================
 # 0. KONFIGURASI HALAMAN & UI ELEGAN (FRESH & PROFESSIONAL)
 # ==========================================
