@@ -54,30 +54,65 @@ st.markdown("""
         transition: all 0.3s ease;
     }
     .stTextInput>div>div>input:focus, .stSelectbox>div>div>select:focus {
-        border: 1px solid #D4AF37 !important; /* Aksen Emas saat diklik */
+        border: 1px solid #D4AF37 !important;
         box-shadow: 0 0 12px rgba(212, 175, 55, 0.25) !important;
     }
 
-    /* 5. Tombol Premium 3D (Solid Dark with Gold Accent) */
-    .stButton>button {
+    /* 5. TAMPILAN KOTAK MENU UTAMA (SAMA PANJANG, RATA, & PROPOSIONAL) */
+    button[kind="secondary"] {
+        background: #FFFFFF !important;
+        color: #0F172A !important;
+        border: 1px solid #E2E8F0 !important;
+        border-radius: 16px !important;
+        min-height: 120px !important; /* MENGUNCI SEMUA KOTAK MENU AGAR SAMA TINGGI */
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        text-align: center !important;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.03) !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        font-weight: 700 !important;
+        white-space: pre-wrap !important; /* Memastikan teks panjang turun ke bawah dengan rapi */
+    }
+    button[kind="secondary"] p {
+        margin: 0 !important; /* Menghapus jarak bocor pada teks */
+        line-height: 1.4 !important;
+    }
+    button[kind="secondary"]:hover {
+        transform: translateY(-5px) !important;
+        box-shadow: 0 15px 30px rgba(212, 175, 55, 0.2) !important;
+        border-color: #D4AF37 !important;
+        color: #D4AF37 !important;
+    }
+
+    /* 6. TOMBOL SUBMIT / AKSI (SLEEK & ELEGAN) */
+    button[kind="primary"] {
         background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%) !important;
         color: #FFFFFF !important;
+        min-height: 55px !important; /* Lebih ramping untuk tombol aksi */
         font-weight: 700 !important;
         letter-spacing: 0.5px;
         border-radius: 12px !important;
         border: 1px solid #D4AF37 !important;
-        padding: 12px 24px !important;
         box-shadow: 0 10px 20px rgba(15, 23, 42, 0.15) !important;
         transition: all 0.3s ease !important;
     }
-    .stButton>button:hover {
+    button[kind="primary"]:hover {
         transform: translateY(-4px) !important;
         box-shadow: 0 15px 30px rgba(212, 175, 55, 0.4) !important;
         border-color: #FBF5B7 !important;
         color: #FBF5B7 !important;
     }
+    button[kind="primary"]:disabled {
+        background: #E2E8F0 !important;
+        border-color: #CBD5E1 !important;
+        color: #94A3B8 !important;
+        box-shadow: none !important;
+        transform: none !important;
+    }
 
-    /* 6. Desain Ulang Kartu Header */
+    /* 7. Desain Ulang Kartu Header */
     .header-card {
         background: linear-gradient(135deg, #FFFFFF 0%, #F8FAFC 100%);
         padding: 25px;
@@ -89,7 +124,7 @@ st.markdown("""
     .header-card h2 { color: #0F172A !important; font-weight: 800; margin-bottom: 5px; }
     .header-card p { color: #64748B !important; font-size: 15px; margin:0; }
 
-    /* 7. Styling Tabs Navigasi Ala Aplikasi iOS */
+    /* 8. Styling Tabs Navigasi Ala iOS */
     .stTabs [data-baseweb="tab-list"] {
         background-color: #FFFFFF;
         border-radius: 12px;
@@ -105,11 +140,11 @@ st.markdown("""
     }
     .stTabs [aria-selected="true"] {
         background: linear-gradient(135deg, #0F172A, #1E293B) !important;
-        color: #D4AF37 !important; /* Teks Emas */
+        color: #D4AF37 !important;
         box-shadow: 0 4px 10px rgba(0,0,0,0.1);
     }
 
-    /* 8. Menyembunyikan Elemen Default Streamlit yg Terlihat Murah */
+    /* 9. Menyembunyikan Elemen Default Streamlit yg Terlihat Murah */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {background-color: transparent !important;}
