@@ -21,6 +21,101 @@ import cv2
 import numpy as np
 import pytesseract
 
+# =================================================================
+# 🎨 SUNTIKAN UI/UX SUPER VVIP & MEWAH (EXECUTIVE PREMIUM THEME)
+# =================================================================
+st.markdown("""
+<style>
+    /* 1. Ganti Font Bawaan Menjadi Premium (Plus Jakarta Sans) */
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
+    * { font-family: 'Plus Jakarta Sans', sans-serif !important; }
+
+    /* 2. Latar Belakang Aplikasi (Elegan Silver-White Gradient) */
+    .stApp {
+        background-color: #F8FAFC;
+        background-image: radial-gradient(circle at 50% 0%, #FFFFFF 0%, #F1F5F9 100%);
+    }
+
+    /* 3. Panel Sidebar Mewah (Dark Navy) */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #0F172A 0%, #1E1B4B 100%) !important;
+        box-shadow: 5px 0 25px rgba(0,0,0,0.1);
+        border-right: 1px solid rgba(212, 175, 55, 0.2);
+    }
+    [data-testid="stSidebar"] * { color: #F8FAFC !important; }
+    
+    /* 4. Tampilan Input, Dropdown & Area Teks Kelas Atas */
+    .stTextInput>div>div>input, .stSelectbox>div>div>select, .stNumberInput>div>div>input, .stTextArea>div>div>textarea, .stDateInput>div>div>input {
+        border-radius: 12px !important;
+        border: 1px solid #E2E8F0 !important;
+        background-color: #FFFFFF !important;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.02) !important;
+        padding: 10px 15px !important;
+        transition: all 0.3s ease;
+    }
+    .stTextInput>div>div>input:focus, .stSelectbox>div>div>select:focus {
+        border: 1px solid #D4AF37 !important; /* Aksen Emas saat diklik */
+        box-shadow: 0 0 12px rgba(212, 175, 55, 0.25) !important;
+    }
+
+    /* 5. Tombol Premium 3D (Solid Dark with Gold Accent) */
+    .stButton>button {
+        background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%) !important;
+        color: #FFFFFF !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.5px;
+        border-radius: 12px !important;
+        border: 1px solid #D4AF37 !important;
+        padding: 12px 24px !important;
+        box-shadow: 0 10px 20px rgba(15, 23, 42, 0.15) !important;
+        transition: all 0.3s ease !important;
+    }
+    .stButton>button:hover {
+        transform: translateY(-4px) !important;
+        box-shadow: 0 15px 30px rgba(212, 175, 55, 0.4) !important;
+        border-color: #FBF5B7 !important;
+        color: #FBF5B7 !important;
+    }
+
+    /* 6. Desain Ulang Kartu Header */
+    .header-card {
+        background: linear-gradient(135deg, #FFFFFF 0%, #F8FAFC 100%);
+        padding: 25px;
+        border-radius: 20px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+        border-left: 8px solid #D4AF37; /* Strip Emas VIP */
+        margin-bottom: 25px;
+    }
+    .header-card h2 { color: #0F172A !important; font-weight: 800; margin-bottom: 5px; }
+    .header-card p { color: #64748B !important; font-size: 15px; margin:0; }
+
+    /* 7. Styling Tabs Navigasi Ala Aplikasi iOS */
+    .stTabs [data-baseweb="tab-list"] {
+        background-color: #FFFFFF;
+        border-radius: 12px;
+        padding: 8px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.04);
+        gap: 10px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 8px;
+        color: #64748B;
+        font-weight: 600;
+        padding: 5px 20px;
+    }
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, #0F172A, #1E293B) !important;
+        color: #D4AF37 !important; /* Teks Emas */
+        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    }
+
+    /* 8. Menyembunyikan Elemen Default Streamlit yg Terlihat Murah */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {background-color: transparent !important;}
+</style>
+""", unsafe_allow_html=True)
+
 # ==========================================
 # 0. KONFIGURASI HALAMAN & UI ELEGAN (FRESH & PROFESSIONAL)
 # ==========================================
