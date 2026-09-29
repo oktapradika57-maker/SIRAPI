@@ -22,143 +22,147 @@ import numpy as np
 import pytesseract
 
 # =================================================================
-# 🎨 SUNTIKAN UI/UX: MODERN SAAS DASHBOARD (VERCEL / APPLE STYLE)
+# 🎨 SUNTIKAN UI/UX: ENTERPRISE DASHBOARD (CLEAN & HIGH CONTRAST)
 # =================================================================
 st.markdown("""
 <style>
-    /* 1. MENGHILANGKAN JEJAK STREAMLIT */
-    header {visibility: hidden !important;}
-    #MainMenu {visibility: hidden !important;}
-    footer {visibility: hidden !important;}
-    
-    /* 2. LATAR BELAKANG APLIKASI (Abu-abu Lembut) */
+    /* 1. Sembunyikan elemen bawaan Streamlit (Beri ruang bersih) */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {background-color: transparent !important;}
+
+    /* 2. Latar Belakang Aplikasi - Clean Light Slate */
     .stApp {
-        background-color: #F1F5F9 !important; 
+        background-color: #F8FAFC !important;
     }
-    
-    /* 3. KANVAS KERJA MELAYANG (FLOATING CONTAINER) */
-    /* Ini yang akan membuat aplikasi terlihat seperti sistem Enterprise Mahal */
+
+    /* 3. Container Utama - Kartu Putih Rapi */
     .main .block-container {
         background-color: #FFFFFF !important;
-        padding: 2.5rem !important;
-        border-radius: 24px !important;
-        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0,0,0,0.05) !important;
-        margin-top: 3rem !important;
-        margin-bottom: 3rem !important;
-        max-width: 1000px !important; /* Mengunci lebar agar proporsional */
+        padding: 2rem 3rem !important;
+        border-radius: 12px !important;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03) !important;
+        margin-top: 2rem !important;
+        margin-bottom: 2rem !important;
         border: 1px solid #E2E8F0 !important;
+        max-width: 1100px !important;
     }
 
-    /* 4. FONT KELAS ATAS (INTER) */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    /* 4. Font Profesional (Bawaan Sistem UI yang Rapi) */
     * {
-        font-family: 'Inter', sans-serif !important;
-    }
-    h1, h2, h3, p, span, div {
-        color: #0F172A; /* Teks navy super gelap (Hampir Hitam) */
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
     }
 
-    /* 5. MEROMBAK INPUT FORM (Minimalist & Borderless) */
+    /* 5. Warna Teks Global - Navy Super Gelap agar mudah dibaca */
+    p, div, span, label, h1, h2, h3, h4, h5, h6, li {
+        color: #1E293B !important;
+    }
+
+    /* 6. Input Form (Teks, Dropdown, Tanggal) - Elegan & Jelas */
     .stTextInput>div>div>input, 
     .stSelectbox>div>div>select, 
     .stNumberInput>div>div>input, 
     .stTextArea>div>div>textarea, 
     .stDateInput>div>div>input {
-        background-color: #F8FAFC !important;
-        border: 2px solid transparent !important;
-        border-radius: 12px !important;
-        padding: 14px 16px !important;
+        background-color: #FFFFFF !important;
+        color: #0F172A !important;
+        border: 1.5px solid #CBD5E1 !important;
+        border-radius: 8px !important;
+        padding: 10px 14px !important;
         font-size: 15px !important;
         font-weight: 500 !important;
-        color: #0F172A !important;
-        transition: all 0.2s ease-in-out !important;
-        box-shadow: inset 0 2px 4px rgba(0,0,0,0.01) !important;
-    }
-    .stTextInput>div>div>input:focus, 
-    .stSelectbox>div>div>select:focus,
-    .stNumberInput>div>div>input:focus {
-        background-color: #FFFFFF !important;
-        border: 2px solid #2563EB !important; /* Aksen Biru Elektrik saat aktif */
-        box-shadow: 0 4px 14px rgba(37, 99, 235, 0.1) !important;
-    }
-
-    /* 6. KOTAK MENU NAVIGASI (DASHBOARD TILES) */
-    button[kind="secondary"] {
-        background: #FFFFFF !important;
-        border: 1px solid #E2E8F0 !important;
-        border-radius: 20px !important;
-        min-height: 140px !important;
-        display: flex !important;
-        flex-direction: column !important;
-        justify-content: center !important;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.02) !important;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-    }
-    button[kind="secondary"] p {
-        font-size: 16px !important;
-        font-weight: 700 !important;
-        color: #475569 !important;
-    }
-    button[kind="secondary"]:hover {
-        border-color: #2563EB !important;
-        background: #F8FAFC !important;
-        box-shadow: 0 15px 30px rgba(37, 99, 235, 0.08) !important;
-        transform: translateY(-5px) !important;
-    }
-    button[kind="secondary"]:hover p {
-        color: #2563EB !important;
-    }
-
-    /* 7. TOMBOL AKSI UTAMA (SUBMIT) */
-    button[kind="primary"] {
-        background: #0F172A !important; /* Hitam Solid Premium */
-        color: #FFFFFF !important;
-        border-radius: 12px !important;
-        min-height: 55px !important;
-        font-weight: 600 !important;
-        font-size: 16px !important;
-        border: none !important;
-        box-shadow: 0 8px 16px rgba(15, 23, 42, 0.15) !important;
+        box-shadow: inset 0 1px 2px rgba(0,0,0,0.02) !important;
         transition: all 0.2s ease !important;
     }
-    button[kind="primary"] p {
-        color: #FFFFFF !important; /* Pastikan teks tetap putih */
+    .stTextInput>div>div>input:focus, 
+    .stSelectbox>div>div>select:focus {
+        border-color: #2563EB !important; /* Garis Biru Tegas saat diklik */
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
+    }
+
+    /* 7. TOMBOL AKSI UTAMA (SUBMIT) - DIJAMIN JELAS TERBACA */
+    button[kind="primary"] {
+        background-color: #0F172A !important; /* Warna Hitam/Navy Solid */
+        border: none !important;
+        border-radius: 8px !important;
+        padding: 0.75rem 1.5rem !important;
+        min-height: 52px !important;
+        box-shadow: 0 4px 6px rgba(15, 23, 42, 0.2) !important;
+        transition: all 0.2s ease !important;
+    }
+    /* Mengunci paksa teks di dalam tombol UTAMA menjadi putih */
+    button[kind="primary"] * {
+        color: #FFFFFF !important; 
+        font-weight: 600 !important;
+        font-size: 16px !important;
+        letter-spacing: 0.5px !important;
     }
     button[kind="primary"]:hover {
-        background: #2563EB !important; /* Menyala Biru saat disorot */
-        transform: scale(1.02) !important;
-        box-shadow: 0 12px 24px rgba(37, 99, 235, 0.25) !important;
+        background-color: #2563EB !important; /* Berubah Biru menyala saat disentuh */
+        transform: translateY(-2px) !important;
     }
     button[kind="primary"]:disabled {
-        background: #CBD5E1 !important;
-        color: #64748B !important;
+        background-color: #94A3B8 !important;
         box-shadow: none !important;
         transform: none !important;
     }
 
-    /* 8. TABS (TOGGLE SWITCH ALA iOS) */
-    .stTabs [data-baseweb="tab-list"] {
-        background-color: #F1F5F9;
-        border-radius: 14px;
-        padding: 6px;
-        gap: 5px;
+    /* 8. KOTAK MENU NAVIGASI (Secondary) - SERAGAM DAN RAPI */
+    button[kind="secondary"] {
+        background-color: #F8FAFC !important;
+        border: 1.5px solid #E2E8F0 !important;
+        border-radius: 12px !important;
+        min-height: 120px !important; /* MENGUNCI TINGGI KOTAK MENU AGAR SAMA RATA */
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: center !important;
+        align-items: center !important;
+        transition: all 0.2s ease !important;
     }
-    .stTabs [data-baseweb="tab"] {
-        border-radius: 10px;
-        color: #64748B;
-        font-weight: 600;
-        padding: 8px 24px;
+    /* Memastikan teks di dalam menu rapi di tengah dan tidak terpotong */
+    button[kind="secondary"] * {
+        color: #334155 !important;
+        font-weight: 700 !important;
+        font-size: 15px !important;
+        text-align: center !important;
+        white-space: normal !important; 
+        line-height: 1.4 !important;
     }
-    .stTabs [aria-selected="true"] {
+    button[kind="secondary"]:hover {
         background-color: #FFFFFF !important;
-        color: #0F172A !important;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08) !important;
+        border-color: #3B82F6 !important;
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15) !important;
+        transform: translateY(-3px) !important;
+    }
+    button[kind="secondary"]:hover * {
+        color: #1D4ED8 !important; /* Teks berubah biru saat disorot */
+    }
+
+    /* 9. HEADER CARD PORTAL (Tampilan Khusus Judul Halaman) */
+    .header-card {
+        background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%);
+        padding: 25px 30px;
+        border-radius: 12px;
+        margin-bottom: 30px;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        border-left: 6px solid #3B82F6;
+    }
+    .header-card h2, .header-card p { 
+        color: #FFFFFF !important; /* Memaksa teks header menjadi putih */
+    }
+    .header-card h2 { font-weight: 700; margin-bottom: 5px; font-size: 24px; }
+    .header-card p { opacity: 0.8; font-size: 15px; margin: 0; }
+
+    /* 10. Sidebar Rapih */
+    [data-testid="stSidebar"] {
+        background-color: #F8FAFC !important;
+        border-right: 1px solid #E2E8F0 !important;
     }
     
-    /* 9. CHECKBOX */
-    .stCheckbox label span {
-        font-weight: 600 !important;
-        color: #334155 !important;
+    /* 11. Kotak Warning/Info/Error (Alerts) */
+    .stAlert {
+        border-radius: 8px !important;
+        border: none !important;
     }
 </style>
 """, unsafe_allow_html=True)
