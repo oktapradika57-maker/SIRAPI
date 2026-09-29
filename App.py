@@ -22,132 +22,144 @@ import numpy as np
 import pytesseract
 
 # =================================================================
-# 🎨 SUNTIKAN UI/UX SUPER VVIP & MEWAH (EXECUTIVE PREMIUM THEME)
+# 🎨 SUNTIKAN UI/UX: MODERN SAAS DASHBOARD (VERCEL / APPLE STYLE)
 # =================================================================
 st.markdown("""
 <style>
-    /* 1. Ganti Font Bawaan Menjadi Premium (Plus Jakarta Sans) */
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
-    * { font-family: 'Plus Jakarta Sans', sans-serif !important; }
-
-    /* 2. Latar Belakang Aplikasi (Elegan Silver-White Gradient) */
-    .stApp {
-        background-color: #F8FAFC;
-        background-image: radial-gradient(circle at 50% 0%, #FFFFFF 0%, #F1F5F9 100%);
-    }
-
-    /* 3. Panel Sidebar Mewah (Dark Navy) */
-    [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #0F172A 0%, #1E1B4B 100%) !important;
-        box-shadow: 5px 0 25px rgba(0,0,0,0.1);
-        border-right: 1px solid rgba(212, 175, 55, 0.2);
-    }
-    [data-testid="stSidebar"] * { color: #F8FAFC !important; }
+    /* 1. MENGHILANGKAN JEJAK STREAMLIT */
+    header {visibility: hidden !important;}
+    #MainMenu {visibility: hidden !important;}
+    footer {visibility: hidden !important;}
     
-    /* 4. Tampilan Input, Dropdown & Area Teks Kelas Atas */
-    .stTextInput>div>div>input, .stSelectbox>div>div>select, .stNumberInput>div>div>input, .stTextArea>div>div>textarea, .stDateInput>div>div>input {
-        border-radius: 12px !important;
-        border: 1px solid #E2E8F0 !important;
-        background-color: #FFFFFF !important;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.02) !important;
-        padding: 10px 15px !important;
-        transition: all 0.3s ease;
+    /* 2. LATAR BELAKANG APLIKASI (Abu-abu Lembut) */
+    .stApp {
+        background-color: #F1F5F9 !important; 
     }
-    .stTextInput>div>div>input:focus, .stSelectbox>div>div>select:focus {
-        border: 1px solid #D4AF37 !important;
-        box-shadow: 0 0 12px rgba(212, 175, 55, 0.25) !important;
+    
+    /* 3. KANVAS KERJA MELAYANG (FLOATING CONTAINER) */
+    /* Ini yang akan membuat aplikasi terlihat seperti sistem Enterprise Mahal */
+    .main .block-container {
+        background-color: #FFFFFF !important;
+        padding: 2.5rem !important;
+        border-radius: 24px !important;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0,0,0,0.05) !important;
+        margin-top: 3rem !important;
+        margin-bottom: 3rem !important;
+        max-width: 1000px !important; /* Mengunci lebar agar proporsional */
+        border: 1px solid #E2E8F0 !important;
     }
 
-    /* 5. TAMPILAN KOTAK MENU UTAMA (SAMA PANJANG, RATA, & PROPOSIONAL) */
+    /* 4. FONT KELAS ATAS (INTER) */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    * {
+        font-family: 'Inter', sans-serif !important;
+    }
+    h1, h2, h3, p, span, div {
+        color: #0F172A; /* Teks navy super gelap (Hampir Hitam) */
+    }
+
+    /* 5. MEROMBAK INPUT FORM (Minimalist & Borderless) */
+    .stTextInput>div>div>input, 
+    .stSelectbox>div>div>select, 
+    .stNumberInput>div>div>input, 
+    .stTextArea>div>div>textarea, 
+    .stDateInput>div>div>input {
+        background-color: #F8FAFC !important;
+        border: 2px solid transparent !important;
+        border-radius: 12px !important;
+        padding: 14px 16px !important;
+        font-size: 15px !important;
+        font-weight: 500 !important;
+        color: #0F172A !important;
+        transition: all 0.2s ease-in-out !important;
+        box-shadow: inset 0 2px 4px rgba(0,0,0,0.01) !important;
+    }
+    .stTextInput>div>div>input:focus, 
+    .stSelectbox>div>div>select:focus,
+    .stNumberInput>div>div>input:focus {
+        background-color: #FFFFFF !important;
+        border: 2px solid #2563EB !important; /* Aksen Biru Elektrik saat aktif */
+        box-shadow: 0 4px 14px rgba(37, 99, 235, 0.1) !important;
+    }
+
+    /* 6. KOTAK MENU NAVIGASI (DASHBOARD TILES) */
     button[kind="secondary"] {
         background: #FFFFFF !important;
-        color: #0F172A !important;
         border: 1px solid #E2E8F0 !important;
-        border-radius: 16px !important;
-        min-height: 120px !important; /* MENGUNCI SEMUA KOTAK MENU AGAR SAMA TINGGI */
+        border-radius: 20px !important;
+        min-height: 140px !important;
         display: flex !important;
         flex-direction: column !important;
-        align-items: center !important;
         justify-content: center !important;
-        text-align: center !important;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.03) !important;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.02) !important;
         transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-        font-weight: 700 !important;
-        white-space: pre-wrap !important; /* Memastikan teks panjang turun ke bawah dengan rapi */
     }
     button[kind="secondary"] p {
-        margin: 0 !important; /* Menghapus jarak bocor pada teks */
-        line-height: 1.4 !important;
+        font-size: 16px !important;
+        font-weight: 700 !important;
+        color: #475569 !important;
     }
     button[kind="secondary"]:hover {
+        border-color: #2563EB !important;
+        background: #F8FAFC !important;
+        box-shadow: 0 15px 30px rgba(37, 99, 235, 0.08) !important;
         transform: translateY(-5px) !important;
-        box-shadow: 0 15px 30px rgba(212, 175, 55, 0.2) !important;
-        border-color: #D4AF37 !important;
-        color: #D4AF37 !important;
+    }
+    button[kind="secondary"]:hover p {
+        color: #2563EB !important;
     }
 
-    /* 6. TOMBOL SUBMIT / AKSI (SLEEK & ELEGAN) */
+    /* 7. TOMBOL AKSI UTAMA (SUBMIT) */
     button[kind="primary"] {
-        background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%) !important;
+        background: #0F172A !important; /* Hitam Solid Premium */
         color: #FFFFFF !important;
-        min-height: 55px !important; /* Lebih ramping untuk tombol aksi */
-        font-weight: 700 !important;
-        letter-spacing: 0.5px;
         border-radius: 12px !important;
-        border: 1px solid #D4AF37 !important;
-        box-shadow: 0 10px 20px rgba(15, 23, 42, 0.15) !important;
-        transition: all 0.3s ease !important;
+        min-height: 55px !important;
+        font-weight: 600 !important;
+        font-size: 16px !important;
+        border: none !important;
+        box-shadow: 0 8px 16px rgba(15, 23, 42, 0.15) !important;
+        transition: all 0.2s ease !important;
+    }
+    button[kind="primary"] p {
+        color: #FFFFFF !important; /* Pastikan teks tetap putih */
     }
     button[kind="primary"]:hover {
-        transform: translateY(-4px) !important;
-        box-shadow: 0 15px 30px rgba(212, 175, 55, 0.4) !important;
-        border-color: #FBF5B7 !important;
-        color: #FBF5B7 !important;
+        background: #2563EB !important; /* Menyala Biru saat disorot */
+        transform: scale(1.02) !important;
+        box-shadow: 0 12px 24px rgba(37, 99, 235, 0.25) !important;
     }
     button[kind="primary"]:disabled {
-        background: #E2E8F0 !important;
-        border-color: #CBD5E1 !important;
-        color: #94A3B8 !important;
+        background: #CBD5E1 !important;
+        color: #64748B !important;
         box-shadow: none !important;
         transform: none !important;
     }
 
-    /* 7. Desain Ulang Kartu Header */
-    .header-card {
-        background: linear-gradient(135deg, #FFFFFF 0%, #F8FAFC 100%);
-        padding: 25px;
-        border-radius: 20px;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.05);
-        border-left: 8px solid #D4AF37; /* Strip Emas VIP */
-        margin-bottom: 25px;
-    }
-    .header-card h2 { color: #0F172A !important; font-weight: 800; margin-bottom: 5px; }
-    .header-card p { color: #64748B !important; font-size: 15px; margin:0; }
-
-    /* 8. Styling Tabs Navigasi Ala iOS */
+    /* 8. TABS (TOGGLE SWITCH ALA iOS) */
     .stTabs [data-baseweb="tab-list"] {
-        background-color: #FFFFFF;
-        border-radius: 12px;
-        padding: 8px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.04);
-        gap: 10px;
+        background-color: #F1F5F9;
+        border-radius: 14px;
+        padding: 6px;
+        gap: 5px;
     }
     .stTabs [data-baseweb="tab"] {
-        border-radius: 8px;
+        border-radius: 10px;
         color: #64748B;
         font-weight: 600;
-        padding: 5px 20px;
+        padding: 8px 24px;
     }
     .stTabs [aria-selected="true"] {
-        background: linear-gradient(135deg, #0F172A, #1E293B) !important;
-        color: #D4AF37 !important;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        background-color: #FFFFFF !important;
+        color: #0F172A !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08) !important;
     }
-
-    /* 9. Menyembunyikan Elemen Default Streamlit yg Terlihat Murah */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {background-color: transparent !important;}
+    
+    /* 9. CHECKBOX */
+    .stCheckbox label span {
+        font-weight: 600 !important;
+        color: #334155 !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
