@@ -1497,37 +1497,33 @@ elif st.session_state.page == "📝 Form Request Dana":
                 if not all_checked:
                     st.warning("⚠️ Silakan centang 3 Checklist Persiapan di atas agar Tombol Submit terbuka.")
                 
-                # Fitur 'disabled' akan membuat tombol tetap TAMPIL tapi tidak bisa diklik jika belum dicentang
+                # ====================================================
+                # --- ULTIMATE FIX: TOMBOL SUBMIT BERSIH ---
+                # ====================================================
                 if st.button("📤 Submit Request Dana", type="primary", use_container_width=True, disabled=not all_checked):
                     
-                    # BLOKADE KHUSUS PENGIRIMAN MATERIAL
-                    if is_kirim_mat and (not mat_module or not mat_site):
-                        st.error("❌ PENGIRIMAN DITOLAK: Anda mencentang Pengiriman Material, WAJIB mengisi Nama Module dan Site ID Tujuan di bagian atas!")
-                        st.stop()
-                    
-                   # --- BLOKADE JIKA UANG MAKAN BELUM DIPILIH ---
-                    if "Uang Makan" in kebutuhan_dana_list and ('kategori_kerja' not in locals() or kategori_kerja == "-- Pilih Kategori Pekerjaan --"):
-                        st.error("❌ PENGIRIMAN DITOLAK: Anda memilih Uang Makan tetapi belum menentukan Jenis Pekerjaan Aktual di atas!")
-                        st.stop()
-                    # ---------------------------------------------
-                    
+                    # 1. Validasi Form Dasar (Kosong atau Tidak)
                     if form_invalid or not sub_requests or nominal_tf <= 0:
                         st.error("❌ Mohon lengkapi formulir (Rincian Dana, Nominal, dan Tiket wajib diisi)!")
                         st.stop()
                         
+                    # 2. Validasi Khusus Material (Jika dicentang tapi kosong)
+                    if is_kirim_mat and (not mat_module or not mat_site):
+                        st.error("❌ PENGIRIMAN DITOLAK: Anda mencentang Pengiriman Material, WAJIB mengisi Nama Module dan Site ID Tujuan di bagian atas!")
+                        st.stop()
+
+                    # 3. Validasi Peta & Kilometer
                     for req in sub_requests:
                         if req['tipe'] in ['UM', 'Inap']:
                             if invalid_coords:
-                                st.error("❌ Peta belum valid. Pastikan Lat & Long tidak 0.")
-                                st.stop()
-                            if jarak_km_pp < 80:
-                                st.error(f"❌ Jarak {jarak_km_pp:.1f} KM tidak memenuhi syarat akomodasi (Minimal 80 KM).")
+                                st.error("❌ PENGIRIMAN DITOLAK: Peta belum valid. Pastikan Lat & Long tidak 0. Silakan klik tombol 'Cari' pada peta.")
                                 st.stop()
                         elif req['tipe'] in ['Mobil', 'Motor', 'Genset']:
                             if req['indikator'] <= 0 or req['indikator'] < req['last_ind']:
                                 st.error(f"❌ KM/RH Awal pada {req['tipe']} bermasalah (0 atau lebih kecil dari histori {req['last_ind']}).")
                                 st.stop()
                     
+                    # --- SISA KODE LAMA (TIDAK ADA LAGI BLOKADE UANG MAKAN DI SINI) ---
                     with st.spinner("🚀 Memecah data & Mengupload..."):
                         url_km = upload_foto(foto_km)
                         url_evidance = upload_foto(foto_evidance)
