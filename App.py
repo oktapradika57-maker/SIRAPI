@@ -1144,7 +1144,43 @@ elif st.session_state.page == "📝 Form Request Dana":
             if is_rejected_request:
                 st.info(f"💡 Info: Request dengan tiket **{base_tiket_clean}** sebelumnya ditolak. Anda dapat menginput ulang (Re-Submit) di form ini.")
 
-            deskripsi = st.text_area("Deskripsi Pekerjaan / Justifikasi (Harus Detail)")
+            # --- TAMBAHAN KLASIFIKASI PEKERJAAN MULTIPLE (MULAI) ---
+            st.markdown("<div class='section-title'>🏗️ Klasifikasi & Detail Pekerjaan</div>", unsafe_allow_html=True)
+            st.info("💡 Pilih semua jenis pekerjaan yang dilakukan. Pilihan akan otomatis merangkum Deskripsi, mengunci Uang Makan, dan memunculkan Checklist khusus.")
+            
+            c_job1, c_job2 = st.columns(2)
+            with c_job1:
+                opt_atas = ["RRU", "Antena MW/RF", "Jumper", "Optik", "Odu", "Pindah Mounting", "Lainnya (Ketik Manual)"]
+                val_atas = st.multiselect("📡 Tshoot Bagian Atas", opt_atas)
+                manual_atas = st.text_input("Sebutkan (Atas Lainnya):") if "Lainnya (Ketik Manual)" in val_atas else ""
+                
+                is_kirim_mat = st.checkbox("📦 Pengiriman Material")
+                mat_module = st.text_input("Wajib: Nama Module yang dikirim:") if is_kirim_mat else ""
+                mat_site = st.text_input("Wajib: Site ID Tujuan Pengiriman:") if is_kirim_mat else ""
+                
+            with c_job2:
+                opt_bawah = ["Module APR", "Backplane Rectifier", "Replace Board BTS", "Replace Optik Transmisi", "Replace Idu", "Add Batterai", "Add Rectifier", "Tshoot Power dan rectifier", "Pengecekan MCB", "BCP", "Automasi Genset", "Preventive Maintenance SITE", "Preventive Maintenance GENSET", "Preventive Maintenance SITE & GENSET (Tim PM)", "Lainnya (Ketik Manual)"]
+                val_bawah = st.multiselect("🔌 Tshoot Bagian Bawah", opt_bawah)
+                manual_bawah = st.text_input("Sebutkan (Bawah Lainnya):") if "Lainnya (Ketik Manual)" in val_bawah else ""
+
+            # Merangkum Deskripsi Otomatis dari Pilihan Tim
+            auto_desc = []
+            if val_atas:
+                c_atas = [x for x in val_atas if x != "Lainnya (Ketik Manual)"]
+                if manual_atas: c_atas.append(manual_atas)
+                if c_atas: auto_desc.append("BAGIAN ATAS: " + ", ".join(c_atas))
+            if val_bawah:
+                c_bawah = [x for x in val_bawah if x != "Lainnya (Ketik Manual)"]
+                if manual_bawah: c_bawah.append(manual_bawah)
+                if c_bawah: auto_desc.append("BAGIAN BAWAH: " + ", ".join(c_bawah))
+            if is_kirim_mat:
+                auto_desc.append(f"PENGIRIMAN MATERIAL: {mat_module} (Tujuan: Site {mat_site})")
+                
+            str_auto_desc = "\n".join(auto_desc)
+            
+            # Text area akan otomatis terisi dari rangkuman di atas!
+            deskripsi = st.text_area("Deskripsi Pekerjaan / Justifikasi (Auto-Fill System):", value=str_auto_desc, height=120)
+            # --- TAMBAHAN KLASIFIKASI PEKERJAAN MULTIPLE (SELESAI) ---
             
             list_nama_tim = [n for n in MASTER_DATA[nop]["names"] if n.strip().upper() != nama_lookup and n != ""]
             tim_bareng = st.multiselect("👥 Pilih Rekan Tim yang Berangkat Bersama (Opsional)", list_nama_tim)
@@ -1334,45 +1370,39 @@ elif st.session_state.page == "📝 Form Request Dana":
                 
             if "Uang Makan" in kebutuhan_dana_list:
                 st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
-                st.markdown("<b style='color:#0369A1;'>📋 Klasifikasi Jenis Pekerjaan (Wajib untuk Uang Makan)</b>", unsafe_allow_html=True)
                 
-                list_berat = [
-                    "Pekerjaan Ganti RRU", "Tshoot Rectifier", "Backup > 3 jam", 
-                    "Pembersihan Solar Panel", "Relokasi Batterai Lumsump", 
-                    "Ganti Optik", "Tshoot Genset", "Outomasi Genset (Diluar SVA)"
-                ]
-                list_ringan = [
-                    "Onkan MCB PLN yang trip", "Pengecekan biasa", "BCP biasa (Input data)"
-                ]
-                
-                kategori_kerja = st.selectbox(
-                    "Pilih Jenis Pekerjaan Aktual di Lapangan:", 
-                    ["-- Pilih Kategori Pekerjaan --"] + list_berat + list_ringan
-                )
-                
-                um_invalid = False
-                if kategori_kerja == "-- Pilih Kategori Pekerjaan --":
-                    st.warning("⚠️ Anda WAJIB memilih kategori pekerjaan di atas untuk memunculkan nominal Uang Makan.")
-                    um_invalid = True
+                # Blokir jika belum memilih kategori pekerjaan
+                if not val_atas and not val_bawah and not is_kirim_mat:
+                    st.error("❌ SISTEM MENOLAK: Anda memilih Uang Makan tapi belum menentukan jenis pekerjaan (Atas/Bawah/Material) di atas!")
+                    st.stop()
+                    
+                # Logika Sistem Cerdas (Berat = 60k, Ringan = 30k)
+                is_berat = False
+                if val_atas or is_kirim_mat: is_berat = True
+                if val_bawah:
+                    for item in val_bawah:
+                        # Jika ada pilihan SELAIN MCB dan BCP, otomatis dianggap kerja berat
+                        if item not in ["Pengecekan MCB", "BCP"]: 
+                            is_berat = True
+                            
+                if is_berat:
+                    base_um = 60000
+                    alasan = "✅ **Kategori Pekerjaan Berat/Teknikal:** Tim mendapatkan Uang Makan **Rp 60.000/orang** (Syarat: Jarak >80 KM)."
                 else:
-                    # Logika Penentuan Harga
-                    if kategori_kerja in list_berat:
-                        base_um = 60000
-                        alasan = f"✅ **Kategori Pekerjaan Berat:** Jarak tempuh >80 KM dan pekerjaan bersifat teknikal berat. Tim berhak mendapatkan Uang Makan maksimal **Rp 60.000/orang**."
-                    else:
-                        base_um = 30000
-                        alasan = f"⚠️ **Kategori Pekerjaan Ringan:** Walaupun jarak tempuh >80 KM, pekerjaan ini bersifat ringan/pengecekan. Tim hanya berhak mendapatkan Uang Makan maksimal **Rp 30.000/orang**."
+                    base_um = 30000
+                    alasan = "⚠️ **Kategori Pekerjaan Ringan:** Pekerjaan hanya berupa Pengecekan/BCP. Tim maksimal mendapatkan **Rp 30.000/orang** (Syarat: Jarak >80 KM)."
+                
+                st.info(alasan)
+                st.warning("🔒 **SYSTEM LOCK AKTIF:** Nominal tidak bisa diubah manual agar tertib. Hubungi Admin / Boss jika butuh approval khusus.")
+                
+                with c_um2:
+                    max_um_nominal = base_um * jml_org
+                    # FITUR DISABLED=TRUE akan mengunci kolom agar tidak bisa diketik tim
+                    nom_req_um = st.number_input(f"Nominal UM/Hari (TERKUNCI)", min_value=0, max_value=max_um_nominal, value=max_um_nominal, step=5000, disabled=True)
                     
-                    st.info(alasan)
-                    
-                    with c_um2:
-                        max_um_nominal = base_um * jml_org
-                        # Tampilkan input nominal tapi dikunci maksimal nilainya berdasarkan jenis kerja
-                        nom_req_um = st.number_input(f"Nominal UM/Hari (Maks Rp {base_um:,} x {jml_org} org)", min_value=0, max_value=max_um_nominal, step=5000, value=max_um_nominal)
-                        
-                    tot_um = hari_req * nom_req_um
-                    st.success(f"💰 Total Estimasi Uang Makan (Berdasarkan {jml_org} Orang): **Rp {tot_um:,.0f}**")
-                    sub_requests.append({"tiket": f"{base_tiket_clean} [UM]", "kategori": f"Akomodasi - {kategori_kerja}", "kebutuhan": tot_um, "plat": "", "indikator": 0.0, "last_ind": 0.0, "tipe": "UM", "hari": hari_req, "nom_um": nom_req_um})
+                tot_um = hari_req * nom_req_um
+                st.success(f"💰 Total Estimasi Uang Makan: **Rp {tot_um:,.0f}**")
+                sub_requests.append({"tiket": f"{base_tiket_clean} [UM]", "kategori": f"Akomodasi", "kebutuhan": tot_um, "plat": "", "indikator": 0.0, "last_ind": 0.0, "tipe": "UM", "hari": hari_req, "nom_um": nom_req_um})
                 
             if "Penginapan" in kebutuhan_dana_list:
                 with c_um1:
@@ -1425,18 +1455,53 @@ elif st.session_state.page == "📝 Form Request Dana":
         with c_up1: foto_km = ui_image_uploader("1. Foto KM / RH Genset Awal", key="req_km")
         with c_up2: foto_evidance = ui_image_uploader("2. Foto Evidance Request", key="req_ev")
         
-        # --- TAMBAHAN CHECKLIST KOMITMEN (MULAI) ---
+        # --- TAMBAHAN CHECKLIST DINAMIS (MULAI) ---
         st.markdown("<div class='section-title'>✅ 6. Checklist Persiapan & Komitmen Tim</div>", unsafe_allow_html=True)
         st.markdown("<div style='background-color:#FFFBEB; padding:15px; border-radius:10px; border-left: 5px solid #F59E0B; margin-bottom: 20px;'>", unsafe_allow_html=True)
-        st.write("⚠️ **WAJIB DICENTANG KETIGANYA UNTUK MEMUNCULKAN TOMBOL SUBMIT:**")
-        # Penambahan kunci (key) agar Streamlit tidak mereset centangan secara acak
-        cek_tools = st.checkbox("🔧 Saya memastikan seluruh **TOOLS** LENGKAP dan BERFUNGSI.", key="req_cek_1")
-        cek_material = st.checkbox("📦 Saya memastikan **MATERIAL** sudah disiapkan sepenuhnya.", key="req_cek_2")
-        cek_komitmen = st.checkbox("🤝 Saya **BERKOMITMEN** menuntaskan pekerjaan & bertanggung jawab.", key="req_cek_3")
-        st.markdown("</div>", unsafe_allow_html=True)
+        st.write("⚠️ **WAJIB DICENTANG SELURUHNYA UNTUK MEMUNCULKAN TOMBOL SUBMIT:**")
         
-        all_checked = cek_tools and cek_material and cek_komitmen
-        # --- TAMBAHAN CHECKLIST KOMITMEN (SELESAI) ---
+        all_checked = True
+        
+        # Trigger Checklist Pintar dari pilihan Atas/Bawah/PM
+        show_atas = len(val_atas) > 0
+        show_bawah = len(val_bawah) > 0
+        show_pm = any("Preventive Maintenance" in x for x in val_bawah)
+        
+        if show_atas:
+            st.markdown("<b style='color:#EF4444;'>🛠️ TSHOOT BAGIAN ATAS:</b>", unsafe_allow_html=True)
+            if not st.checkbox("1. Body harnes", key="c_a1"): all_checked = False
+            if not st.checkbox("2. Tambang", key="c_a2"): all_checked = False
+            if not st.checkbox("3. Material/module", key="c_a3"): all_checked = False
+            if not st.checkbox("4. Helm Climbing", key="c_a4"): all_checked = False
+            if not st.checkbox("5. Tang amper", key="c_a5"): all_checked = False
+            if not st.checkbox("6. Pastikan sebelum naik semua material kondisi baik & berfungsi. JANGAN DIMULAI JIKA ADA KEKURANGAN.", key="c_a6"): all_checked = False
+            st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
+            
+        if show_bawah:
+            st.markdown("<b style='color:#3B82F6;'>🔌 TSHOOT BAGIAN BAWAH:</b>", unsafe_allow_html=True)
+            if not st.checkbox("1. Tang Amper", key="c_b1"): all_checked = False
+            if not st.checkbox("2. Sarung tangan", key="c_b2"): all_checked = False
+            if not st.checkbox("3. Material/Module", key="c_b3"): all_checked = False
+            if not st.checkbox("4. Sepatu Safety", key="c_b4"): all_checked = False
+            if not st.checkbox("5. Perkabelan dan optikal/sfp", key="c_b5"): all_checked = False
+            if not st.checkbox("6. Pastikan semua berfungsi, jangan memulai pekerjaan jika ada kekurangan.", key="c_b6"): all_checked = False
+            st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
+            
+        if show_pm:
+            st.markdown("<b style='color:#10B981;'>🦺 KHUSUS PREVENTIVE MAINTENANCE (JSA):</b>", unsafe_allow_html=True)
+            if not st.checkbox("1. Sertifikat", key="c_p1"): all_checked = False
+            if not st.checkbox("2. Box P3K standart (Eskalasi jika perlu)", key="c_p2"): all_checked = False
+            if not st.checkbox("3. Sepatu Safety", key="c_p3"): all_checked = False
+            if not st.checkbox("4. Banner ditulis site id dan nomor hp sesuai kebutuhan", key="c_p4"): all_checked = False
+            if not st.checkbox("5. Policeline", key="c_p5"): all_checked = False
+            if not st.checkbox("6. Semua tools JSA Wajib lengkap (MENGHINDARI REJECT PM DAN TEMUAN)", key="c_p6"): all_checked = False
+            st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
+            
+        if not (show_atas or show_bawah or show_pm):
+            if not st.checkbox("🤝 Saya BERKOMITMEN menyelesaikan pekerjaan ini dengan tuntas & bertanggung jawab.", key="c_def1"): all_checked = False
+            
+        st.markdown("</div>", unsafe_allow_html=True)
+        # --- TAMBAHAN CHECKLIST DINAMIS (SELESAI) ---
 
         form_invalid = (nama == "" or cluster == "" or role == "-- Pilih Role --" or keperluan == "" or not base_tiket_clean)
 
@@ -1476,6 +1541,11 @@ elif st.session_state.page == "📝 Form Request Dana":
                 
                 # Fitur 'disabled' akan membuat tombol tetap TAMPIL tapi tidak bisa diklik jika belum dicentang
                 if st.button("📤 Submit Request Dana", type="primary", use_container_width=True, disabled=not all_checked):
+                    
+                    # BLOKADE KHUSUS PENGIRIMAN MATERIAL
+                    if is_kirim_mat and (not mat_module or not mat_site):
+                        st.error("❌ PENGIRIMAN DITOLAK: Anda mencentang Pengiriman Material, WAJIB mengisi Nama Module dan Site ID Tujuan di bagian atas!")
+                        st.stop()
                     
                     # --- BLOKADE JIKA UANG MAKAN BELUM DIPILIH ---
                     if "Uang Makan" in kebutuhan_dana_list and ('kategori_kerja' not in locals() or kategori_kerja == "-- Pilih Kategori Pekerjaan --"):
