@@ -1547,10 +1547,7 @@ elif st.session_state.page == "📝 Form Request Dana":
                         st.error("❌ PENGIRIMAN DITOLAK: Anda mencentang Pengiriman Material, WAJIB mengisi Nama Module dan Site ID Tujuan di bagian atas!")
                         st.stop()
                     
-                    # --- BLOKADE JIKA UANG MAKAN BELUM DIPILIH ---
-                    if "Uang Makan" in kebutuhan_dana_list and ('kategori_kerja' not in locals() or kategori_kerja == "-- Pilih Kategori Pekerjaan --"):
-                        st.error("❌ PENGIRIMAN DITOLAK: Anda memilih Uang Makan tetapi belum menentukan Jenis Pekerjaan Aktual di atas!")
-                        st.stop()
+                
                     # ---------------------------------------------
                     
                     if form_invalid or not sub_requests or nominal_tf <= 0:
