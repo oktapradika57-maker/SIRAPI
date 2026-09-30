@@ -26,12 +26,17 @@ import pytesseract
 # =================================================================
 st.markdown("""
 <style>
+    /* 1. Sembunyikan elemen bawaan Streamlit (Beri ruang bersih) */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {background-color: transparent !important;}
 
-    .stApp { background-color: #F8FAFC !important; }
+    /* 2. Latar Belakang Aplikasi - Clean Light Slate */
+    .stApp {
+        background-color: #F8FAFC !important;
+    }
 
+    /* 3. Container Utama - Kartu Putih Rapi */
     .main .block-container {
         background-color: #FFFFFF !important;
         padding: 2rem 3rem !important;
@@ -43,21 +48,22 @@ st.markdown("""
         max-width: 1100px !important;
     }
 
-    /* Menerapkan font hanya pada teks biasa, BUKAN pada icon */
-    html, body, p, div, label, h1, h2, h3, h4, h5, h6, li, span {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    }
-    
-    /* MENGEMBALIKAN FONT ICON STREAMLIT AGAR TIDAK ERROR (arrow_drop_down) */
-    span.material-icons, span.material-icons-outlined, span.material-icons-round, span[class*="icon"] {
-        font-family: 'Material Icons', 'Material Symbols Outlined' !important;
-        color: #64748B !important;
+    /* 4. Font Profesional (Bawaan Sistem UI yang Rapi) */
+    * {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
     }
 
-    p, label, h1, h2, h3, h4, h5, h6, li { color: #1E293B !important; }
+    /* 5. Warna Teks Global - Diperbaiki agar tidak merusak banner */
+    p, label, h1, h2, h3, h4, h5, h6, li {
+        color: #1E293B !important;
+    }
 
-    .stTextInput>div>div>input, .stSelectbox>div>div>select, .stNumberInput>div>div>input, 
-    .stTextArea>div>div>textarea, .stDateInput>div>div>input {
+    /* 6. Input Form (Teks, Dropdown, Tanggal) - Elegan & Jelas */
+    .stTextInput>div>div>input, 
+    .stSelectbox>div>div>select, 
+    .stNumberInput>div>div>input, 
+    .stTextArea>div>div>textarea, 
+    .stDateInput>div>div>input {
         background-color: #FFFFFF !important;
         color: #0F172A !important;
         border: 1.5px solid #CBD5E1 !important;
@@ -66,12 +72,15 @@ st.markdown("""
         font-size: 15px !important;
         font-weight: 500 !important;
         box-shadow: inset 0 1px 2px rgba(0,0,0,0.02) !important;
+        transition: all 0.2s ease !important;
     }
-    .stTextInput>div>div>input:focus, .stSelectbox>div>div>select:focus {
+    .stTextInput>div>div>input:focus, 
+    .stSelectbox>div>div>select:focus {
         border-color: #2563EB !important;
         box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
     }
 
+    /* 7. TOMBOL AKSI UTAMA (SUBMIT) - DIJAMIN JELAS TERBACA */
     button[kind="primary"] {
         background-color: #0F172A !important;
         border: none !important;
@@ -79,15 +88,25 @@ st.markdown("""
         padding: 0.75rem 1.5rem !important;
         min-height: 52px !important;
         box-shadow: 0 4px 6px rgba(15, 23, 42, 0.2) !important;
+        transition: all 0.2s ease !important;
     }
     button[kind="primary"] * {
         color: #FFFFFF !important; 
         font-weight: 600 !important;
         font-size: 16px !important;
+        letter-spacing: 0.5px !important;
     }
-    button[kind="primary"]:hover { background-color: #2563EB !important; transform: translateY(-2px) !important; }
-    button[kind="primary"]:disabled { background-color: #94A3B8 !important; transform: none !important; }
+    button[kind="primary"]:hover {
+        background-color: #2563EB !important;
+        transform: translateY(-2px) !important;
+    }
+    button[kind="primary"]:disabled {
+        background-color: #94A3B8 !important;
+        box-shadow: none !important;
+        transform: none !important;
+    }
 
+    /* 8. KOTAK MENU NAVIGASI (Secondary) - SERAGAM DAN RAPI */
     button[kind="secondary"] {
         background-color: #F8FAFC !important;
         border: 1.5px solid #E2E8F0 !important;
@@ -97,6 +116,7 @@ st.markdown("""
         flex-direction: column !important;
         justify-content: center !important;
         align-items: center !important;
+        transition: all 0.2s ease !important;
     }
     button[kind="secondary"] * {
         color: #334155 !important;
@@ -106,25 +126,57 @@ st.markdown("""
         white-space: normal !important; 
         line-height: 1.4 !important;
     }
-    button[kind="secondary"]:hover { border-color: #3B82F6 !important; transform: translateY(-3px) !important; }
-    button[kind="secondary"]:hover * { color: #1D4ED8 !important; }
+    button[kind="secondary"]:hover {
+        background-color: #FFFFFF !important;
+        border-color: #3B82F6 !important;
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15) !important;
+        transform: translateY(-3px) !important;
+    }
+    button[kind="secondary"]:hover * {
+        color: #1D4ED8 !important;
+    }
 
+    /* 9. HEADER CARD PORTAL (Tampilan Khusus Judul Halaman) */
     .header-card {
         background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%) !important;
         padding: 30px !important;
         border-radius: 12px !important;
         margin-bottom: 30px !important;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important;
         border-left: 6px solid #3B82F6 !important;
         text-align: center !important;
     }
-    .header-card, .header-card p, .header-card h1, .header-card h2, .header-card h3, .header-card span, .header-card div {
+    /* Mengunci paksa SEMUA teks di dalam header menjadi putih terang */
+    .header-card,
+    .header-card p,
+    .header-card h1,
+    .header-card h2,
+    .header-card h3,
+    .header-card span,
+    .header-card div {
         color: #FFFFFF !important;
     }
-    .header-card h1, .header-card h2 { font-weight: 800 !important; margin-bottom: 5px !important; font-size: 26px !important;}
-    .header-card p { opacity: 0.9 !important; font-size: 15px !important; font-weight: 400 !important;}
+    .header-card h1, .header-card h2 { 
+        font-weight: 800 !important; 
+        margin-bottom: 5px !important; 
+        font-size: 26px !important;
+    }
+    .header-card p { 
+        opacity: 0.9 !important; 
+        font-size: 15px !important; 
+        margin: 0 !important; 
+        font-weight: 400 !important;
+    }
 
-    [data-testid="stSidebar"] { background-color: #F8FAFC !important; border-right: 1px solid #E2E8F0 !important; }
-    .stAlert { border-radius: 8px !important; border: none !important; }
+    /* 10. Sidebar & Alert */
+    [data-testid="stSidebar"] {
+        background-color: #F8FAFC !important;
+        border-right: 1px solid #E2E8F0 !important;
+    }
+    .stAlert {
+        border-radius: 8px !important;
+        border: none !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 # ==========================================
@@ -1308,7 +1360,6 @@ elif st.session_state.page == "📝 Form Request Dana":
                     sub_requests.append({"tiket": f"{base_tiket_clean} [GENSET]", "kategori": f"Genset - {jb_genset}", "kebutuhan": keb_genset, "plat": plat_genset, "indikator": rh_awal_gen, "last_ind": last_rh_gen, "tipe": "Genset"})
             st.markdown("</div>", unsafe_allow_html=True)
             
-       # --- BLOK AKOMODASI (UANG MAKAN & PENGINAPAN) MULAI ---
         if "Uang Makan" in kebutuhan_dana_list or "Penginapan" in kebutuhan_dana_list:
             st.markdown("<div style='background-color:#E0F2FE; padding:15px; border-radius:10px; border-left: 5px solid #0284C7; margin-bottom: 15px;'>", unsafe_allow_html=True)
             
@@ -1320,46 +1371,39 @@ elif st.session_state.page == "📝 Form Request Dana":
             if "Uang Makan" in kebutuhan_dana_list:
                 st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
                 
-                # Blokir jika belum memilih kategori pekerjaan (Pencegahan Curang)
+                # Blokir jika belum memilih kategori pekerjaan
                 if not val_atas and not val_bawah and not is_kirim_mat:
                     st.error("❌ SISTEM MENOLAK: Anda memilih Uang Makan tapi belum menentukan jenis pekerjaan (Atas/Bawah/Material) di atas!")
                     st.stop()
                     
-                # Logika Sistem Cerdas (Berat / Ringan)
+                # Logika Sistem Cerdas (Berat = 60k, Ringan = 30k)
                 is_berat = False
                 if val_atas or is_kirim_mat: is_berat = True
                 if val_bawah:
                     for item in val_bawah:
+                        # Jika ada pilihan SELAIN MCB dan BCP, otomatis dianggap kerja berat
                         if item not in ["Pengecekan MCB", "BCP"]: 
                             is_berat = True
-                
-                # Validasi Jarak Langsung di Panel Uang Makan
-                if jarak_km_pp < 80:
-                    st.error(f"❌ JARAK TIDAK MEMENUHI SYARAT: Jarak tempuh Peta hanya {jarak_km_pp:.1f} KM. Syarat minimal Uang Makan adalah >80 KM. Nominal dikunci ke 0.")
-                    base_um = 0
-                    nom_req_um = 0
+                            
+                if is_berat:
+                    base_um = 60000
+                    alasan = "✅ **Kategori Pekerjaan Berat/Teknikal:** Tim mendapatkan Uang Makan **Rp 60.000/orang** (Syarat: Jarak >80 KM)."
                 else:
-                    if is_berat:
-                        base_um = 60000
-                        alasan = f"✅ **Kategori Pekerjaan Berat:** Jarak {jarak_km_pp:.1f} KM (>80 KM) tercapai. Tim berhak mendapatkan **Rp 60.000/orang**."
-                    else:
-                        base_um = 30000
-                        alasan = f"⚠️ **Kategori Pekerjaan Ringan:** Jarak {jarak_km_pp:.1f} KM (>80 KM) namun pekerjaan ringan. Tim berhak mendapatkan **Rp 30.000/orang**."
-                    st.info(alasan)
+                    base_um = 30000
+                    alasan = "⚠️ **Kategori Pekerjaan Ringan:** Pekerjaan hanya berupa Pengecekan/BCP. Tim maksimal mendapatkan **Rp 30.000/orang** (Syarat: Jarak >80 KM)."
                 
-                st.warning("🔒 **SYSTEM LOCK AKTIF:** Nominal tidak bisa diubah manual.")
+                st.info(alasan)
+                st.warning("🔒 **SYSTEM LOCK AKTIF:** Nominal tidak bisa diubah manual agar tertib. Hubungi Admin / Boss jika butuh approval khusus.")
                 
                 with c_um2:
                     max_um_nominal = base_um * jml_org
-                    # Dikunci (disabled=True) agar tim tidak bisa mengotak-atik angkanya
-                    nom_req_um = st.number_input(f"Nominal UM/Hari (TERKUNCI)", min_value=0, max_value=max_um_nominal if max_um_nominal > 0 else 100, value=max_um_nominal, step=5000, disabled=True)
+                    # FITUR DISABLED=TRUE akan mengunci kolom agar tidak bisa diketik tim
+                    nom_req_um = st.number_input(f"Nominal UM/Hari (TERKUNCI)", min_value=0, max_value=max_um_nominal, value=max_um_nominal, step=5000, disabled=True)
                     
                 tot_um = hari_req * nom_req_um
-                if tot_um > 0:
-                    st.success(f"💰 Total Estimasi Uang Makan: **Rp {tot_um:,.0f}**")
-                    kategori_teks = "Uang Makan (Pekerjaan Berat)" if is_berat else "Uang Makan (Pekerjaan Ringan)"
-                    sub_requests.append({"tiket": f"{base_tiket_clean} [UM]", "kategori": kategori_teks, "kebutuhan": tot_um, "plat": "", "indikator": 0.0, "last_ind": 0.0, "tipe": "UM", "hari": hari_req, "nom_um": nom_req_um})
-            
+                st.success(f"💰 Total Estimasi Uang Makan: **Rp {tot_um:,.0f}**")
+                sub_requests.append({"tiket": f"{base_tiket_clean} [UM]", "kategori": f"Akomodasi", "kebutuhan": tot_um, "plat": "", "indikator": 0.0, "last_ind": 0.0, "tipe": "UM", "hari": hari_req, "nom_um": nom_req_um})
+                
             if "Penginapan" in kebutuhan_dana_list:
                 with c_um1:
                     malam_inap = st.number_input("Berapa Malam Menginap?", min_value=1, step=1, value=hari_req if hari_req == 1 else hari_req - 1)
@@ -1370,9 +1414,7 @@ elif st.session_state.page == "📝 Form Request Dana":
                 tot_inap = malam_inap * nom_req_inap
                 st.success(f"🛏️ Total Estimasi Penginapan: **Rp {tot_inap:,.0f}**")
                 sub_requests.append({"tiket": f"{base_tiket_clean} [INAP]", "kategori": "Penginapan", "kebutuhan": tot_inap, "plat": "", "indikator": 0.0, "last_ind": 0.0, "tipe": "Inap", "hari": malam_inap, "nom_inap": nom_req_inap})
-            
             st.markdown("</div>", unsafe_allow_html=True)
-        # --- BLOK AKOMODASI (UANG MAKAN & PENGINAPAN) SELESAI ---
             
         if "Material" in kebutuhan_dana_list:
             with st.expander("📦 Detail Material", expanded=True):
@@ -1497,33 +1539,37 @@ elif st.session_state.page == "📝 Form Request Dana":
                 if not all_checked:
                     st.warning("⚠️ Silakan centang 3 Checklist Persiapan di atas agar Tombol Submit terbuka.")
                 
-                # ====================================================
-                # --- ULTIMATE FIX: TOMBOL SUBMIT BERSIH ---
-                # ====================================================
+                # Fitur 'disabled' akan membuat tombol tetap TAMPIL tapi tidak bisa diklik jika belum dicentang
                 if st.button("📤 Submit Request Dana", type="primary", use_container_width=True, disabled=not all_checked):
                     
-                    # 1. Validasi Form Dasar (Kosong atau Tidak)
+                    # BLOKADE KHUSUS PENGIRIMAN MATERIAL
+                    if is_kirim_mat and (not mat_module or not mat_site):
+                        st.error("❌ PENGIRIMAN DITOLAK: Anda mencentang Pengiriman Material, WAJIB mengisi Nama Module dan Site ID Tujuan di bagian atas!")
+                        st.stop()
+                    
+                    # --- BLOKADE JIKA UANG MAKAN BELUM DIPILIH ---
+                    if "Uang Makan" in kebutuhan_dana_list and ('kategori_kerja' not in locals() or kategori_kerja == "-- Pilih Kategori Pekerjaan --"):
+                        st.error("❌ PENGIRIMAN DITOLAK: Anda memilih Uang Makan tetapi belum menentukan Jenis Pekerjaan Aktual di atas!")
+                        st.stop()
+                    # ---------------------------------------------
+                    
                     if form_invalid or not sub_requests or nominal_tf <= 0:
                         st.error("❌ Mohon lengkapi formulir (Rincian Dana, Nominal, dan Tiket wajib diisi)!")
                         st.stop()
                         
-                    # 2. Validasi Khusus Material (Jika dicentang tapi kosong)
-                    if is_kirim_mat and (not mat_module or not mat_site):
-                        st.error("❌ PENGIRIMAN DITOLAK: Anda mencentang Pengiriman Material, WAJIB mengisi Nama Module dan Site ID Tujuan di bagian atas!")
-                        st.stop()
-
-                    # 3. Validasi Peta & Kilometer
                     for req in sub_requests:
                         if req['tipe'] in ['UM', 'Inap']:
                             if invalid_coords:
-                                st.error("❌ PENGIRIMAN DITOLAK: Peta belum valid. Pastikan Lat & Long tidak 0. Silakan klik tombol 'Cari' pada peta.")
+                                st.error("❌ Peta belum valid. Pastikan Lat & Long tidak 0.")
+                                st.stop()
+                            if jarak_km_pp < 80:
+                                st.error(f"❌ Jarak {jarak_km_pp:.1f} KM tidak memenuhi syarat akomodasi (Minimal 80 KM).")
                                 st.stop()
                         elif req['tipe'] in ['Mobil', 'Motor', 'Genset']:
                             if req['indikator'] <= 0 or req['indikator'] < req['last_ind']:
                                 st.error(f"❌ KM/RH Awal pada {req['tipe']} bermasalah (0 atau lebih kecil dari histori {req['last_ind']}).")
                                 st.stop()
                     
-                    # --- SISA KODE LAMA (TIDAK ADA LAGI BLOKADE UANG MAKAN DI SINI) ---
                     with st.spinner("🚀 Memecah data & Mengupload..."):
                         url_km = upload_foto(foto_km)
                         url_evidance = upload_foto(foto_evidance)
@@ -1533,10 +1579,8 @@ elif st.session_state.page == "📝 Form Request Dana":
                         for req in sub_requests:
                             desc_final = deskripsi
                             if tim_bareng: desc_final += f"\n\n[Tim: {', '.join(tim_bareng)}]"
-                            if req['tipe'] == 'UM': 
-                                desc_final += f"\n\n[REQ AKOMODASI: {req['kategori']} | {req['hari']} Hari @ Rp {req['nom_um']:,.0f}/hari = Rp {req['kebutuhan']:,.0f} | Jarak Peta: {jarak_km_pp:.1f} KM]"
-                            elif req['tipe'] == 'Inap': 
-                                desc_final += f"\n\n[REQ PENGINAPAN: {req['hari']} Malam @ Rp {req['nom_inap']:,.0f}/malam = Rp {req['kebutuhan']:,.0f} | Jarak Peta: {jarak_km_pp:.1f} KM]"
+                            if req['tipe'] == 'UM': desc_final += f"\n\n[REQ AKOMODASI: {req['hari']} Hari @ Rp {req['nom_um']:,.0f}/hari = Rp {req['kebutuhan']:,.0f}]"
+                            elif req['tipe'] == 'Inap': desc_final += f"\n\n[REQ PENGINAPAN: {req['hari']} Malam @ Rp {req['nom_inap']:,.0f}/malam = Rp {req['kebutuhan']:,.0f}]"
                             
                             data_req = [
                                 ts_now, tgl_str, nop, req['tiket'], cluster, nama, role, site_id, keperluan, 
@@ -1579,24 +1623,27 @@ elif st.session_state.page == "✅ Form PJB Operasional":
         
         site_dict, site_list, tim_dict, list_nopol_csv, nik_dict = load_excel_data()
         
-        # --- ALGORITMA FILTER PJB SUPER CERDAS (BERSIH) ---
+       # --- ALGORITMA FILTER PJB SUPER CERDAS (MULAI) ---
+        pjb_counts = {}
         status_verif_dict = {}
+        
+        # 1. Ambil status Verifikasi PJB (Mendeteksi PJB yang direvisi/ditolak Admin)
         for r in app_r[1:]:
             if len(r) > 5 and r[3] == "Verifikasi PJB":
                 tiket_app = str(r[2]).strip().upper()
                 if tiket_app != "": status_verif_dict[tiket_app] = str(r[5]).strip()
-
-        pjb_counts = {}
-        pjb_tickets_all_set = set() # Kita kembalikan variabel ini agar sistem lama tidak error
+                
+        # 2. Hitung jumlah PJB valid yang sudah diselesaikan (Kebal Duplikat & Re-Request)
         for r in pjb_r[1:]:
             if len(r) > 21 and r[21].strip() != "":
                 tk_str = r[36].strip() if (len(r) > 36 and r[36].strip()) else r[21].strip()
-                tk_list = [t.strip().upper() for t in tk_str.split(",")]
-                pjb_tickets_all_set.update(tk_list)
-                for t_clean in tk_list:
+                for t in tk_str.split(","):
+                    t_clean = t.strip().upper()
+                    # Jika PJB ini ditolak admin, JANGAN dihitung sebagai "Selesai", agar muncul lagi di layar tim
                     if t_clean and status_verif_dict.get(t_clean) != "REJECTED":
                         pjb_counts[t_clean] = pjb_counts.get(t_clean, 0) + 1
         
+        # 3. Ambil status Approval Request Dana (Membuang tiket yang ditolak sejak awal)
         req_app_status = {}
         for r in app_r[1:]:
             if len(r) > 5 and r[3] == "Request Dana":
@@ -1615,6 +1662,7 @@ elif st.session_state.page == "✅ Form PJB Operasional":
 
         with col_id2: pass_nominal = st.text_input("🔑 Akses Nominal (Admin):", type="password")
             
+        # 4. Filter Pencocokan Tiket Pending
         req_counts = {}
         pending_list, pending_options = [], []
         
@@ -1623,15 +1671,19 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                 req_tk_raw = str(r[3]).strip().upper()
                 nm = str(r[5]).strip().upper()
                 
+                # Hitung frekuensi tiket ini diajukan
                 req_counts[req_tk_raw] = req_counts.get(req_tk_raw, 0) + 1
-                base_tiket = req_tk_raw.split(" [")[0].strip()
                 
+                # Abaikan tiket yang sudah ditolak mentah-mentah saat tahap Request Dana
+                base_tiket = req_tk_raw.split(" [")[0].strip()
                 if req_app_status.get(req_tk_raw) == "REJECTED" or req_app_status.get(base_tiket) == "REJECTED":
                     continue 
                 
+                # TIKET PENDING = Jika jumlah Request lebih banyak dari jumlah PJB yang sudah divalidasi
                 if req_counts[req_tk_raw] > pjb_counts.get(req_tk_raw, 0):
                     is_ready_to_pjb = True
                     
+                    # Logika Penahan Tahap 2 (Khusus BBM Split)
                     if "[MOTOR-2]" in req_tk_raw or "[MOBIL-2]" in req_tk_raw:
                         tiket_tahap_1 = req_tk_raw.replace("-2]", "-1]")
                         if pjb_counts.get(tiket_tahap_1, 0) == 0:
@@ -1646,12 +1698,55 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                             rem = [t for t in pm_list if pjb_counts.get(t, 0) == 0]
                             item["Sisa Tiket PM"] = ", ".join(rem) if rem else "Menunggu Verifikasi"
                         
+                        # Filter Anti-Spasi Terselubung (Membaca meski ada spasi salah ketik di database)
                         if nama_pjb != "-- Pilih Nama --":
                             nama_bersih = nama_pjb.strip().upper()
                             if nama_bersih in nm or nm in nama_bersih:
-                                pending_list.append(item); pending_options.append(req_tk_raw)
+                                pending_list.append(item)
+                                pending_options.append(req_tk_raw)
                         else: 
                             pending_list.append(item)
+        # --- ALGORITMA FILTER PJB SUPER CERDAS (SELESAI) ---
+            
+        pending_list, pending_options = [], []
+        for r in req_r[1:]:
+            if len(r)>5 and str(r[3]).strip() != "":
+                req_tk_raw = str(r[3]).strip().upper()
+                req_tk_list = [t.strip() for t in req_tk_raw.split(",") if t.strip()]
+                nm = str(r[5]).strip().upper()
+                
+                req_set = set(req_tk_list)
+                is_ready_to_pjb = False
+                
+                if not req_set.issubset(pjb_tickets_all_set):
+                    if req_app_status.get(req_tk_raw) == "REJECTED": is_ready_to_pjb = False
+                    else: is_ready_to_pjb = True
+                elif status_verif_dict.get(req_tk_raw) == "REJECTED":
+                    is_ready_to_pjb = True 
+                    
+                # ---------------------------------------------------------
+                # LOGIKA PENAHAN TIKET TAHAP 2 (MENCEGAH SALAH CLOSING TIM)
+                # ---------------------------------------------------------
+                if is_ready_to_pjb:
+                    if "[MOTOR-2]" in req_tk_raw or "[MOBIL-2]" in req_tk_raw:
+                        # Identifikasi nama tiket tahap 1-nya
+                        tiket_tahap_1 = req_tk_raw.replace("-2]", "-1]")
+                        # Jika tiket tahap 1 BELUM masuk ke database PJB selesai, sembunyikan tahap 2!
+                        if tiket_tahap_1 not in pjb_tickets_all_set:
+                            is_ready_to_pjb = False
+                
+                # Masukkan ke daftar jika lolos verifikasi
+                if is_ready_to_pjb:
+                    item = {"Tanggal": r[1], "Nama": r[5], "No Request": req_tk_raw, "Kategori Item": r[10] if len(r)>10 else "", "Keperluan": r[8] if len(r)>8 else ""}
+                    if pass_nominal == "B0924649": item["Nominal Request"] = f"Rp {clean_nominal(r[9]):,.0f}" if len(r)>9 else "Rp 0"
+                    
+                    if "PM" in (r[8] if len(r)>8 else ""):
+                        rem = [t for t in req_tk_list if t not in pjb_tickets_all_set]
+                        item["Sisa Tiket PM"] = ", ".join(rem) if rem else "Semua (Ditolak)"
+                    
+                    if nama_pjb != "-- Pilih Nama --":
+                        if nm == nama_pjb.strip().upper(): pending_list.append(item); pending_options.append(req_tk_raw)
+                    else: pending_list.append(item)
         
         if pending_list: st.dataframe(pd.DataFrame(pending_list), hide_index=True, use_container_width=True)
         else: st.success("💎 Seluruh sub-tiket sudah di-PJB!")
