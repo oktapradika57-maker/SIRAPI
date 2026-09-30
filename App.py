@@ -26,17 +26,12 @@ import pytesseract
 # =================================================================
 st.markdown("""
 <style>
-    /* 1. Sembunyikan elemen bawaan Streamlit (Beri ruang bersih) */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {background-color: transparent !important;}
 
-    /* 2. Latar Belakang Aplikasi - Clean Light Slate */
-    .stApp {
-        background-color: #F8FAFC !important;
-    }
+    .stApp { background-color: #F8FAFC !important; }
 
-    /* 3. Container Utama - Kartu Putih Rapi */
     .main .block-container {
         background-color: #FFFFFF !important;
         padding: 2rem 3rem !important;
@@ -48,22 +43,21 @@ st.markdown("""
         max-width: 1100px !important;
     }
 
-    /* 4. Font Profesional (Bawaan Sistem UI yang Rapi) */
-    * {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+    /* Menerapkan font hanya pada teks biasa, BUKAN pada icon */
+    html, body, p, div, label, h1, h2, h3, h4, h5, h6, li, span {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    
+    /* MENGEMBALIKAN FONT ICON STREAMLIT AGAR TIDAK ERROR (arrow_drop_down) */
+    span.material-icons, span.material-icons-outlined, span.material-icons-round, span[class*="icon"] {
+        font-family: 'Material Icons', 'Material Symbols Outlined' !important;
+        color: #64748B !important;
     }
 
-    /* 5. Warna Teks Global - Diperbaiki agar tidak merusak banner */
-    p, label, h1, h2, h3, h4, h5, h6, li {
-        color: #1E293B !important;
-    }
+    p, label, h1, h2, h3, h4, h5, h6, li { color: #1E293B !important; }
 
-    /* 6. Input Form (Teks, Dropdown, Tanggal) - Elegan & Jelas */
-    .stTextInput>div>div>input, 
-    .stSelectbox>div>div>select, 
-    .stNumberInput>div>div>input, 
-    .stTextArea>div>div>textarea, 
-    .stDateInput>div>div>input {
+    .stTextInput>div>div>input, .stSelectbox>div>div>select, .stNumberInput>div>div>input, 
+    .stTextArea>div>div>textarea, .stDateInput>div>div>input {
         background-color: #FFFFFF !important;
         color: #0F172A !important;
         border: 1.5px solid #CBD5E1 !important;
@@ -72,15 +66,12 @@ st.markdown("""
         font-size: 15px !important;
         font-weight: 500 !important;
         box-shadow: inset 0 1px 2px rgba(0,0,0,0.02) !important;
-        transition: all 0.2s ease !important;
     }
-    .stTextInput>div>div>input:focus, 
-    .stSelectbox>div>div>select:focus {
+    .stTextInput>div>div>input:focus, .stSelectbox>div>div>select:focus {
         border-color: #2563EB !important;
         box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
     }
 
-    /* 7. TOMBOL AKSI UTAMA (SUBMIT) - DIJAMIN JELAS TERBACA */
     button[kind="primary"] {
         background-color: #0F172A !important;
         border: none !important;
@@ -88,25 +79,15 @@ st.markdown("""
         padding: 0.75rem 1.5rem !important;
         min-height: 52px !important;
         box-shadow: 0 4px 6px rgba(15, 23, 42, 0.2) !important;
-        transition: all 0.2s ease !important;
     }
     button[kind="primary"] * {
         color: #FFFFFF !important; 
         font-weight: 600 !important;
         font-size: 16px !important;
-        letter-spacing: 0.5px !important;
     }
-    button[kind="primary"]:hover {
-        background-color: #2563EB !important;
-        transform: translateY(-2px) !important;
-    }
-    button[kind="primary"]:disabled {
-        background-color: #94A3B8 !important;
-        box-shadow: none !important;
-        transform: none !important;
-    }
+    button[kind="primary"]:hover { background-color: #2563EB !important; transform: translateY(-2px) !important; }
+    button[kind="primary"]:disabled { background-color: #94A3B8 !important; transform: none !important; }
 
-    /* 8. KOTAK MENU NAVIGASI (Secondary) - SERAGAM DAN RAPI */
     button[kind="secondary"] {
         background-color: #F8FAFC !important;
         border: 1.5px solid #E2E8F0 !important;
@@ -116,7 +97,6 @@ st.markdown("""
         flex-direction: column !important;
         justify-content: center !important;
         align-items: center !important;
-        transition: all 0.2s ease !important;
     }
     button[kind="secondary"] * {
         color: #334155 !important;
@@ -126,57 +106,25 @@ st.markdown("""
         white-space: normal !important; 
         line-height: 1.4 !important;
     }
-    button[kind="secondary"]:hover {
-        background-color: #FFFFFF !important;
-        border-color: #3B82F6 !important;
-        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15) !important;
-        transform: translateY(-3px) !important;
-    }
-    button[kind="secondary"]:hover * {
-        color: #1D4ED8 !important;
-    }
+    button[kind="secondary"]:hover { border-color: #3B82F6 !important; transform: translateY(-3px) !important; }
+    button[kind="secondary"]:hover * { color: #1D4ED8 !important; }
 
-    /* 9. HEADER CARD PORTAL (Tampilan Khusus Judul Halaman) */
     .header-card {
         background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%) !important;
         padding: 30px !important;
         border-radius: 12px !important;
         margin-bottom: 30px !important;
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important;
         border-left: 6px solid #3B82F6 !important;
         text-align: center !important;
     }
-    /* Mengunci paksa SEMUA teks di dalam header menjadi putih terang */
-    .header-card,
-    .header-card p,
-    .header-card h1,
-    .header-card h2,
-    .header-card h3,
-    .header-card span,
-    .header-card div {
+    .header-card, .header-card p, .header-card h1, .header-card h2, .header-card h3, .header-card span, .header-card div {
         color: #FFFFFF !important;
     }
-    .header-card h1, .header-card h2 { 
-        font-weight: 800 !important; 
-        margin-bottom: 5px !important; 
-        font-size: 26px !important;
-    }
-    .header-card p { 
-        opacity: 0.9 !important; 
-        font-size: 15px !important; 
-        margin: 0 !important; 
-        font-weight: 400 !important;
-    }
+    .header-card h1, .header-card h2 { font-weight: 800 !important; margin-bottom: 5px !important; font-size: 26px !important;}
+    .header-card p { opacity: 0.9 !important; font-size: 15px !important; font-weight: 400 !important;}
 
-    /* 10. Sidebar & Alert */
-    [data-testid="stSidebar"] {
-        background-color: #F8FAFC !important;
-        border-right: 1px solid #E2E8F0 !important;
-    }
-    .stAlert {
-        border-radius: 8px !important;
-        border: none !important;
-    }
+    [data-testid="stSidebar"] { background-color: #F8FAFC !important; border-right: 1px solid #E2E8F0 !important; }
+    .stAlert { border-radius: 8px !important; border: none !important; }
 </style>
 """, unsafe_allow_html=True)
 # ==========================================
