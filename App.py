@@ -1623,18 +1623,27 @@ elif st.session_state.page == "✅ Form PJB Operasional":
         
         site_dict, site_list, tim_dict, list_nopol_csv, nik_dict = load_excel_data()
         
-        pjb_tickets_all_set = set()
-        for r in pjb_r[1:]:
-            if len(r) > 21 and r[21].strip() != "":
-                tk_str = r[36].strip() if (len(r) > 36 and r[36].strip()) else r[21].strip()
-                pjb_tickets_all_set.update([t.strip().upper() for t in tk_str.split(",")])
-        
+       # --- ALGORITMA FILTER PJB SUPER CERDAS (MULAI) ---
+        pjb_counts = {}
         status_verif_dict = {}
+        
+        # 1. Ambil status Verifikasi PJB (Mendeteksi PJB yang direvisi/ditolak Admin)
         for r in app_r[1:]:
             if len(r) > 5 and r[3] == "Verifikasi PJB":
                 tiket_app = str(r[2]).strip().upper()
                 if tiket_app != "": status_verif_dict[tiket_app] = str(r[5]).strip()
+                
+        # 2. Hitung jumlah PJB valid yang sudah diselesaikan (Kebal Duplikat & Re-Request)
+        for r in pjb_r[1:]:
+            if len(r) > 21 and r[21].strip() != "":
+                tk_str = r[36].strip() if (len(r) > 36 and r[36].strip()) else r[21].strip()
+                for t in tk_str.split(","):
+                    t_clean = t.strip().upper()
+                    # Jika PJB ini ditolak admin, JANGAN dihitung sebagai "Selesai", agar muncul lagi di layar tim
+                    if t_clean and status_verif_dict.get(t_clean) != "REJECTED":
+                        pjb_counts[t_clean] = pjb_counts.get(t_clean, 0) + 1
         
+        # 3. Ambil status Approval Request Dana (Membuang tiket yang ditolak sejak awal)
         req_app_status = {}
         for r in app_r[1:]:
             if len(r) > 5 and r[3] == "Request Dana":
@@ -1652,6 +1661,52 @@ elif st.session_state.page == "✅ Form PJB Operasional":
             if aging_tickets: st.warning(f"🔔 NOTIFIKASI: Anda memiliki **{len(aging_tickets)}** tiket tertunda >3 hari.")
 
         with col_id2: pass_nominal = st.text_input("🔑 Akses Nominal (Admin):", type="password")
+            
+        # 4. Filter Pencocokan Tiket Pending
+        req_counts = {}
+        pending_list, pending_options = [], []
+        
+        for r in req_r[1:]:
+            if len(r) > 5 and str(r[3]).strip() != "":
+                req_tk_raw = str(r[3]).strip().upper()
+                nm = str(r[5]).strip().upper()
+                
+                # Hitung frekuensi tiket ini diajukan
+                req_counts[req_tk_raw] = req_counts.get(req_tk_raw, 0) + 1
+                
+                # Abaikan tiket yang sudah ditolak mentah-mentah saat tahap Request Dana
+                base_tiket = req_tk_raw.split(" [")[0].strip()
+                if req_app_status.get(req_tk_raw) == "REJECTED" or req_app_status.get(base_tiket) == "REJECTED":
+                    continue 
+                
+                # TIKET PENDING = Jika jumlah Request lebih banyak dari jumlah PJB yang sudah divalidasi
+                if req_counts[req_tk_raw] > pjb_counts.get(req_tk_raw, 0):
+                    is_ready_to_pjb = True
+                    
+                    # Logika Penahan Tahap 2 (Khusus BBM Split)
+                    if "[MOTOR-2]" in req_tk_raw or "[MOBIL-2]" in req_tk_raw:
+                        tiket_tahap_1 = req_tk_raw.replace("-2]", "-1]")
+                        if pjb_counts.get(tiket_tahap_1, 0) == 0:
+                            is_ready_to_pjb = False
+                            
+                    if is_ready_to_pjb:
+                        item = {"Tanggal": r[1], "Nama": r[5], "No Request": req_tk_raw, "Kategori Item": r[10] if len(r)>10 else "", "Keperluan": r[8] if len(r)>8 else ""}
+                        if pass_nominal == "B0924649": item["Nominal Request"] = f"Rp {clean_nominal(r[9]):,.0f}" if len(r)>9 else "Rp 0"
+                        
+                        if "PM" in (r[8] if len(r)>8 else ""):
+                            pm_list = [t.strip() for t in req_tk_raw.split(",") if t.strip()]
+                            rem = [t for t in pm_list if pjb_counts.get(t, 0) == 0]
+                            item["Sisa Tiket PM"] = ", ".join(rem) if rem else "Menunggu Verifikasi"
+                        
+                        # Filter Anti-Spasi Terselubung (Membaca meski ada spasi salah ketik di database)
+                        if nama_pjb != "-- Pilih Nama --":
+                            nama_bersih = nama_pjb.strip().upper()
+                            if nama_bersih in nm or nm in nama_bersih:
+                                pending_list.append(item)
+                                pending_options.append(req_tk_raw)
+                        else: 
+                            pending_list.append(item)
+        # --- ALGORITMA FILTER PJB SUPER CERDAS (SELESAI) ---
             
         pending_list, pending_options = [], []
         for r in req_r[1:]:
