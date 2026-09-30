@@ -1316,41 +1316,48 @@ elif st.session_state.page == "📝 Form Request Dana":
                 hari_req = st.number_input("Rencana Berapa Hari (Durasi Kerja)?", min_value=1, step=1, value=1)
                 jml_org = 1 + len(tim_bareng)
                 
-            if "Uang Makan" in kebutuhan_dana_list:
+        if "Uang Makan" in kebutuhan_dana_list:
                 st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
                 
-                # Blokir jika belum memilih kategori pekerjaan
+                # Blokir jika belum memilih kategori pekerjaan (Pencegahan Curang)
                 if not val_atas and not val_bawah and not is_kirim_mat:
                     st.error("❌ SISTEM MENOLAK: Anda memilih Uang Makan tapi belum menentukan jenis pekerjaan (Atas/Bawah/Material) di atas!")
                     st.stop()
                     
-                # Logika Sistem Cerdas (Berat = 60k, Ringan = 30k)
+                # Logika Sistem Cerdas (Berat / Ringan)
                 is_berat = False
                 if val_atas or is_kirim_mat: is_berat = True
                 if val_bawah:
                     for item in val_bawah:
-                        # Jika ada pilihan SELAIN MCB dan BCP, otomatis dianggap kerja berat
                         if item not in ["Pengecekan MCB", "BCP"]: 
                             is_berat = True
-                            
-                if is_berat:
-                    base_um = 60000
-                    alasan = "✅ **Kategori Pekerjaan Berat/Teknikal:** Tim mendapatkan Uang Makan **Rp 60.000/orang** (Syarat: Jarak >80 KM)."
-                else:
-                    base_um = 30000
-                    alasan = "⚠️ **Kategori Pekerjaan Ringan:** Pekerjaan hanya berupa Pengecekan/BCP. Tim maksimal mendapatkan **Rp 30.000/orang** (Syarat: Jarak >80 KM)."
                 
-                st.info(alasan)
-                st.warning("🔒 **SYSTEM LOCK AKTIF:** Nominal tidak bisa diubah manual agar tertib. Hubungi Admin / Boss jika butuh approval khusus.")
+                # Validasi Jarak Langsung di Panel Uang Makan
+                if jarak_km_pp < 80:
+                    st.error(f"❌ JARAK TIDAK MEMENUHI SYARAT: Jarak tempuh Peta hanya {jarak_km_pp:.1f} KM. Syarat minimal Uang Makan adalah >80 KM. Nominal dikunci ke 0.")
+                    base_um = 0
+                    nom_req_um = 0
+                else:
+                    if is_berat:
+                        base_um = 60000
+                        alasan = f"✅ **Kategori Pekerjaan Berat:** Jarak {jarak_km_pp:.1f} KM (>80 KM) tercapai. Tim berhak mendapatkan **Rp 60.000/orang**."
+                    else:
+                        base_um = 30000
+                        alasan = f"⚠️ **Kategori Pekerjaan Ringan:** Jarak {jarak_km_pp:.1f} KM (>80 KM) namun pekerjaan ringan. Tim berhak mendapatkan **Rp 30.000/orang**."
+                    st.info(alasan)
+                
+                st.warning("🔒 **SYSTEM LOCK AKTIF:** Nominal tidak bisa diubah manual.")
                 
                 with c_um2:
                     max_um_nominal = base_um * jml_org
-                    # FITUR DISABLED=TRUE akan mengunci kolom agar tidak bisa diketik tim
-                    nom_req_um = st.number_input(f"Nominal UM/Hari (TERKUNCI)", min_value=0, max_value=max_um_nominal, value=max_um_nominal, step=5000, disabled=True)
+                    # Dikunci (disabled=True) agar tim tidak bisa mengotak-atik angkanya
+                    nom_req_um = st.number_input(f"Nominal UM/Hari (TERKUNCI)", min_value=0, max_value=max_um_nominal if max_um_nominal > 0 else 100, value=max_um_nominal, step=5000, disabled=True)
                     
                 tot_um = hari_req * nom_req_um
-                st.success(f"💰 Total Estimasi Uang Makan: **Rp {tot_um:,.0f}**")
-                sub_requests.append({"tiket": f"{base_tiket_clean} [UM]", "kategori": f"Akomodasi", "kebutuhan": tot_um, "plat": "", "indikator": 0.0, "last_ind": 0.0, "tipe": "UM", "hari": hari_req, "nom_um": nom_req_um})
+                if tot_um > 0:
+                    st.success(f"💰 Total Estimasi Uang Makan: **Rp {tot_um:,.0f}**")
+                    kategori_teks = "Uang Makan (Pekerjaan Berat)" if is_berat else "Uang Makan (Pekerjaan Ringan)"
+                    sub_requests.append({"tiket": f"{base_tiket_clean} [UM]", "kategori": kategori_teks, "kebutuhan": tot_um, "plat": "", "indikator": 0.0, "last_ind": 0.0, "tipe": "UM", "hari": hari_req, "nom_um": nom_req_um})
                 
             if "Penginapan" in kebutuhan_dana_list:
                 with c_um1:
@@ -1527,8 +1534,10 @@ elif st.session_state.page == "📝 Form Request Dana":
                         for req in sub_requests:
                             desc_final = deskripsi
                             if tim_bareng: desc_final += f"\n\n[Tim: {', '.join(tim_bareng)}]"
-                            if req['tipe'] == 'UM': desc_final += f"\n\n[REQ AKOMODASI: {req['hari']} Hari @ Rp {req['nom_um']:,.0f}/hari = Rp {req['kebutuhan']:,.0f}]"
-                            elif req['tipe'] == 'Inap': desc_final += f"\n\n[REQ PENGINAPAN: {req['hari']} Malam @ Rp {req['nom_inap']:,.0f}/malam = Rp {req['kebutuhan']:,.0f}]"
+                            if req['tipe'] == 'UM': 
+                                desc_final += f"\n\n[REQ AKOMODASI: {req['kategori']} | {req['hari']} Hari @ Rp {req['nom_um']:,.0f}/hari = Rp {req['kebutuhan']:,.0f} | Jarak Peta: {jarak_km_pp:.1f} KM]"
+                            elif req['tipe'] == 'Inap': 
+                                desc_final += f"\n\n[REQ PENGINAPAN: {req['hari']} Malam @ Rp {req['nom_inap']:,.0f}/malam = Rp {req['kebutuhan']:,.0f} | Jarak Peta: {jarak_km_pp:.1f} KM]"
                             
                             data_req = [
                                 ts_now, tgl_str, nop, req['tiket'], cluster, nama, role, site_id, keperluan, 
