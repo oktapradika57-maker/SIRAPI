@@ -1308,6 +1308,7 @@ elif st.session_state.page == "📝 Form Request Dana":
                     sub_requests.append({"tiket": f"{base_tiket_clean} [GENSET]", "kategori": f"Genset - {jb_genset}", "kebutuhan": keb_genset, "plat": plat_genset, "indikator": rh_awal_gen, "last_ind": last_rh_gen, "tipe": "Genset"})
             st.markdown("</div>", unsafe_allow_html=True)
             
+       # --- BLOK AKOMODASI (UANG MAKAN & PENGINAPAN) MULAI ---
         if "Uang Makan" in kebutuhan_dana_list or "Penginapan" in kebutuhan_dana_list:
             st.markdown("<div style='background-color:#E0F2FE; padding:15px; border-radius:10px; border-left: 5px solid #0284C7; margin-bottom: 15px;'>", unsafe_allow_html=True)
             
@@ -1316,7 +1317,7 @@ elif st.session_state.page == "📝 Form Request Dana":
                 hari_req = st.number_input("Rencana Berapa Hari (Durasi Kerja)?", min_value=1, step=1, value=1)
                 jml_org = 1 + len(tim_bareng)
                 
-        if "Uang Makan" in kebutuhan_dana_list:
+            if "Uang Makan" in kebutuhan_dana_list:
                 st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
                 
                 # Blokir jika belum memilih kategori pekerjaan (Pencegahan Curang)
@@ -1358,7 +1359,7 @@ elif st.session_state.page == "📝 Form Request Dana":
                     st.success(f"💰 Total Estimasi Uang Makan: **Rp {tot_um:,.0f}**")
                     kategori_teks = "Uang Makan (Pekerjaan Berat)" if is_berat else "Uang Makan (Pekerjaan Ringan)"
                     sub_requests.append({"tiket": f"{base_tiket_clean} [UM]", "kategori": kategori_teks, "kebutuhan": tot_um, "plat": "", "indikator": 0.0, "last_ind": 0.0, "tipe": "UM", "hari": hari_req, "nom_um": nom_req_um})
-                
+            
             if "Penginapan" in kebutuhan_dana_list:
                 with c_um1:
                     malam_inap = st.number_input("Berapa Malam Menginap?", min_value=1, step=1, value=hari_req if hari_req == 1 else hari_req - 1)
@@ -1369,7 +1370,9 @@ elif st.session_state.page == "📝 Form Request Dana":
                 tot_inap = malam_inap * nom_req_inap
                 st.success(f"🛏️ Total Estimasi Penginapan: **Rp {tot_inap:,.0f}**")
                 sub_requests.append({"tiket": f"{base_tiket_clean} [INAP]", "kategori": "Penginapan", "kebutuhan": tot_inap, "plat": "", "indikator": 0.0, "last_ind": 0.0, "tipe": "Inap", "hari": malam_inap, "nom_inap": nom_req_inap})
+            
             st.markdown("</div>", unsafe_allow_html=True)
+        # --- BLOK AKOMODASI (UANG MAKAN & PENGINAPAN) SELESAI ---
             
         if "Material" in kebutuhan_dana_list:
             with st.expander("📦 Detail Material", expanded=True):
