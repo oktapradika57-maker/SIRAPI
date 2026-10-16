@@ -1763,6 +1763,9 @@ elif st.session_state.page == "✅ Form PJB Operasional":
             # =================================================================
             # 🔒 SISTEM INTERLOCK SIDATA (KUNCI PJB JIKA BELUM REPORT)
             # =================================================================
+            import urllib.parse
+            import pandas as pd
+            
             role_petugas = str(d.get("Role", "")).strip().upper()
             nama_petugas = str(d.get("Nama", "")).strip().upper()
             site_petugas = str(d.get("Site", "")).strip().upper()
@@ -1774,13 +1777,11 @@ elif st.session_state.page == "✅ Form PJB Operasional":
             # --- CEK TANGGAL CUT-OFF (BERLAKU MULAI 16 OKT 2026) ---
             tgl_req_str = str(d.get("Tanggal", ""))
             try:
-                # Membaca tanggal request dan membandingkannya dengan 16-10-2026
                 tgl_req_date = pd.to_datetime(tgl_req_str, dayfirst=True).date()
                 batas_tgl = pd.to_datetime("2026-10-16").date()
                 aturan_berlaku = tgl_req_date >= batas_tgl
             except:
-                # Jika format tanggal error/kosong, otomatis aturan diberlakukan agar aman
-                aturan_berlaku = True 
+                aturan_berlaku = True # Jika gagal baca tanggal, anggap berlaku
             
             is_locked_by_sidata = False
             
@@ -1793,40 +1794,46 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                         
                         sudah_report = False
                         
-                        # LOGIKA PENCOCOKAN
-                        # (Nanti angka [2], [3], [4] disesuaikan dengan posisi kolom Excel Anda)
+                        # LOGIKA PENCOCOKAN (Cek apakah tiket ini sudah direport)
                         for baris in sidata_report[1:]:
                             if len(baris) > 4: 
-                                cek_nama = str(baris[2]).strip().upper()  # Kolom Nama di SIDATA
-                                cek_site = str(baris[3]).strip().upper()  # Kolom Site ID di SIDATA
-                                cek_kode = str(baris[4]).strip().upper()  # Kolom Nomor Tiket/Kode Unik
+                                cek_nama = str(baris[2]).strip().upper()  # Sesuaikan dengan Index Kolom Nama di SIDATA
+                                cek_site = str(baris[3]).strip().upper()  # Sesuaikan dengan Index Kolom Site ID di SIDATA
+                                cek_kode = str(baris[4]).strip().upper()  # Sesuaikan dengan Index Kolom Kode Tiket di SIDATA
                                 
                                 if cek_nama == nama_petugas and cek_site == site_petugas and cek_kode == kode_unik:
                                     sudah_report = True
-                                    break # Ketemu 1 saja, langsung aman
+                                    break 
                                     
                         if not sudah_report:
                             is_locked_by_sidata = True
                             
                     except Exception as e:
-                        st.warning("⚠️ Gagal membaca Sheet 'Report Preventive'. PJB dikunci sementara untuk keamanan.")
+                        st.warning("⚠️ Gagal membaca Sheet 'Report Preventive'. PJB dikunci sementara.")
                         is_locked_by_sidata = True
                         
-            # EKSEKUSI LOCK & TAMPILAN ERROR
+            # EKSEKUSI LOCK & TAMPILAN ERROR DENGAN AUTO-LINK
             if is_locked_by_sidata:
+                # Membuat URL Parameters yang aman
+                safe_nama = urllib.parse.quote(nama_petugas)
+                safe_site = urllib.parse.quote(site_petugas)
+                safe_tiket = urllib.parse.quote(kode_unik)
+                
+                link_sidata_auto = f"https://sidata.streamlit.app/?tiket={safe_tiket}&nama={safe_nama}&site={safe_site}"
+                
                 st.error(f"🔒 SYSTEM LOCK: PJB DITOLAK! Sdr. {nama_petugas}, Anda belum submit Report di SIDATA untuk Site {site_petugas}.")
-                st.info(f"🔑 Gunakan Nomor Tiket ini sebagai **Kode Unik** saat mengisi form SIDATA: **{kode_unik}**")
+                st.info("💡 Sistem telah mengunci Nomor Tiket Anda. Silakan klik tombol di bawah ini untuk mengisi form:")
                 
                 st.markdown(
-                    '''
-                    <a href="https://sidata.streamlit.app/" target="_blank" style="display: block; text-align: center; background-color: #EF4444; color: white; padding: 18px; border-radius: 12px; text-decoration: none; font-weight: 800; font-size: 18px; margin-top: 15px; margin-bottom: 25px; box-shadow: 0 4px 6px rgba(239,68,68,0.3);">
-                        🚨 KLIK DI SINI UNTUK ISI REPORT SIDATA SEKARANG 🚨
+                    f'''
+                    <a href="{link_sidata_auto}" target="_blank" style="display: block; text-align: center; background-color: #EF4444; color: white; padding: 18px; border-radius: 12px; text-decoration: none; font-weight: 800; font-size: 18px; margin-top: 15px; margin-bottom: 25px; box-shadow: 0 4px 6px rgba(239,68,68,0.3);">
+                        🚨 KLIK DI SINI UNTUK ISI REPORT (AUTO-LINK) 🚨
                     </a>
                     ''', unsafe_allow_html=True
                 )
-                st.stop()
+                st.stop() # Memblokir form di bawahnya
             # =================================================================
-            
+                      
             is_pm = ("PM" in str(d["Keperluan"]).upper())
             specific_pm_tickets = valid_cari_tiket
             
