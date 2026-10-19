@@ -1459,7 +1459,18 @@ elif st.session_state.page == "📝 Form Request Dana":
         st.markdown("<div class='section-title'>✅ 6. Checklist Persiapan & Komitmen Tim</div>", unsafe_allow_html=True)
         st.markdown("<div style='background-color:#FFFBEB; padding:15px; border-radius:10px; border-left: 5px solid #F59E0B; margin-bottom: 20px;'>", unsafe_allow_html=True)
         st.write("⚠️ **WAJIB DICENTANG SELURUHNYA UNTUK MEMUNCULKAN TOMBOL SUBMIT:**")
+        # --- SHORTCUT WAJIB LAPOR SIDATA (TAMBAHAN BARU) ---
+        st.markdown("<div class='section-title'>📊 Wajib Update Database (SIDATA)</div>", unsafe_allow_html=True)
+        st.info("⚠️ **PENTING:** Khusus untuk Role TE, MBP, dan CME. Setelah melakukan kegiatan (Troubleshooting/PM), Anda WAJIB melaporkan hasilnya ke sistem SIDATA. Pastikan Nomor Tiket dan Site ID Anda sesuai.")
         
+        st.markdown(
+            '''
+            <a href="https://sidata.streamlit.app/" target="_blank" style="display: block; text-align: center; background-color: #EF4444; color: white; padding: 15px; border-radius: 10px; text-decoration: none; font-weight: 700; font-size: 16px; margin-bottom: 25px; box-shadow: 0 4px 6px rgba(239,68,68,0.2); transition: all 0.3s ease;">
+                👉 KLIK DI SINI UNTUK UPDATE REPORT SIDATA (WAJIB) 👈
+            </a>
+            ''', unsafe_allow_html=True
+        )
+        # ----------------------------------------------------
         all_checked = True
         
         # Trigger Checklist Pintar dari pilihan Atas/Bawah/PM
