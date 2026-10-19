@@ -871,31 +871,16 @@ if st.session_state.page == "🏠 Hub Menu Utama":
     with c2:
         if st.button("✅\nPJB OPERASIONAL\n(Nota Realisasi)", use_container_width=True): st.session_state.page = "✅ Form PJB Operasional"; st.rerun()
         
-    # --- SHORTCUT MENU SIDATA DI SIDEBAR ---
-st.sidebar.markdown("<hr style='margin: 15px 0;'>", unsafe_allow_html=True)
-st.sidebar.markdown("<h3 style='text-align: center; color: #1E293B;'>📊 Wajib Lapor</h3>", unsafe_allow_html=True)
-st.sidebar.info("Khusus Role TE, MBP, & CME: Wajib lapor hasil kegiatan lapangan (Tshoot/PM) ke database SIDATA.")
+    if st.button("📝\nREPORT LAPANGAN\n(Update Progress & Generate WA)", use_container_width=True): st.session_state.page = "📝 Report Lapangan"; st.rerun()
 
-st.sidebar.markdown(
-    '''
-    <a href="https://sidata.streamlit.app/" target="_blank" style="display: block; text-align: center; background-color: #EF4444; color: white; padding: 12px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 15px; box-shadow: 0 4px 6px rgba(239,68,68,0.2); transition: all 0.3s ease;">
-        👉 BUKA PORTAL SIDATA
-    </a>
-    ''', unsafe_allow_html=True
-)
-st.sidebar.markdown("<hr style='margin: 15px 0;'>", unsafe_allow_html=True)
-
-# --- HALAMAN CEK STATUS TIKET ---
-elif st.session_state.page == "🔍 Cek Status Tiket": # Pastikan menu ini ada di daftar menu_utama di atas!
     st.markdown("<div class='section-title'>🔍 CEK STATUS TIKET (PRIBADI & TIM)</div>", unsafe_allow_html=True)
     cek_nop = st.selectbox("Pilih Area Wilayah", ["-- Pilih Area --"] + list(MASTER_DATA.keys()), key="cek_area_hub")
-
+    
     if cek_nop != "-- Pilih Area --":
         tab_pribadi, tab_tim_pending = st.tabs(["👤 Status Pribadi Anda", "🚨 Tim Belum PJB (Mulai Agustus)"])
-
+        
         with tab_pribadi:
             cek_nama = st.selectbox("Nama Petugas", ["-- Pilih Nama --"] + MASTER_DATA[cek_nop]["names"], key="cek_nama_hub")
-            # (Lanjutkan dengan kode asli Anda di bawah ini, pastikan semuanya menjorok ke dalam menyesuaikan 'with tab_pribadi:')
             if st.button("Cari Status Saya", use_container_width=True):
                 if cek_nama != "-- Pilih Nama --" and cek_nama != "":
                     with st.spinner("Menarik data server..."):
@@ -1474,18 +1459,7 @@ elif st.session_state.page == "📝 Form Request Dana":
         st.markdown("<div class='section-title'>✅ 6. Checklist Persiapan & Komitmen Tim</div>", unsafe_allow_html=True)
         st.markdown("<div style='background-color:#FFFBEB; padding:15px; border-radius:10px; border-left: 5px solid #F59E0B; margin-bottom: 20px;'>", unsafe_allow_html=True)
         st.write("⚠️ **WAJIB DICENTANG SELURUHNYA UNTUK MEMUNCULKAN TOMBOL SUBMIT:**")
-        # --- SHORTCUT WAJIB LAPOR SIDATA (TAMBAHAN BARU) ---
-        st.markdown("<div class='section-title'>📊 Wajib Update Database (SIDATA)</div>", unsafe_allow_html=True)
-        st.info("⚠️ **PENTING:** Khusus untuk Role TE, MBP, dan CME. Setelah melakukan kegiatan (Troubleshooting/PM), Anda WAJIB melaporkan hasilnya ke sistem SIDATA. Pastikan Nomor Tiket dan Site ID Anda sesuai.")
         
-        st.markdown(
-            '''
-            <a href="https://sidata.streamlit.app/" target="_blank" style="display: block; text-align: center; background-color: #EF4444; color: white; padding: 15px; border-radius: 10px; text-decoration: none; font-weight: 700; font-size: 16px; margin-bottom: 25px; box-shadow: 0 4px 6px rgba(239,68,68,0.2); transition: all 0.3s ease;">
-                👉 KLIK DI SINI UNTUK UPDATE REPORT SIDATA (WAJIB) 👈
-            </a>
-            ''', unsafe_allow_html=True
-        )
-        # ----------------------------------------------------
         all_checked = True
         
         # Trigger Checklist Pintar dari pilihan Atas/Bawah/PM
