@@ -1760,73 +1760,13 @@ elif st.session_state.page == "✅ Form PJB Operasional":
         if st.session_state.get("pjb_data"):
             d = st.session_state.pjb_data
             
-            # =================================================================
-            # 🔒 GERBANG TOL SIDATA (KHUSUS ROLE: CME, MBP, TE)
-            # =================================================================
-            import urllib.parse
+            # --- JIKA LOLOS, LANJUTKAN MENAMPILKAN FORM PJB SEPERTI BIASA ---
+            is_pm = ("PM" in str(d["Keperluan"]).upper())
+            specific_pm_tickets = valid_cari_tiket
             
-            role_petugas = str(d.get("Role", "")).strip().upper()
-            nama_petugas = str(d.get("Nama", "")).strip().upper()
-            site_petugas = str(d.get("Site", "")).strip().upper()
-            
-            # Mengambil kode tiket murni (Misal: FNA-202610-00000017450)
-            kode_unik = valid_cari_tiket.split(" [")[0].strip() 
-            
-            # TRIGGER AKTIF: Hanya menahan tim dengan Role CME, MBP, dan TE
-            if role_petugas in ["CME", "MBP", "TE"]:
-                is_locked = False
-                
-                with st.spinner("⏳ Memverifikasi data ke sistem SIDATA..."):
-                    try:
-                        # Menarik data menggunakan fungsi yang sudah di-cache agar kuota API aman
-                        sidata_data = fetch_spreadsheet_data(target_ss) 
-                        sidata_report = sidata_data.get("Report Preventive", []) 
-                        
-                        sudah_report = False
-                        
-                        # Cek isi database SIDATA
-                        # (Pastikan index [2], [3], [4] sesuai dengan letak kolom Nama, Site, & Tiket di Excel Anda)
-                        for baris in sidata_report[1:]:
-                            if len(baris) > 4: 
-                                cek_nama = str(baris[2]).strip().upper()
-                                cek_site = str(baris[3]).strip().upper()
-                                cek_kode = str(baris[4]).strip().upper()
-                                
-                                # Jika data cocok, berarti tim SUDAH LAPOR
-                                if cek_nama == nama_petugas and cek_site == site_petugas and cek_kode == kode_unik:
-                                    sudah_report = True
-                                    break 
-                                    
-                        if not sudah_report:
-                            is_locked = True
-                            
-                    except Exception as e:
-                        st.warning("⚠️ Koneksi ke SIDATA bermasalah. Akses PJB ditutup sementara.")
-                        is_locked = True
-                        
-                # 🛑 BLOKADE DIEKSEKUSI JIKA BELUM LAPOR SIDATA
-                if is_locked:
-                    # Membuat link SIDATA pintar yang sudah disuntik data tiket (Auto-fill)
-                    safe_nama = urllib.parse.quote(nama_petugas)
-                    safe_site = urllib.parse.quote(site_petugas)
-                    safe_tiket = urllib.parse.quote(kode_unik)
-                    
-                    link_sidata = f"https://sidata.streamlit.app/?tiket={safe_tiket}&nama={safe_nama}&site={safe_site}"
-                    
-                    st.error(f"🛑 AKSES PJB DITOLAK: Sdr. {nama_petugas} (Role: {role_petugas}), Anda BELUM melakukan submit report di SIDATA untuk Site {site_petugas}.")
-                    st.info("Sesuai SOP Perusahaan: Anda **WAJIB** mengisi form SIDATA terlebih dahulu. Setelah SIDATA terkirim, form PJB ini akan otomatis terbuka.")
-                    
-                    # Menampilkan Tombol Merah ke link SIDATA
-                    st.markdown(
-                        f'''
-                        <a href="{link_sidata}" target="_blank" style="display: block; text-align: center; background-color: #EF4444; color: white; padding: 18px; border-radius: 12px; text-decoration: none; font-weight: 800; font-size: 17px; margin-top: 15px; margin-bottom: 25px; box-shadow: 0 4px 6px rgba(239,68,68,0.3);">
-                            👉 KLIK DI SINI UNTUK ISI REPORT SIDATA SEKARANG
-                        </a>
-                        ''', unsafe_allow_html=True
-                    )
-                    
-                    st.stop() # 🛑 KUNCI UTAMA: Membunuh script di sini agar form foto nota, KM, dll di bawahnya HILANG!
-            # =================================================================
+            if is_pm:
+                st.markdown("<div style='background-color:#F0F9FF; padding:15px; border-radius:10px; border-left: 5px solid #0EA5E9; margin-bottom: 15px;'><b>🎫 PJB Parsial (Khusus PM Multi-Select)</b></div>", unsafe_allow_html=True)
+                # ... (sisa kode PJB berjalan normal ke bawah) ...
                       
             is_pm = ("PM" in str(d["Keperluan"]).upper())
             specific_pm_tickets = valid_cari_tiket
