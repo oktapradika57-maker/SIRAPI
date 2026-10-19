@@ -885,14 +885,17 @@ st.sidebar.markdown(
 )
 st.sidebar.markdown("<hr style='margin: 15px 0;'>", unsafe_allow_html=True)
 
+# --- HALAMAN CEK STATUS TIKET ---
+elif st.session_state.page == "🔍 Cek Status Tiket": # Pastikan menu ini ada di daftar menu_utama di atas!
     st.markdown("<div class='section-title'>🔍 CEK STATUS TIKET (PRIBADI & TIM)</div>", unsafe_allow_html=True)
     cek_nop = st.selectbox("Pilih Area Wilayah", ["-- Pilih Area --"] + list(MASTER_DATA.keys()), key="cek_area_hub")
-    
+
     if cek_nop != "-- Pilih Area --":
         tab_pribadi, tab_tim_pending = st.tabs(["👤 Status Pribadi Anda", "🚨 Tim Belum PJB (Mulai Agustus)"])
-        
+
         with tab_pribadi:
             cek_nama = st.selectbox("Nama Petugas", ["-- Pilih Nama --"] + MASTER_DATA[cek_nop]["names"], key="cek_nama_hub")
+            # (Lanjutkan dengan kode asli Anda di bawah ini, pastikan semuanya menjorok ke dalam menyesuaikan 'with tab_pribadi:')
             if st.button("Cari Status Saya", use_container_width=True):
                 if cek_nama != "-- Pilih Nama --" and cek_nama != "":
                     with st.spinner("Menarik data server..."):
