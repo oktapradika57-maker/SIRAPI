@@ -871,7 +871,19 @@ if st.session_state.page == "🏠 Hub Menu Utama":
     with c2:
         if st.button("✅\nPJB OPERASIONAL\n(Nota Realisasi)", use_container_width=True): st.session_state.page = "✅ Form PJB Operasional"; st.rerun()
         
-    if st.button("📝\nREPORT LAPANGAN\n(Update Progress & Generate WA)", use_container_width=True): st.session_state.page = "📝 Report Lapangan"; st.rerun()
+    # --- SHORTCUT MENU SIDATA DI SIDEBAR ---
+st.sidebar.markdown("<hr style='margin: 15px 0;'>", unsafe_allow_html=True)
+st.sidebar.markdown("<h3 style='text-align: center; color: #1E293B;'>📊 Wajib Lapor</h3>", unsafe_allow_html=True)
+st.sidebar.info("Khusus Role TE, MBP, & CME: Wajib lapor hasil kegiatan lapangan (Tshoot/PM) ke database SIDATA.")
+
+st.sidebar.markdown(
+    '''
+    <a href="https://sidata.streamlit.app/" target="_blank" style="display: block; text-align: center; background-color: #EF4444; color: white; padding: 12px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 15px; box-shadow: 0 4px 6px rgba(239,68,68,0.2); transition: all 0.3s ease;">
+        👉 BUKA PORTAL SIDATA
+    </a>
+    ''', unsafe_allow_html=True
+)
+st.sidebar.markdown("<hr style='margin: 15px 0;'>", unsafe_allow_html=True)
 
     st.markdown("<div class='section-title'>🔍 CEK STATUS TIKET (PRIBADI & TIM)</div>", unsafe_allow_html=True)
     cek_nop = st.selectbox("Pilih Area Wilayah", ["-- Pilih Area --"] + list(MASTER_DATA.keys()), key="cek_area_hub")
