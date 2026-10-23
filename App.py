@@ -27,69 +27,77 @@ import pytesseract
 st.set_page_config(page_title="SiRAPI Enterprise", page_icon="💸", layout="wide", initial_sidebar_state="collapsed")
 
 # =================================================================
-# 🎨 UI/UX DESIGN (SATU BLOK CSS BERSIH AGAR TIDAK ADA HURUF BOCOR)
+# 🎨 UI/UX DESIGN (GAYA ASLI SiDATA - CLEAN & JOSS)
 # =================================================================
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
     
+    /* Global Background & Font */
+    .stApp { background-color: #f8fafc; font-family: 'Plus Jakarta Sans', sans-serif; }
+    
+    /* Sembunyikan elemen bawaan Streamlit (Beri ruang bersih) */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {background-color: transparent !important;}
     
-    .stApp { background-color: #f8fafc !important; font-family: 'Plus Jakarta Sans', sans-serif !important; }
-    
-    .main .block-container {
-        background-color: #FFFFFF !important;
-        padding: 2rem 3rem !important;
-        border-radius: 12px !important;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03) !important;
-        margin-top: 1rem !important;
-        margin-bottom: 2rem !important;
-        border: 1px solid #E2E8F0 !important;
-        max-width: 1100px !important;
-    }
-    
-    p, label, h1, h2, h3, h4, h5, h6, li { color: #1E293B !important; }
-    
-    .stTextInput>div>div>input, .stSelectbox>div>div>select, .stNumberInput>div>div>input, 
-    .stTextArea>div>div>textarea, .stDateInput>div>div>input {
-        background-color: #FFFFFF !important; color: #0F172A !important;
-        border: 1.5px solid #CBD5E1 !important; border-radius: 8px !important;
-        padding: 10px 14px !important; font-size: 15px !important; font-weight: 500 !important;
-    }
-    
-    button[kind="primary"] {
-        background-color: #0F172A !important; border: none !important; border-radius: 8px !important;
-        padding: 0.75rem 1.5rem !important; min-height: 52px !important;
-        box-shadow: 0 4px 6px rgba(15, 23, 42, 0.2) !important; transition: all 0.2s ease !important;
-    }
-    button[kind="primary"] * { color: #FFFFFF !important; font-weight: 600 !important; font-size: 16px !important; }
-    button[kind="primary"]:hover { background-color: #2563EB !important; transform: translateY(-2px) !important; }
-    
+    /* Premium Header Card (Glassmorphism & Clean Gradient) */
     .header-card {
         background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-        padding: 30px; border-radius: 16px; color: #ffffff !important; text-align: center;
-        box-shadow: 0 10px 25px rgba(15, 23, 42, 0.1); margin-top: 5px; margin-bottom: 30px;
+        padding: 40px 30px; border-radius: 20px; color: #ffffff !important; text-align: center;
+        box-shadow: 0 15px 35px rgba(15, 23, 42, 0.1);
+        margin-top: 10px; margin-bottom: 35px; border: 1px solid rgba(255,255,255,0.05);
         position: relative; overflow: hidden;
     }
-    .header-card h1, .header-card h2 { font-weight: 800; font-size: 26px; margin-bottom: 5px; color: #ffffff !important;}
-    .header-card p { font-size: 15px; color: #cbd5e1 !important; margin: 0; }
+    .header-card::before {
+        content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
+        background: radial-gradient(circle, rgba(56,189,248,0.08) 0%, transparent 50%);
+        pointer-events: none;
+    }
+    .header-card h1, .header-card h2 { font-weight: 800; font-size: 2.5rem; letter-spacing: -0.5px; margin-bottom: 5px; text-shadow: 0 2px 4px rgba(0,0,0,0.3); color: #ffffff !important;}
+    .header-card p { font-size: 1.1rem; color: #cbd5e1 !important; font-weight: 400; margin: 0; }
     
+    /* Menu Buttons - Modern Clean Soft UI */
+    div[data-testid="stButton"] > button {
+        background: #ffffff !important;
+        border: 1px solid #e2e8f0 !important; 
+        border-radius: 16px !important;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.02), 0 10px 15px rgba(0,0,0,0.03) !important;
+        padding: 22px 10px !important; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+    }
+    div[data-testid="stButton"] > button:hover, div[data-testid="stButton"] > button:active {
+        background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%) !important;
+        transform: translateY(-5px) !important;
+        box-shadow: 0 15px 25px rgba(2,132,199,0.2) !important; border-color: transparent !important;
+    }
+    div[data-testid="stButton"] > button p { color: #1e293b !important; font-weight: 700 !important; font-size: 1.1rem !important; margin:0; transition: color 0.3s ease; }
+    div[data-testid="stButton"] > button:hover p, div[data-testid="stButton"] > button:active p { color: #ffffff !important; }
+    
+    /* Section Titles Modern */
     .section-title { 
-        color: #0f172a !important; font-size: 1.3rem !important; font-weight: 800 !important; 
-        margin: 35px 0 20px 0 !important; display: flex !important; align-items: center !important; gap: 10px !important;
+        color: #0f172a; font-size: 1.3rem; font-weight: 800; letter-spacing: -0.3px;
+        margin: 35px 0 20px 0; display: flex; align-items: center; gap: 10px;
     }
     .section-title::before {
         content: ''; display: block; width: 5px; height: 24px; background: #0ea5e9; border-radius: 4px;
     }
     
+    /* Metric Cards Clean Modern */
     .metric-3d {
         background: #ffffff; padding: 25px 20px; border-radius: 16px; text-align: center;
-        box-shadow: 0 10px 20px rgba(0,0,0,0.03); border: 1px solid #e2e8f0; border-top: 4px solid #0ea5e9; margin-bottom: 20px;
+        box-shadow: 0 10px 20px rgba(0,0,0,0.03); border: 1px solid #e2e8f0;
+        border-top: 4px solid #0ea5e9; margin-bottom: 20px; transition: transform 0.3s;
     }
-    .metric-title { font-size: 0.85rem; color: #64748b; font-weight: 700; text-transform: uppercase; }
+    .metric-3d:hover { transform: translateY(-4px); box-shadow: 0 15px 30px rgba(0,0,0,0.06); }
+    .metric-title { font-size: 0.85rem; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;}
     .metric-value { font-size: 1.8rem; font-weight: 800; margin-top: 8px; color: #0f172a; }
+    
+    /* Sidebar Kosong */
+    [data-testid="stSidebar"] {
+        background-color: #f8fafc !important;
+        border-right: 1px solid #e2e8f0 !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -281,7 +289,7 @@ def get_credentials():
     with open("credentials.json", "w") as f: f.write(st.secrets["gcp_json"])
     return Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=60)
 def fetch_spreadsheet_data(spreadsheet_id):
     client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
     ws_names = [SHEET_REQUEST, SHEET_PJB, SHEET_UM, SHEET_DISTRIBUSI, SHEET_APP, "Rekap PJB", SHEET_TIKET_PM, SHEET_ABSENSI]
@@ -1964,14 +1972,24 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                                 "Keringat di lapangan adalah pahlawan keluarga. Jaga integritas dan pulanglah dengan bangga! 💼"
                             ]
                             st.toast(f"💡 {random.choice(kata_motivasi)}", icon="✨")
-                            # --------------------------------------
                             
-                            st.success(f"🎉 PJB Berhasil Dikirim untuk Verifikasi Admin!")
-                            st.session_state.pjb_data = None
-                            if "Operational" in jns_pjb:
-                                time.sleep(2.5)
-                                st.session_state.page = "🏠 Hub Menu Utama"
-                                st.rerun()
+                            # Logika Pengalihan Tampilan Ke WhatsApp
+                            if ai_mismatch_flag:
+                                st.warning(f"🚨 **PERINGATAN AI:** {msg_nota}")
+                                st.error("PJB Anda tetap berhasil disubmit, namun dengan status **TERKUNCI (Membutuhkan Approval Manual)** karena tulisan nota sulit dibaca AI.")
+                                st.info("📲 **Harap konfirmasi ke Koordinator via WA untuk persetujuan PJB:** [Klik Disini (08115251515)](https://wa.me/628115251515)")
+                                st.session_state.pjb_data = None
+                                if "Operational" in jns_pjb:
+                                    time.sleep(8) # Jeda panjang (8 detik) agar tim punya waktu klik link WA
+                                    st.session_state.page = "🏠 Hub Menu Utama"
+                                    st.rerun()
+                            else:
+                                st.success(f"🎉 PJB Berhasil Dikirim untuk Verifikasi Admin!")
+                                st.session_state.pjb_data = None
+                                if "Operational" in jns_pjb:
+                                    time.sleep(2.5) # Jeda normal (2.5 detik) jika nota lolos AI
+                                    st.session_state.page = "🏠 Hub Menu Utama"
+                                    st.rerun()
                         else: st.error("🚨 Gagal mengirim ke Google Sheet.")
 
         if st.session_state.get("pdf_ready"):
@@ -2079,7 +2097,7 @@ elif st.session_state.page == "🛡️ Approval Center":
 
 
 # ==========================================
-# PAGE 5: MANAJEMEN KAS & DISTRIBUSI DANA
+# PAGE 4: MANAJEMEN KAS & DISTRIBUSI DANA
 # ==========================================
 elif st.session_state.page == "🏦 Manajemen Kas & Distribusi":
     st.markdown("<div class='header-card'><h2>🏦 MANAJEMEN KAS & DISTRIBUSI TIM</h2><p>Sistem Pencatatan Uang Masuk & Rekap Distribusi ke Petugas Lapangan</p></div>", unsafe_allow_html=True)
@@ -3073,14 +3091,15 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
                     df_sisa["Nominal PJB Total"] = df_sisa["Nominal PJB Total"].apply(lambda x: f"Rp {x:,.0f}")
                     df_sisa["Sisa Dana (Tarik)"] = df_sisa["Sisa Dana (Tarik)"].apply(lambda x: f"Rp {x:,.0f}")
                     st.dataframe(df_sisa, hide_index=True, use_container_width=True)
-                else: st.success("Aman! Tidak ada sisa dana di tim.")
+                else: st.success("Aman! Semua pengajuan PM/Reguler nominalnya sesuai (Tidak ada sisa dana di tim).")
 
 
 # ==========================================
 # PAGE 9: REPORT LAPANGAN (WA GENERATOR)
 # ==========================================
 elif st.session_state.page == "📝 Report Lapangan":
-    st.markdown("<div class='header-card'><h2>📝 REPORT LAPANGAN (PROGRESS)</h2><p>Auto-Generate Laporan Teks WA & Kompresi Foto</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='header-card'><h2>📝 REPORT LAPANGAN (PROGRESS)</h2><p>Auto-Generate Laporan Teks WA & Kompresi Foto (Bebas Beban)</p></div>", unsafe_allow_html=True)
+    st.info("💡 **INFO:** Fitur ini 100% aman. Mengisi report ini tidak akan mengubah status tiket PJB Anda. Hasil akhirnya adalah teks yang siap Anda Copy-Paste ke WhatsApp.")
     
     nop_rep = st.selectbox("📂 1. Pilih Database (NOP):", ["-- Pilih NOP --"] + list(MASTER_DATA.keys()))
     
@@ -3088,7 +3107,7 @@ elif st.session_state.page == "📝 Report Lapangan":
         target_ss = MASTER_DATA[nop_rep]["spreadsheet_id"]
         with st.spinner("Memuat data tiket..."):
             data_all = fetch_spreadsheet_data(target_ss)
-            req_r = data_all.get(SHEET_REQUEST, [])
+            req_r = data_all[SHEET_REQUEST]
 
         c_rep1, c_rep2 = st.columns(2)
         with c_rep1: 
@@ -3099,24 +3118,33 @@ elif st.session_state.page == "📝 Report Lapangan":
             for r in reversed(req_r[1:]):
                 if len(r)>5 and str(r[3]).strip() != "" and str(r[5]).strip().upper() == nama_rep.strip().upper():
                     req_tk_raw = str(r[3]).strip().upper()
+                    
                     site_id_val = str(r[7]).strip() if len(r)>7 and str(r[7]).strip() else "Tanpa Site"
+                    
                     display_text = f"{req_tk_raw} | {site_id_val}"
-                    if display_text not in pending_options: pending_options.append(display_text)
+                    
+                    if display_text not in pending_options:
+                        pending_options.append(display_text)
                         
             with c_rep2: 
-                if pending_options: tiket_rep = st.selectbox("🎫 Pilih Tiket Pekerjaan:", ["-- Pilih Tiket --"] + pending_options)
-                else: st.success("Belum ada riwayat tiket!"); tiket_rep = "-- Pilih Tiket --"
+                if pending_options:
+                    tiket_rep = st.selectbox("🎫 Pilih Tiket Pekerjaan (Terbaru di atas):", ["-- Pilih Tiket --"] + pending_options)
+                else:
+                    st.success("Belum ada riwayat tiket untuk nama ini!")
+                    tiket_rep = "-- Pilih Tiket --"
                     
             if tiket_rep != "-- Pilih Tiket --":
                 tiket_clean = tiket_rep.split(" | ")[0].strip()
+                
                 st.markdown("<div class='section-title'>🔍 Rincian Laporan Lapangan</div>", unsafe_allow_html=True)
                 site_name = ""
                 for r in reversed(req_r[1:]):
                     if len(r) > 7 and str(r[3]).strip().upper() == tiket_clean:
-                        site_name = str(r[7]).strip(); break
+                        site_name = str(r[7]).strip()
+                        break
                         
                 site_rep = st.text_input("Nama Site / Lokasi", value=site_name)
-                analisa_rep = st.text_area("📝 Analisa Pekerjaan", height=100)
+                analisa_rep = st.text_area("📝 Analisa Pekerjaan (Apa saja yang dilakukan?)", height=100)
                 
                 c_k1, c_k2 = st.columns(2)
                 with c_k1:
@@ -3127,6 +3155,8 @@ elif st.session_state.page == "📝 Report Lapangan":
                     kond_power = st.text_input("🔋 Status Backup Power (Baterai)")
                     
                 st.markdown("<div class='section-title'>📸 Upload Dokumentasi (Maks 5 Foto)</div>", unsafe_allow_html=True)
+                st.info("⚠️ Semua foto yang diupload di sini akan **DIKOMPRESI OTOMATIS (Size menjadi Kecil)** sebelum diupload ke server. Aman untuk kuota dan storage!")
+                
                 cf1, cf2, cf3, cf4, cf5 = st.columns(5)
                 with cf1: f1 = st.file_uploader("Foto 1", type=["jpg", "png", "jpeg"])
                 with cf2: f2 = st.file_uploader("Foto 2", type=["jpg", "png", "jpeg"])
@@ -3143,16 +3173,44 @@ elif st.session_state.page == "📝 Report Lapangan":
                         l_f5 = upload_foto_compressed(f5) if f5 else ""
                         
                         ts_now = datetime.now().strftime("%d %B %Y - %H:%M")
-                        wa_text = f"*UPDATE PROGRESS PEKERJAAN*\n📅 Tanggal: {ts_now}\n👤 Pelapor: {nama_rep}\n🎫 No Tiket: {tiket_clean}\n📍 Site: {site_rep}\n\n*📝 Analisa Pekerjaan:*\n{analisa_rep if analisa_rep else '-'}\n\n*🛠️ Status Perangkat:*\n• BTS & Recti : {kond_bts if kond_bts else '-'}\n• Genset      : {kond_genset if kond_genset else '-'}\n• Enpas/AC    : {kond_enpas if kond_enpas else '-'}\n• Baterai/BUP : {kond_power if kond_power else '-'}\n\n*📸 Link Dokumentasi:*\n"
+                        
+                        wa_text = f"""*UPDATE PROGRESS PEKERJAAN*
+📅 Tanggal: {ts_now}
+👤 Pelapor: {nama_rep}
+🎫 No Tiket: {tiket_clean}
+📍 Site: {site_rep}
+
+*📝 Analisa Pekerjaan:*
+{analisa_rep if analisa_rep else '-'}
+
+*🛠️ Status Perangkat:*
+• BTS & Recti : {kond_bts if kond_bts else '-'}
+• Genset      : {kond_genset if kond_genset else '-'}
+• Enpas/AC    : {kond_enpas if kond_enpas else '-'}
+• Baterai/BUP : {kond_power if kond_power else '-'}
+
+*📸 Link Dokumentasi:*
+"""
                         counter = 1
                         for link in [l_f1, l_f2, l_f3, l_f4, l_f5]:
-                            if link: wa_text += f"{counter}. {link}\n"; counter += 1
-                        if counter == 1: wa_text += "- Tidak ada dokumentasi terlampir.\n"
+                            if link:
+                                wa_text += f"{counter}. {link}\n"
+                                counter += 1
+                        
+                        if counter == 1:
+                            wa_text += "- Tidak ada dokumentasi terlampir.\n"
                             
                         st.session_state.wa_text_ready = wa_text
-                        st.success("✅ Berhasil! Laporan siap disalin.")
+                        st.success("✅ Berhasil! Foto telah dikompres dan Laporan siap disalin.")
                         
             if st.session_state.get("wa_text_ready"):
                 st.markdown("<div class='section-title'>📱 Hasil Text Siap Copy-Paste / Download</div>", unsafe_allow_html=True)
                 st.code(st.session_state.wa_text_ready, language="markdown")
-                st.download_button(label="📥 Download File (.txt) untuk WA", data=st.session_state.wa_text_ready, file_name=f"Report_WA_{tiket_clean}.txt", mime="text/plain", use_container_width=True)
+                
+                st.download_button(
+                    label="📥 Download File (.txt) untuk WA", 
+                    data=st.session_state.wa_text_ready, 
+                    file_name=f"Report_WA_{tiket_clean}.txt", 
+                    mime="text/plain", 
+                    use_container_width=True
+                )
