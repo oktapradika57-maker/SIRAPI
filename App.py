@@ -21,249 +21,76 @@ import cv2
 import numpy as np
 import pytesseract
 
+# ==========================================
+# 0. KONFIGURASI HALAMAN (HARUS PALING ATAS!)
+# ==========================================
+st.set_page_config(page_title="SiRAPI Enterprise", page_icon="💸", layout="wide", initial_sidebar_state="collapsed")
+
 # =================================================================
-# 🎨 SUNTIKAN UI/UX: ENTERPRISE DASHBOARD (CLEAN & HIGH CONTRAST)
+# 🎨 UI/UX DESIGN (SATU BLOK CSS BERSIH AGAR TIDAK ADA HURUF BOCOR)
 # =================================================================
 st.markdown("""
 <style>
-    /* 1. Sembunyikan elemen bawaan Streamlit (Beri ruang bersih) */
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+    
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {background-color: transparent !important;}
-
-    /* 2. Latar Belakang Aplikasi - Clean Light Slate */
-    .stApp {
-        background-color: #F8FAFC !important;
-    }
-
-    /* 3. Container Utama - Kartu Putih Rapi */
+    
+    .stApp { background-color: #f8fafc !important; font-family: 'Plus Jakarta Sans', sans-serif !important; }
+    
     .main .block-container {
         background-color: #FFFFFF !important;
         padding: 2rem 3rem !important;
         border-radius: 12px !important;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03) !important;
-        margin-top: 2rem !important;
+        margin-top: 1rem !important;
         margin-bottom: 2rem !important;
         border: 1px solid #E2E8F0 !important;
         max-width: 1100px !important;
     }
-
-    /* 4. Font Profesional (Bawaan Sistem UI yang Rapi) */
-    * {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+    
+    p, label, h1, h2, h3, h4, h5, h6, li { color: #1E293B !important; }
+    
+    .stTextInput>div>div>input, .stSelectbox>div>div>select, .stNumberInput>div>div>input, 
+    .stTextArea>div>div>textarea, .stDateInput>div>div>input {
+        background-color: #FFFFFF !important; color: #0F172A !important;
+        border: 1.5px solid #CBD5E1 !important; border-radius: 8px !important;
+        padding: 10px 14px !important; font-size: 15px !important; font-weight: 500 !important;
     }
-
-    /* 5. Warna Teks Global - Diperbaiki agar tidak merusak banner */
-    p, label, h1, h2, h3, h4, h5, h6, li {
-        color: #1E293B !important;
-    }
-
-    /* 6. Input Form (Teks, Dropdown, Tanggal) - Elegan & Jelas */
-    .stTextInput>div>div>input, 
-    .stSelectbox>div>div>select, 
-    .stNumberInput>div>div>input, 
-    .stTextArea>div>div>textarea, 
-    .stDateInput>div>div>input {
-        background-color: #FFFFFF !important;
-        color: #0F172A !important;
-        border: 1.5px solid #CBD5E1 !important;
-        border-radius: 8px !important;
-        padding: 10px 14px !important;
-        font-size: 15px !important;
-        font-weight: 500 !important;
-        box-shadow: inset 0 1px 2px rgba(0,0,0,0.02) !important;
-        transition: all 0.2s ease !important;
-    }
-    .stTextInput>div>div>input:focus, 
-    .stSelectbox>div>div>select:focus {
-        border-color: #2563EB !important;
-        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
-    }
-
-    /* 7. TOMBOL AKSI UTAMA (SUBMIT) - DIJAMIN JELAS TERBACA */
+    
     button[kind="primary"] {
-        background-color: #0F172A !important;
-        border: none !important;
-        border-radius: 8px !important;
-        padding: 0.75rem 1.5rem !important;
-        min-height: 52px !important;
-        box-shadow: 0 4px 6px rgba(15, 23, 42, 0.2) !important;
-        transition: all 0.2s ease !important;
+        background-color: #0F172A !important; border: none !important; border-radius: 8px !important;
+        padding: 0.75rem 1.5rem !important; min-height: 52px !important;
+        box-shadow: 0 4px 6px rgba(15, 23, 42, 0.2) !important; transition: all 0.2s ease !important;
     }
-    button[kind="primary"] * {
-        color: #FFFFFF !important; 
-        font-weight: 600 !important;
-        font-size: 16px !important;
-        letter-spacing: 0.5px !important;
-    }
-    button[kind="primary"]:hover {
-        background-color: #2563EB !important;
-        transform: translateY(-2px) !important;
-    }
-    button[kind="primary"]:disabled {
-        background-color: #94A3B8 !important;
-        box-shadow: none !important;
-        transform: none !important;
-    }
-
-    /* 8. KOTAK MENU NAVIGASI (Secondary) - SERAGAM DAN RAPI */
-    button[kind="secondary"] {
-        background-color: #F8FAFC !important;
-        border: 1.5px solid #E2E8F0 !important;
-        border-radius: 12px !important;
-        min-height: 120px !important;
-        display: flex !important;
-        flex-direction: column !important;
-        justify-content: center !important;
-        align-items: center !important;
-        transition: all 0.2s ease !important;
-    }
-    button[kind="secondary"] * {
-        color: #334155 !important;
-        font-weight: 700 !important;
-        font-size: 15px !important;
-        text-align: center !important;
-        white-space: normal !important; 
-        line-height: 1.4 !important;
-    }
-    button[kind="secondary"]:hover {
-        background-color: #FFFFFF !important;
-        border-color: #3B82F6 !important;
-        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15) !important;
-        transform: translateY(-3px) !important;
-    }
-    button[kind="secondary"]:hover * {
-        color: #1D4ED8 !important;
-    }
-
-    /* 9. HEADER CARD PORTAL (Tampilan Khusus Judul Halaman) */
+    button[kind="primary"] * { color: #FFFFFF !important; font-weight: 600 !important; font-size: 16px !important; }
+    button[kind="primary"]:hover { background-color: #2563EB !important; transform: translateY(-2px) !important; }
+    
     .header-card {
-        background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%) !important;
-        padding: 30px !important;
-        border-radius: 12px !important;
-        margin-bottom: 30px !important;
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important;
-        border-left: 6px solid #3B82F6 !important;
-        text-align: center !important;
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        padding: 30px; border-radius: 16px; color: #ffffff !important; text-align: center;
+        box-shadow: 0 10px 25px rgba(15, 23, 42, 0.1); margin-top: 5px; margin-bottom: 30px;
+        position: relative; overflow: hidden;
     }
-    /* Mengunci paksa SEMUA teks di dalam header menjadi putih terang */
-    .header-card,
-    .header-card p,
-    .header-card h1,
-    .header-card h2,
-    .header-card h3,
-    .header-card span,
-    .header-card div {
-        color: #FFFFFF !important;
+    .header-card h1, .header-card h2 { font-weight: 800; font-size: 26px; margin-bottom: 5px; color: #ffffff !important;}
+    .header-card p { font-size: 15px; color: #cbd5e1 !important; margin: 0; }
+    
+    .section-title { 
+        color: #0f172a !important; font-size: 1.3rem !important; font-weight: 800 !important; 
+        margin: 35px 0 20px 0 !important; display: flex !important; align-items: center !important; gap: 10px !important;
     }
-    .header-card h1, .header-card h2 { 
-        font-weight: 800 !important; 
-        margin-bottom: 5px !important; 
-        font-size: 26px !important;
+    .section-title::before {
+        content: ''; display: block; width: 5px; height: 24px; background: #0ea5e9; border-radius: 4px;
     }
-    .header-card p { 
-        opacity: 0.9 !important; 
-        font-size: 15px !important; 
-        margin: 0 !important; 
-        font-weight: 400 !important;
+    
+    .metric-3d {
+        background: #ffffff; padding: 25px 20px; border-radius: 16px; text-align: center;
+        box-shadow: 0 10px 20px rgba(0,0,0,0.03); border: 1px solid #e2e8f0; border-top: 4px solid #0ea5e9; margin-bottom: 20px;
     }
-
-    /* 10. Sidebar & Alert */
-    [data-testid="stSidebar"] {
-        background-color: #F8FAFC !important;
-        border-right: 1px solid #E2E8F0 !important;
-    }
-    .stAlert {
-        border-radius: 8px !important;
-        border: none !important;
-    }
+    .metric-title { font-size: 0.85rem; color: #64748b; font-weight: 700; text-transform: uppercase; }
+    .metric-value { font-size: 1.8rem; font-weight: 800; margin-top: 8px; color: #0f172a; }
 </style>
-""", unsafe_allow_html=True)
-# ==========================================
-# 0. KONFIGURASI HALAMAN & UI ELEGAN (FRESH & PROFESSIONAL)
-# ==========================================
-st.set_page_config(page_title="SiRAPI Enterprise", page_icon="💸", layout="wide", initial_sidebar_state="collapsed")
-
-# --- SISTEM REMEMBER ME (LEBIH STABIL & INSTAN) ---
-cookie_manager = CookieController()
-
-saved_user = cookie_manager.get("user_sirapi")
-saved_date = cookie_manager.get("login_date")
-saved_absen = cookie_manager.get("absent_date") # Tambahan Cookie Absen
-today_date = datetime.now().strftime("%Y-%m-%d")
-
-if saved_user and saved_date == today_date and st.session_state.get("logged_in_user") is None:
-    st.session_state.logged_in_user = saved_user
-    st.session_state.is_authenticated = True
-    if saved_absen == today_date:
-        st.session_state.has_absent = True
-        st.session_state.needs_routing = True
-    if st.session_state.get("page") == "Login":
-        st.session_state.page = "🏠 Hub Menu Utama"
-# ---------------------------------------------------
-
-st.markdown("""
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
-        
-        /* Global Background & Font */
-        .main { background-color: #f8fafc; font-family: 'Plus Jakarta Sans', sans-serif; }
-        
-        /* Premium Header Card (Glassmorphism & Clean Gradient) */
-        .header-card {
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-            padding: 40px 30px; border-radius: 20px; color: #ffffff; text-align: center;
-            box-shadow: 0 15px 35px rgba(15, 23, 42, 0.1);
-            margin-top: 10px; margin-bottom: 35px; border: 1px solid rgba(255,255,255,0.05);
-            position: relative; overflow: hidden;
-        }
-        .header-card::before {
-            content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
-            background: radial-gradient(circle, rgba(56,189,248,0.08) 0%, transparent 50%);
-            pointer-events: none;
-        }
-        .header-card h1 { font-weight: 800; font-size: 2.5rem; letter-spacing: -0.5px; margin-bottom: 5px; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }
-        .header-card p { font-size: 1.1rem; color: #cbd5e1; font-weight: 400; margin: 0; }
-        
-        /* Menu Buttons - Modern Clean Soft UI */
-        div[data-testid="stButton"] > button {
-            background: #ffffff !important;
-            border: 1px solid #e2e8f0 !important; 
-            border-radius: 16px !important;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.02), 0 10px 15px rgba(0,0,0,0.03) !important;
-            padding: 22px 10px !important; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-        }
-        div[data-testid="stButton"] > button:hover, div[data-testid="stButton"] > button:active {
-            background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%) !important;
-            transform: translateY(-5px) !important;
-            box-shadow: 0 15px 25px rgba(2,132,199,0.2) !important; border-color: transparent !important;
-        }
-        div[data-testid="stButton"] > button p { color: #1e293b !important; font-weight: 700 !important; font-size: 1.1rem !important; margin:0; transition: color 0.3s ease; }
-        div[data-testid="stButton"] > button:hover p, div[data-testid="stButton"] > button:active p { color: #ffffff !important; }
-        
-        /* Section Titles Modern */
-        .section-title { 
-            color: #0f172a; font-size: 1.3rem; font-weight: 800; letter-spacing: -0.3px;
-            margin: 35px 0 20px 0; display: flex; align-items: center; gap: 10px;
-        }
-        .section-title::before {
-            content: ''; display: block; width: 5px; height: 24px; background: #0ea5e9; border-radius: 4px;
-        }
-        
-        /* Metric Cards Clean Modern */
-        .metric-3d {
-            background: #ffffff; padding: 25px 20px; border-radius: 16px; text-align: center;
-            box-shadow: 0 10px 20px rgba(0,0,0,0.03); border: 1px solid #e2e8f0;
-            border-top: 4px solid #0ea5e9; margin-bottom: 20px; transition: transform 0.3s;
-        }
-        .metric-3d:hover { transform: translateY(-4px); box-shadow: 0 15px 30px rgba(0,0,0,0.06); }
-        .metric-title { font-size: 0.85rem; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;}
-        .metric-value { font-size: 1.8rem; font-weight: 800; margin-top: 8px; color: #0f172a; }
-        
-        /* Hide Sidebar completely for mobile purity */
-        [data-testid="collapsedControl"] { display: none; }
-    </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
@@ -478,7 +305,6 @@ def update_pm_ticket_status(spreadsheet_id, tickets_to_update, new_status):
 
 @st.cache_data(ttl=600)
 def load_excel_data():
-    site_dict, site_list = {}, []
     try:
         df_site_pky = pd.read_excel("Hasil_910_Site.xlsx").fillna(0)
         try:
@@ -489,7 +315,8 @@ def load_excel_data():
             
         site_dict = df_site.set_index('Site ID')[['Latitude Tujuan', 'Longtitude Tujuan']].to_dict('index')
         site_list = df_site['Site ID'].astype(str).tolist()
-    except Exception: pass
+    except Exception:
+        site_dict, site_list = {}, []
     
     tim_dict, list_nopol_csv = {}, []
     try:
@@ -522,10 +349,8 @@ def load_excel_data():
                     if pic_name and nopol_val and nopol_val not in ["nan", "0", "None"]: 
                         tim_dict[pic_name]['NOPOL'] = nopol_val
     except Exception: pass
-
-    # =========================================================
-    # SUNTIKAN KHUSUS DATA PANGKALANBUN (ROLE & NOPOL MBP)
-    # =========================================================
+    
+    # SUNTIKAN KHUSUS DATA PANGKALANBUN (NAMA & NOPOL)
     try:
         df_tim_pbun = pd.read_excel("NAMA NOP PANGKALANBUN & NOPOL MBP.xlsx").fillna("")
         for _, row in df_tim_pbun.iterrows():
@@ -558,6 +383,7 @@ def load_excel_data():
     except Exception: pass
         
     return site_dict, site_list, tim_dict, list_nopol_csv, nik_dict
+
 def get_last_indicator(plat_raw, jns, pjb_r):
     if not plat_raw: return 0.0
     # Bersihkan spasi secara total agar sinkron
@@ -721,6 +547,7 @@ if st.session_state.page != "🏠 Hub Menu Utama":
             
 st.markdown("<hr style='margin: 10px 0 30px 0;'>", unsafe_allow_html=True)
 
+
 # ==========================================
 # 4. SIDEBAR NAVIGATION & SHORTCUT SIDATA
 # ==========================================
@@ -749,8 +576,6 @@ st.sidebar.markdown(
 )
 st.sidebar.markdown("<hr style='margin: 15px 0;'>", unsafe_allow_html=True)
 
-# (DI BAWAH INI ADALAH KODE # PAGE 0: HUB MENU UTAMA ANDA, JANGAN DIHAPUS)
-
 # ==========================================
 # PAGE 0: HUB MENU UTAMA (1-SCREEN DASHBOARD)
 # ==========================================
@@ -758,7 +583,10 @@ if st.session_state.page == "🏠 Hub Menu Utama":
     
     c_logo1, c_logo2, c_logo3 = st.columns([1, 1, 1])
     with c_logo2:
-        try: st.image("koperasi-jasa-konstruksi-tower-event-organizer-network-monitoring-telekomunikasi-kisel-group-logo-kut.webp", use_container_width=True)
+        try: 
+            st.markdown("<div style='display: flex; justify-content: center;'>", unsafe_allow_html=True)
+            st.image("koperasi-jasa-konstruksi-tower-event-organizer-network-monitoring-telekomunikasi-kisel-group-logo-kut.webp", width=120)
+            st.markdown("</div>", unsafe_allow_html=True)
         except: pass
 
     st.markdown("""
@@ -971,7 +799,15 @@ elif st.session_state.page == "📝 Form Request Dana":
                             default_bank, default_no_rek = str(r[17]).strip(), str(r[18]).strip(); break
                             
             is_locked_user = len(out_lock) > 0
-            role = st.selectbox("Role Jabatan", ["-- Pilih Role --", "Admin", "Koordinator", "PM", "TE", "MBP", "CME"])
+            
+            default_role_idx = 0
+            if nama_lookup in tim_dict and 'ROLE' in tim_dict[nama_lookup]:
+                role_val = tim_dict[nama_lookup]['ROLE']
+                roles_list = ["-- Pilih Role --", "Admin", "Koordinator", "PM", "TE", "MBP", "CME"]
+                if role_val in roles_list:
+                    default_role_idx = roles_list.index(role_val)
+                    
+            role = st.selectbox("Role Jabatan", ["-- Pilih Role --", "Admin", "Koordinator", "PM", "TE", "MBP", "CME"], index=default_role_idx)
             
             if len(site_list) > 0:
                 site_id = st.selectbox("ID Site / Lokasi", [""] + site_list)
@@ -1289,24 +1125,31 @@ elif st.session_state.page == "📝 Form Request Dana":
                         if item not in ["Pengecekan MCB", "BCP"]: 
                             is_berat = True
                             
-                if is_berat:
-                    base_um = 60000
-                    alasan = "✅ **Kategori Pekerjaan Berat/Teknikal:** Tim mendapatkan Uang Makan **Rp 60.000/orang** (Syarat: Jarak >80 KM)."
+                if jarak_km_pp < 80:
+                    st.error(f"❌ JARAK TIDAK MEMENUHI SYARAT: Jarak tempuh Peta hanya {jarak_km_pp:.1f} KM. Syarat minimal Uang Makan adalah >80 KM. Nominal dikunci ke 0.")
+                    base_um = 0
+                    nom_req_um = 0
                 else:
-                    base_um = 30000
-                    alasan = "⚠️ **Kategori Pekerjaan Ringan:** Pekerjaan hanya berupa Pengecekan/BCP. Tim maksimal mendapatkan **Rp 30.000/orang** (Syarat: Jarak >80 KM)."
+                    if is_berat:
+                        base_um = 60000
+                        alasan = f"✅ **Kategori Pekerjaan Berat:** Jarak {jarak_km_pp:.1f} KM (>80 KM) tercapai. Tim berhak mendapatkan **Rp 60.000/orang**."
+                    else:
+                        base_um = 30000
+                        alasan = f"⚠️ **Kategori Pekerjaan Ringan:** Jarak {jarak_km_pp:.1f} KM (>80 KM) namun pekerjaan ringan. Tim berhak mendapatkan **Rp 30.000/orang**."
+                    st.info(alasan)
                 
-                st.info(alasan)
                 st.warning("🔒 **SYSTEM LOCK AKTIF:** Nominal tidak bisa diubah manual agar tertib. Hubungi Admin / Boss jika butuh approval khusus.")
                 
                 with c_um2:
                     max_um_nominal = base_um * jml_org
                     # FITUR DISABLED=TRUE akan mengunci kolom agar tidak bisa diketik tim
-                    nom_req_um = st.number_input(f"Nominal UM/Hari (TERKUNCI)", min_value=0, max_value=max_um_nominal, value=max_um_nominal, step=5000, disabled=True)
+                    nom_req_um = st.number_input(f"Nominal UM/Hari (TERKUNCI)", min_value=0, max_value=max_um_nominal if max_um_nominal > 0 else 100, value=max_um_nominal, step=5000, disabled=True)
                     
                 tot_um = hari_req * nom_req_um
-                st.success(f"💰 Total Estimasi Uang Makan: **Rp {tot_um:,.0f}**")
-                sub_requests.append({"tiket": f"{base_tiket_clean} [UM]", "kategori": f"Akomodasi", "kebutuhan": tot_um, "plat": "", "indikator": 0.0, "last_ind": 0.0, "tipe": "UM", "hari": hari_req, "nom_um": nom_req_um})
+                if tot_um > 0:
+                    st.success(f"💰 Total Estimasi Uang Makan: **Rp {tot_um:,.0f}**")
+                    kategori_teks = "Uang Makan (Pekerjaan Berat)" if is_berat else "Uang Makan (Pekerjaan Ringan)"
+                    sub_requests.append({"tiket": f"{base_tiket_clean} [UM]", "kategori": kategori_teks, "kebutuhan": tot_um, "plat": "", "indikator": 0.0, "last_ind": 0.0, "tipe": "UM", "hari": hari_req, "nom_um": nom_req_um})
                 
             if "Penginapan" in kebutuhan_dana_list:
                 with c_um1:
@@ -1477,38 +1320,41 @@ elif st.session_state.page == "📝 Form Request Dana":
                         ts_now = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
                         tgl_str = tanggal.strftime("%d/%m/%Y")
                         
-                        for req in sub_requests:
-                            desc_final = deskripsi
-                            if tim_bareng: desc_final += f"\n\n[Tim: {', '.join(tim_bareng)}]"
-                            if req['tipe'] == 'UM': desc_final += f"\n\n[REQ AKOMODASI: {req['hari']} Hari @ Rp {req['nom_um']:,.0f}/hari = Rp {req['kebutuhan']:,.0f}]"
-                            elif req['tipe'] == 'Inap': desc_final += f"\n\n[REQ PENGINAPAN: {req['hari']} Malam @ Rp {req['nom_inap']:,.0f}/malam = Rp {req['kebutuhan']:,.0f}]"
-                            
-                            data_req = [
-                                ts_now, tgl_str, nop, req['tiket'], cluster, nama, role, site_id, keperluan, 
-                                req['kebutuhan'], req['kategori'], desc_final, str(req['indikator']), 
-                                jarak_final_text, lat_berangkat, long_berangkat, req['plat'], 
-                                rek_penerima, no_rek, nominal_tf, url_km, url_evidance, lat_tujuan, long_tujuan
-                            ]
-                            append_data(SHEET_REQUEST, data_req, target_ss)
-                            if req['plat'] and req['plat'] not in list_nopol_bersih: save_new_nopol_to_csv(req['plat'])
+                        try:
+                            for req in sub_requests:
+                                desc_final = deskripsi
+                                if tim_bareng: desc_final += f"\n\n[Tim: {', '.join(tim_bareng)}]"
+                                if req['tipe'] == 'UM': desc_final += f"\n\n[REQ AKOMODASI: {req['kategori']} | {req['hari']} Hari @ Rp {req['nom_um']:,.0f}/hari = Rp {req['kebutuhan']:,.0f} | Jarak Peta: {jarak_km_pp:.1f} KM]"
+                                elif req['tipe'] == 'Inap': desc_final += f"\n\n[REQ PENGINAPAN: {req['hari']} Malam @ Rp {req['nom_inap']:,.0f}/malam = Rp {req['kebutuhan']:,.0f} | Jarak Peta: {jarak_km_pp:.1f} KM]"
                                 
-                        if pm_selected_list: update_pm_ticket_status(target_ss, pm_selected_list, "REQUESTED")
-                            
-                        kata_motivasi = [
-                            "Kejujuran adalah kunci keberhasilan. Terima kasih atas kerja kerasmu hari ini! 💪",
-                            "Jujur dalam bekerja demi senyum keluarga di rumah. Keringatmu adalah ibadah! 🏡✨",
-                            "Satu kejujuran bernilai lebih dari seribu kebohongan. Lanjutkan dedikasimu! 🌟",
-                            "Tetap semangat! Hasil yang berkah berasal dari proses yang jujur dan transparan. 🤝",
-                            "Keringat di lapangan adalah pahlawan keluarga. Jaga integritas dan pulanglah dengan bangga! 💼"
-                        ]
-                        pesan_semangat = random.choice(kata_motivasi)
-                        
-                        st.toast(f"💡 {pesan_semangat}", icon="✨")
-                        
-                        st.success(f"🎉 Berhasil memecah {len(sub_requests)} tiket terpisah!")
-                        time.sleep(3)
-                        st.session_state.page = "🏠 Hub Menu Utama"
-                        st.rerun()
+                                data_req = [
+                                    ts_now, tgl_str, nop, req['tiket'], cluster, nama, role, site_id, keperluan, 
+                                    req['kebutuhan'], req['kategori'], desc_final, str(req['indikator']), 
+                                    jarak_final_text, lat_berangkat, long_berangkat, req['plat'], 
+                                    rek_penerima, no_rek, nominal_tf, url_km, url_evidance, lat_tujuan, long_tujuan
+                                ]
+                                append_data(SHEET_REQUEST, data_req, target_ss)
+                                if req['plat'] and req['plat'] not in list_nopol_bersih: save_new_nopol_to_csv(req['plat'])
+                                    
+                            if pm_selected_list: update_pm_ticket_status(target_ss, pm_selected_list, "REQUESTED")
+                                
+                            import random
+                            kata_motivasi = [
+                                "Kejujuran adalah kunci keberhasilan. Terima kasih atas kerja kerasmu hari ini! 💪",
+                                "Jujur dalam bekerja demi senyum keluarga di rumah. Keringatmu adalah ibadah! 🏡✨",
+                                "Satu kejujuran bernilai lebih dari seribu kebohongan. Lanjutkan dedikasimu! 🌟",
+                                "Tetap semangat! Hasil yang berkah berasal dari proses yang jujur dan transparan. 🤝"
+                            ]
+                            st.toast(f"💡 {random.choice(kata_motivasi)}", icon="✨")
+                            st.success(f"🎉 Berhasil memecah {len(sub_requests)} tiket terpisah!")
+                            time.sleep(3)
+                            st.session_state.page = "🏠 Hub Menu Utama"
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"⚠️ Gagal menyimpan ke Spreadsheet. Error: {e}")
+                            st.stop()
+
+
 # ==========================================
 # PAGE 2: FORM PJB OPERASIONAL 
 # ==========================================
@@ -2233,7 +2079,7 @@ elif st.session_state.page == "🛡️ Approval Center":
 
 
 # ==========================================
-# PAGE 4: MANAJEMEN KAS & DISTRIBUSI DANA
+# PAGE 5: MANAJEMEN KAS & DISTRIBUSI DANA
 # ==========================================
 elif st.session_state.page == "🏦 Manajemen Kas & Distribusi":
     st.markdown("<div class='header-card'><h2>🏦 MANAJEMEN KAS & DISTRIBUSI TIM</h2><p>Sistem Pencatatan Uang Masuk & Rekap Distribusi ke Petugas Lapangan</p></div>", unsafe_allow_html=True)
@@ -2370,7 +2216,7 @@ elif st.session_state.page == "🏦 Manajemen Kas & Distribusi":
 
 
 # ==========================================
-# PAGE 5: LIVE MONITORING
+# PAGE 6: LIVE MONITORING
 # ==========================================
 elif st.session_state.page == "📈 Live Monitoring":
     st.markdown("<div class='header-card'><h2>📈 LIVE MONITORING DASHBOARD</h2><p>Analisa Kas, Daily Pengeluaran, Tracker Satelit, & Analisa Performa Mobil (NOPOL)</p></div>", unsafe_allow_html=True)
@@ -2378,7 +2224,7 @@ elif st.session_state.page == "📈 Live Monitoring":
     nop_live = st.selectbox("🌐 Pilih Market (NOP):", ["-- Pilih NOP --"] + list(MASTER_DATA.keys()))
     if nop_live != "-- Pilih NOP --":
         data_all = fetch_spreadsheet_data(MASTER_DATA[nop_live]["spreadsheet_id"])
-        um_r, rekap_r, pjb_r, req_r, app_r = data_all[SHEET_UM], data_all["Rekap PJB"], data_all[SHEET_PJB], data_all[SHEET_REQUEST], data_all[SHEET_APP]
+        um_r, rekap_r, pjb_r, req_r, app_r = data_all.get(SHEET_UM,[]), data_all.get("Rekap PJB",[]), data_all.get(SHEET_PJB,[]), data_all.get(SHEET_REQUEST,[]), data_all.get(SHEET_APP,[])
         
         t1, t2, t3, t4, t5 = st.tabs(["💰 1. Sisa Kas", "🚨 2. Anomali", "🕵️ 3. Evaluasi Satelit", "🚗 4. Performa Mobil (NOPOL)", "⚡ 5. Datalog Genset"])
         
@@ -2569,7 +2415,7 @@ elif st.session_state.page == "📈 Live Monitoring":
 
 
 # ==========================================
-# PAGE 6: REPORT & AUTO PJB
+# PAGE 7: REPORT & AUTO PJB
 # ==========================================
 elif st.session_state.page == "🖨️ Auto PJB Report":
     st.markdown("<div class='header-card'><h2>🖨️ REPORT & EXPORT CENTER</h2><p>Generator Laporan PDF Otomatis & Analisa Tabel Tiket Menyeluruh</p></div>", unsafe_allow_html=True)
@@ -3009,7 +2855,7 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
 
 
 # ==========================================
-# PAGE 7: MONITORING REQUEST & PJB
+# PAGE 8: REQ & PJB MONITORING
 # ==========================================
 elif st.session_state.page == "👀 Request & PJB Monitoring":
     st.markdown("<div class='header-card'><h2>📋 REQ & PJB MONITORING</h2><p>Pantau Aktivitas Tim Daily, Warning Tiket Gantung & Cek Sisa Dana</p></div>", unsafe_allow_html=True)
@@ -3045,22 +2891,17 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
             for r in req_r[1:]:
                 if len(r) > 13 and str(r[1]).strip() == filter_date_str:
                     tiket_req = str(r[3]).strip().upper()
-                    
-                    if tiket_req in processed_tickets:
-                        continue
-                        
+                    if tiket_req in processed_tickets: continue
                     nom = clean_nominal(r[9])
                     tot_req_daily += nom
                     
-                    # --- AMBIL DATA BANK & NOREK ---
                     bank_info = str(r[17]).strip() if len(r) > 17 else "-"
                     norek_info = str(r[18]).strip() if len(r) > 18 else "-"
-                    rek_tim = f"{bank_info} - {norek_info}"
                     
                     daily_req.append({
                         "Waktu": r[0], "Nama": r[5], "Sub-Tiket (Split)": r[3], "Role": r[6],
                         "Keperluan": r[8], "Kategori Item": r[10], 
-                        "Jarak/Info": r[13], "Rekening Tim": rek_tim, "Nominal Request": nom
+                        "Jarak/Info": r[13], "Rekening Tim": f"{bank_info} - {norek_info}", "Nominal Request": nom
                     })
             
             if daily_req:
@@ -3167,8 +3008,6 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
             
         with tab_warning:
             st.markdown("### 🚨 Peringatan Otomatis (Data Mulai Agustus 2026 dst)")
-            st.info("Sistem melacak siapa yang belum setor PJB lebih dari 3 hari, dan mencocokkan nilai **Sisa Dana (Request awal vs Laporan PJB)**.")
-            
             pjb_dict = {}
             pjb_tickets_all_set = set()
             for r in pjb_r[1:]:
@@ -3176,7 +3015,6 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
                     tk = str(r[21]).strip().upper()
                     if tk not in pjb_dict: pjb_dict[tk] = 0
                     pjb_dict[tk] += clean_nominal(r[11]) if len(r)>11 else 0
-                    
                     tk_str = r[36].strip() if (len(r) > 36 and r[36].strip()) else r[21].strip()
                     pjb_tickets_all_set.update([t.strip().upper() for t in tk_str.split(",")])
                     
@@ -3185,8 +3023,7 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
                 if len(r) > 5 and r[3] == "Request Dana" and str(r[5]).strip().upper() == "REJECTED":
                     req_reject_set.add(str(r[2]).strip().upper())
                     
-            list_gantung = []
-            list_sisa = []
+            list_gantung, list_sisa = [], []
             today_date = datetime.now().date()
             
             for r in req_r[1:]:
@@ -3196,36 +3033,27 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
                     
                     if req_date >= CUTOFF_DATE:
                         req_tk_raw = str(r[3]).strip().upper()
-                        
                         if not req_tk_raw or req_tk_raw in req_reject_set: continue
                         
                         req_tk_list = [t.strip() for t in req_tk_raw.split(",") if t.strip()]
                         req_set = set(req_tk_list)
                         
-                        nama = str(r[5])
                         nom_req = clean_nominal(r[9])
-                        
                         if not req_set.issubset(pjb_tickets_all_set):
                             aging = (today_date - req_date).days
                             if aging > 3:
                                 list_gantung.append({
-                                    "Tanggal Request": tgl_req_str,
-                                    "Aging": f"{aging} Hari",
-                                    "Nama Petugas": nama,
-                                    "Sub-Tiket Gantung": req_tk_raw,
-                                    "Nominal Request": nom_req
+                                    "Tanggal Request": tgl_req_str, "Aging": f"{aging} Hari",
+                                    "Nama Petugas": str(r[5]), "Sub-Tiket Gantung": req_tk_raw, "Nominal Request": nom_req
                                 })
                         else:
                             nom_pjb = pjb_dict.get(req_tk_raw, 0)
                             sisa = nom_req - nom_pjb
                             if sisa > 0:
                                 list_sisa.append({
-                                    "Tanggal Request": tgl_req_str,
-                                    "Nama Petugas": nama,
-                                    "Sub-Tiket PJB": req_tk_raw,
-                                    "Nominal Request": nom_req,
-                                    "Nominal PJB Total": nom_pjb,
-                                    "Sisa Dana (Tarik)": sisa
+                                    "Tanggal Request": tgl_req_str, "Nama Petugas": str(r[5]),
+                                    "Sub-Tiket PJB": req_tk_raw, "Nominal Request": nom_req,
+                                    "Nominal PJB Total": nom_pjb, "Sisa Dana (Tarik)": sisa
                                 })
                                 
             col_w1, col_w2 = st.columns(2)
@@ -3245,15 +3073,14 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
                     df_sisa["Nominal PJB Total"] = df_sisa["Nominal PJB Total"].apply(lambda x: f"Rp {x:,.0f}")
                     df_sisa["Sisa Dana (Tarik)"] = df_sisa["Sisa Dana (Tarik)"].apply(lambda x: f"Rp {x:,.0f}")
                     st.dataframe(df_sisa, hide_index=True, use_container_width=True)
-                else: st.success("Aman! Semua pengajuan PM/Reguler nominalnya sesuai (Tidak ada sisa dana di tim).")
+                else: st.success("Aman! Tidak ada sisa dana di tim.")
 
 
 # ==========================================
-# PAGE 8: REPORT LAPANGAN (WA GENERATOR)
+# PAGE 9: REPORT LAPANGAN (WA GENERATOR)
 # ==========================================
 elif st.session_state.page == "📝 Report Lapangan":
-    st.markdown("<div class='header-card'><h2>📝 REPORT LAPANGAN (PROGRESS)</h2><p>Auto-Generate Laporan Teks WA & Kompresi Foto (Bebas Beban)</p></div>", unsafe_allow_html=True)
-    st.info("💡 **INFO:** Fitur ini 100% aman. Mengisi report ini tidak akan mengubah status tiket PJB Anda. Hasil akhirnya adalah teks yang siap Anda Copy-Paste ke WhatsApp.")
+    st.markdown("<div class='header-card'><h2>📝 REPORT LAPANGAN (PROGRESS)</h2><p>Auto-Generate Laporan Teks WA & Kompresi Foto</p></div>", unsafe_allow_html=True)
     
     nop_rep = st.selectbox("📂 1. Pilih Database (NOP):", ["-- Pilih NOP --"] + list(MASTER_DATA.keys()))
     
@@ -3261,45 +3088,35 @@ elif st.session_state.page == "📝 Report Lapangan":
         target_ss = MASTER_DATA[nop_rep]["spreadsheet_id"]
         with st.spinner("Memuat data tiket..."):
             data_all = fetch_spreadsheet_data(target_ss)
-            req_r = data_all[SHEET_REQUEST]
+            req_r = data_all.get(SHEET_REQUEST, [])
 
         c_rep1, c_rep2 = st.columns(2)
         with c_rep1: 
-            idx_nama_rep = MASTER_DATA[nop_rep]["names"].index(st.session_state.logged_in_user) if st.session_state.logged_in_user in MASTER_DATA[nop_rep]["names"] else 0
-            nama_rep = st.selectbox("👤 Pilih Nama Anda:", ["-- Pilih Nama --"] + MASTER_DATA[nop_rep]["names"], index=idx_nama_rep+1 if idx_nama_rep != 0 else 0)
+            nama_rep = st.selectbox("👤 Pilih Nama Anda:", ["-- Pilih Nama --"] + MASTER_DATA[nop_rep]["names"])
         
         pending_options = []
         if nama_rep != "-- Pilih Nama --":
             for r in reversed(req_r[1:]):
                 if len(r)>5 and str(r[3]).strip() != "" and str(r[5]).strip().upper() == nama_rep.strip().upper():
                     req_tk_raw = str(r[3]).strip().upper()
-                    
                     site_id_val = str(r[7]).strip() if len(r)>7 and str(r[7]).strip() else "Tanpa Site"
-                    
                     display_text = f"{req_tk_raw} | {site_id_val}"
-                    
-                    if display_text not in pending_options:
-                        pending_options.append(display_text)
+                    if display_text not in pending_options: pending_options.append(display_text)
                         
             with c_rep2: 
-                if pending_options:
-                    tiket_rep = st.selectbox("🎫 Pilih Tiket Pekerjaan (Terbaru di atas):", ["-- Pilih Tiket --"] + pending_options)
-                else:
-                    st.success("Belum ada riwayat tiket untuk nama ini!")
-                    tiket_rep = "-- Pilih Tiket --"
+                if pending_options: tiket_rep = st.selectbox("🎫 Pilih Tiket Pekerjaan:", ["-- Pilih Tiket --"] + pending_options)
+                else: st.success("Belum ada riwayat tiket!"); tiket_rep = "-- Pilih Tiket --"
                     
             if tiket_rep != "-- Pilih Tiket --":
                 tiket_clean = tiket_rep.split(" | ")[0].strip()
-                
                 st.markdown("<div class='section-title'>🔍 Rincian Laporan Lapangan</div>", unsafe_allow_html=True)
                 site_name = ""
                 for r in reversed(req_r[1:]):
                     if len(r) > 7 and str(r[3]).strip().upper() == tiket_clean:
-                        site_name = str(r[7]).strip()
-                        break
+                        site_name = str(r[7]).strip(); break
                         
                 site_rep = st.text_input("Nama Site / Lokasi", value=site_name)
-                analisa_rep = st.text_area("📝 Analisa Pekerjaan (Apa saja yang dilakukan?)", height=100)
+                analisa_rep = st.text_area("📝 Analisa Pekerjaan", height=100)
                 
                 c_k1, c_k2 = st.columns(2)
                 with c_k1:
@@ -3310,8 +3127,6 @@ elif st.session_state.page == "📝 Report Lapangan":
                     kond_power = st.text_input("🔋 Status Backup Power (Baterai)")
                     
                 st.markdown("<div class='section-title'>📸 Upload Dokumentasi (Maks 5 Foto)</div>", unsafe_allow_html=True)
-                st.info("⚠️ Semua foto yang diupload di sini akan **DIKOMPRESI OTOMATIS (Size menjadi Kecil)** sebelum diupload ke server. Aman untuk kuota dan storage!")
-                
                 cf1, cf2, cf3, cf4, cf5 = st.columns(5)
                 with cf1: f1 = st.file_uploader("Foto 1", type=["jpg", "png", "jpeg"])
                 with cf2: f2 = st.file_uploader("Foto 2", type=["jpg", "png", "jpeg"])
@@ -3328,44 +3143,16 @@ elif st.session_state.page == "📝 Report Lapangan":
                         l_f5 = upload_foto_compressed(f5) if f5 else ""
                         
                         ts_now = datetime.now().strftime("%d %B %Y - %H:%M")
-                        
-                        wa_text = f"""*UPDATE PROGRESS PEKERJAAN*
-📅 Tanggal: {ts_now}
-👤 Pelapor: {nama_rep}
-🎫 No Tiket: {tiket_clean}
-📍 Site: {site_rep}
-
-*📝 Analisa Pekerjaan:*
-{analisa_rep if analisa_rep else '-'}
-
-*🛠️ Status Perangkat:*
-• BTS & Recti : {kond_bts if kond_bts else '-'}
-• Genset      : {kond_genset if kond_genset else '-'}
-• Enpas/AC    : {kond_enpas if kond_enpas else '-'}
-• Baterai/BUP : {kond_power if kond_power else '-'}
-
-*📸 Link Dokumentasi:*
-"""
+                        wa_text = f"*UPDATE PROGRESS PEKERJAAN*\n📅 Tanggal: {ts_now}\n👤 Pelapor: {nama_rep}\n🎫 No Tiket: {tiket_clean}\n📍 Site: {site_rep}\n\n*📝 Analisa Pekerjaan:*\n{analisa_rep if analisa_rep else '-'}\n\n*🛠️ Status Perangkat:*\n• BTS & Recti : {kond_bts if kond_bts else '-'}\n• Genset      : {kond_genset if kond_genset else '-'}\n• Enpas/AC    : {kond_enpas if kond_enpas else '-'}\n• Baterai/BUP : {kond_power if kond_power else '-'}\n\n*📸 Link Dokumentasi:*\n"
                         counter = 1
                         for link in [l_f1, l_f2, l_f3, l_f4, l_f5]:
-                            if link:
-                                wa_text += f"{counter}. {link}\n"
-                                counter += 1
-                        
-                        if counter == 1:
-                            wa_text += "- Tidak ada dokumentasi terlampir.\n"
+                            if link: wa_text += f"{counter}. {link}\n"; counter += 1
+                        if counter == 1: wa_text += "- Tidak ada dokumentasi terlampir.\n"
                             
                         st.session_state.wa_text_ready = wa_text
-                        st.success("✅ Berhasil! Foto telah dikompres dan Laporan siap disalin.")
+                        st.success("✅ Berhasil! Laporan siap disalin.")
                         
             if st.session_state.get("wa_text_ready"):
                 st.markdown("<div class='section-title'>📱 Hasil Text Siap Copy-Paste / Download</div>", unsafe_allow_html=True)
                 st.code(st.session_state.wa_text_ready, language="markdown")
-                
-                st.download_button(
-                    label="📥 Download File (.txt) untuk WA", 
-                    data=st.session_state.wa_text_ready, 
-                    file_name=f"Report_WA_{tiket_clean}.txt", 
-                    mime="text/plain", 
-                    use_container_width=True
-                )
+                st.download_button(label="📥 Download File (.txt) untuk WA", data=st.session_state.wa_text_ready, file_name=f"Report_WA_{tiket_clean}.txt", mime="text/plain", use_container_width=True)
