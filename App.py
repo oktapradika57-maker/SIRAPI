@@ -973,7 +973,7 @@ elif st.session_state.page == "📝 Form Request Dana":
             is_locked_user = len(out_lock) > 0
             role = st.selectbox("Role Jabatan", ["-- Pilih Role --", "Admin", "Koordinator", "PM", "TE", "MBP", "CME"])
             
-            if nop == "Palangkaraya" and len(site_list) > 0:
+            if len(site_list) > 0:
                 site_id = st.selectbox("ID Site / Lokasi", [""] + site_list)
                 if site_id != "-- Pilih Site ID --" and site_id in site_dict:
                     auto_lat_tujuan, auto_long_tujuan = str(site_dict[site_id].get("Latitude Tujuan", "0")), str(site_dict[site_id].get("Longtitude Tujuan", "0"))
