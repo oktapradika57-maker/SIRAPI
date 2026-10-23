@@ -289,7 +289,7 @@ def get_credentials():
     with open("credentials.json", "w") as f: f.write(st.secrets["gcp_json"])
     return Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=600)
 def fetch_spreadsheet_data(spreadsheet_id):
     client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
     ws_names = [SHEET_REQUEST, SHEET_PJB, SHEET_UM, SHEET_DISTRIBUSI, SHEET_APP, "Rekap PJB", SHEET_TIKET_PM, SHEET_ABSENSI]
@@ -313,6 +313,7 @@ def update_pm_ticket_status(spreadsheet_id, tickets_to_update, new_status):
 
 @st.cache_data(ttl=600)
 def load_excel_data():
+    site_dict, site_list = {}, []
     try:
         df_site_pky = pd.read_excel("Hasil_910_Site.xlsx").fillna(0)
         try:
@@ -323,8 +324,7 @@ def load_excel_data():
             
         site_dict = df_site.set_index('Site ID')[['Latitude Tujuan', 'Longtitude Tujuan']].to_dict('index')
         site_list = df_site['Site ID'].astype(str).tolist()
-    except Exception:
-        site_dict, site_list = {}, []
+    except Exception: pass
     
     tim_dict, list_nopol_csv = {}, []
     try:
@@ -357,8 +357,10 @@ def load_excel_data():
                     if pic_name and nopol_val and nopol_val not in ["nan", "0", "None"]: 
                         tim_dict[pic_name]['NOPOL'] = nopol_val
     except Exception: pass
-    
-    # SUNTIKAN KHUSUS DATA PANGKALANBUN (NAMA & NOPOL)
+
+    # =========================================================
+    # SUNTIKAN KHUSUS DATA PANGKALANBUN (ROLE & NOPOL MBP)
+    # =========================================================
     try:
         df_tim_pbun = pd.read_excel("NAMA NOP PANGKALANBUN & NOPOL MBP.xlsx").fillna("")
         for _, row in df_tim_pbun.iterrows():
@@ -2234,7 +2236,7 @@ elif st.session_state.page == "🏦 Manajemen Kas & Distribusi":
 
 
 # ==========================================
-# PAGE 6: LIVE MONITORING
+# PAGE 5: LIVE MONITORING
 # ==========================================
 elif st.session_state.page == "📈 Live Monitoring":
     st.markdown("<div class='header-card'><h2>📈 LIVE MONITORING DASHBOARD</h2><p>Analisa Kas, Daily Pengeluaran, Tracker Satelit, & Analisa Performa Mobil (NOPOL)</p></div>", unsafe_allow_html=True)
@@ -2242,7 +2244,7 @@ elif st.session_state.page == "📈 Live Monitoring":
     nop_live = st.selectbox("🌐 Pilih Market (NOP):", ["-- Pilih NOP --"] + list(MASTER_DATA.keys()))
     if nop_live != "-- Pilih NOP --":
         data_all = fetch_spreadsheet_data(MASTER_DATA[nop_live]["spreadsheet_id"])
-        um_r, rekap_r, pjb_r, req_r, app_r = data_all.get(SHEET_UM,[]), data_all.get("Rekap PJB",[]), data_all.get(SHEET_PJB,[]), data_all.get(SHEET_REQUEST,[]), data_all.get(SHEET_APP,[])
+        um_r, rekap_r, pjb_r, req_r, app_r = data_all[SHEET_UM], data_all["Rekap PJB"], data_all[SHEET_PJB], data_all[SHEET_REQUEST], data_all[SHEET_APP]
         
         t1, t2, t3, t4, t5 = st.tabs(["💰 1. Sisa Kas", "🚨 2. Anomali", "🕵️ 3. Evaluasi Satelit", "🚗 4. Performa Mobil (NOPOL)", "⚡ 5. Datalog Genset"])
         
@@ -2433,7 +2435,7 @@ elif st.session_state.page == "📈 Live Monitoring":
 
 
 # ==========================================
-# PAGE 7: REPORT & AUTO PJB
+# PAGE 6: REPORT & AUTO PJB
 # ==========================================
 elif st.session_state.page == "🖨️ Auto PJB Report":
     st.markdown("<div class='header-card'><h2>🖨️ REPORT & EXPORT CENTER</h2><p>Generator Laporan PDF Otomatis & Analisa Tabel Tiket Menyeluruh</p></div>", unsafe_allow_html=True)
@@ -3026,6 +3028,8 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
             
         with tab_warning:
             st.markdown("### 🚨 Peringatan Otomatis (Data Mulai Agustus 2026 dst)")
+            st.info("Sistem melacak siapa yang belum setor PJB lebih dari 3 hari, dan mencocokkan nilai **Sisa Dana (Request awal vs Laporan PJB)**.")
+            
             pjb_dict = {}
             pjb_tickets_all_set = set()
             for r in pjb_r[1:]:
@@ -3033,6 +3037,7 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
                     tk = str(r[21]).strip().upper()
                     if tk not in pjb_dict: pjb_dict[tk] = 0
                     pjb_dict[tk] += clean_nominal(r[11]) if len(r)>11 else 0
+                    
                     tk_str = r[36].strip() if (len(r) > 36 and r[36].strip()) else r[21].strip()
                     pjb_tickets_all_set.update([t.strip().upper() for t in tk_str.split(",")])
                     
@@ -3041,7 +3046,8 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
                 if len(r) > 5 and r[3] == "Request Dana" and str(r[5]).strip().upper() == "REJECTED":
                     req_reject_set.add(str(r[2]).strip().upper())
                     
-            list_gantung, list_sisa = [], []
+            list_gantung = []
+            list_sisa = []
             today_date = datetime.now().date()
             
             for r in req_r[1:]:
@@ -3061,17 +3067,23 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
                             aging = (today_date - req_date).days
                             if aging > 3:
                                 list_gantung.append({
-                                    "Tanggal Request": tgl_req_str, "Aging": f"{aging} Hari",
-                                    "Nama Petugas": str(r[5]), "Sub-Tiket Gantung": req_tk_raw, "Nominal Request": nom_req
+                                    "Tanggal Request": tgl_req_str,
+                                    "Aging": f"{aging} Hari",
+                                    "Nama Petugas": str(r[5]),
+                                    "Sub-Tiket Gantung": req_tk_raw,
+                                    "Nominal Request": nom_req
                                 })
                         else:
                             nom_pjb = pjb_dict.get(req_tk_raw, 0)
                             sisa = nom_req - nom_pjb
                             if sisa > 0:
                                 list_sisa.append({
-                                    "Tanggal Request": tgl_req_str, "Nama Petugas": str(r[5]),
-                                    "Sub-Tiket PJB": req_tk_raw, "Nominal Request": nom_req,
-                                    "Nominal PJB Total": nom_pjb, "Sisa Dana (Tarik)": sisa
+                                    "Tanggal Request": tgl_req_str,
+                                    "Nama Petugas": str(r[5]),
+                                    "Sub-Tiket PJB": req_tk_raw,
+                                    "Nominal Request": nom_req,
+                                    "Nominal PJB Total": nom_pjb,
+                                    "Sisa Dana (Tarik)": sisa
                                 })
                                 
             col_w1, col_w2 = st.columns(2)
@@ -3111,7 +3123,8 @@ elif st.session_state.page == "📝 Report Lapangan":
 
         c_rep1, c_rep2 = st.columns(2)
         with c_rep1: 
-            nama_rep = st.selectbox("👤 Pilih Nama Anda:", ["-- Pilih Nama --"] + MASTER_DATA[nop_rep]["names"])
+            idx_nama_rep = MASTER_DATA[nop_rep]["names"].index(st.session_state.logged_in_user) if st.session_state.logged_in_user in MASTER_DATA[nop_rep]["names"] else 0
+            nama_rep = st.selectbox("👤 Pilih Nama Anda:", ["-- Pilih Nama --"] + MASTER_DATA[nop_rep]["names"], index=idx_nama_rep+1 if idx_nama_rep != 0 else 0)
         
         pending_options = []
         if nama_rep != "-- Pilih Nama --":
