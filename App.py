@@ -291,7 +291,7 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 MASTER_DATA = {
     "Palangkaraya": {"spreadsheet_id": "1HvgVicTWwO4RMQI6ZR3Mu3IgGicwjcLZl9mDN1auvJU", "clusters": ["Palangkaraya", "Barito Raya"], "names": ["ADI BOWO SANTOSO", "IRJAN TORO", "AHMAD", "AHMAD MUZAKIR", "AHMAD SETIAWAN", "ALFI SYAHRI", "ARMADI", "AULIA RAHMAN", "DARLI SUTANTO", "DIDI RIYADI", "FAHMI", "FRANS EJHA ADITYA", "GYLLBRHED ALFARY LOLOMSAIT", "HARUN NURASYID", "HORY YUSMANTO", "INDRA", "JAMES JIMBRIS TAMAILANG", "JUMADI", "KHILAL DAWAI KATIRI", "LEONARD HARA", "M. RIFANI", "MUHAMMAD MUKHLIS", "MUHAMMAD MUKTI", "MUNAWIR AHMAD", "MURJANI", "NURHAYAT", "OKY BANGKIT PAMUNGKAS", "PRADILA KANDI", "PUJIANTO", "PUTRA WARDANA", "REYNALDI RICARDO PUTRA", "RIKI HIDAYAT", "RIKO SETIADI", "SAILILLAH", "SARUL SAPUTRA", "SARWONO", "RIO ARDINATA", "TAKLIM", "TIVIANSYAH", "TRISNO SUSANTO", "YAHYA MUHAMAD", "OKTA PRDIKA", "OKTA PRADIKA", "M KIKI FIRMANSYAH", "MAWARDAH", "HD"]},
-    "Pangkalanbun": {"spreadsheet_id": "1bc0lDhR5iMtXZsKiKIdEwPY8JTaASeHFtaJSeXkywE4", "clusters": ["Ketapang", "Sampit", "Pangkalanbun"], "names": ["RIRIH HARIANTO", "MUKHAMAD ABDUL KHOLIP", "YAMA DEWANTA", "BAGUS SANTOSO", "IMRON SETIAWAN", "JOENDRIS HERDIAN KARA", "STEVEN HERDIAN KARA", "YUDIONO", "DADANG WAHYU SYAHPUTRA", "CAVIN ANDREAN EKA PUTRA", "RAHMAT RIYAN WAHYUDIN", "SUWITO", "DIDIK PRIYONO", "GUNTUR WAHYU PRADANA", "UTI MUHAMMAD KHAIRUL HUDA", "IDRUS MAULANA", "M. RIZKY", "TRIYONO", "ERIK SETIAWAN", "AGUS SUGANDA", "AJI SAPUTRA", "DIAN WAHYUDI", "HAFID BUDIANTO", "IWAN ZAINAL ABIDIN", "DANDI PUTRA", "PONIRAN", "PARYADI KUSUMA", "HERWANI", "DIAN WILDANI", "IPAN HARIONO", "FIRDAUS", "RONI YUDI ISYANTO", "AYU NUR ISLAMIAH", "ARDIANSYAH.", "DAYU SHANDY", "WAHYUDI", "TAJAM SAPUTRA", "MUJHAHID ALWI", "NANDA FIRMANSYAH", "WAHYU RAHMADANI", "TEGUH WICAKSONO", "FERI HARIADI", "NASUKI", "ANDARIANTO PUJI SURO", "BONDAN PRAMUDYA ANANTATUR", "SOLEKHAN", "RIZAL IHZAMAHENDRA", "MUHAMMAD ROIS FERDIANSYAH", "WIDI ARYANTO", "FHANNY AGUSTIAWAN"]},
+    "Pangkalanbun": {"spreadsheet_id": "1bc0lDhR5iMtXZsKiKIdEwPY8JTaASeHFtaJSeXkywE4", "clusters": ["Ketapang", "Sampit", "Pangkalanbun"], "names": ["AGUS SUGANDA", "AJI SAPUTRA", "DANDI PUTRA", "DIAN WAHYUDI", "DIAN WILDANI", "HAFID BUDIANTO", "HERWANI", "IWAN ZAINAL ABIDIN", "PARYADI KUSUMA", "PONIRAN", "ANDARIANTO PUJI SURO", "ARDI", "CAVIN ANDREAN EKA PUTRA", "DADANG WAHYU SYAHPUTRA", "FERI HARIADI", "JOENDRIS HERDIAN KARA", "NASUKI", "REDI CANDRA SINAGA", "RIZAL IHZAMAHENDRA", "SOLEKHAN", "STEVEN HERDIAN KARA", "TEGUH WICAKSONO", "YUDIONO", "IPAN HARIONO", "DIDIK PRIYONO", "MUHAMAD ROIS FERDIANSYAH", "WIDI ARYANTO", "HERMANSYAH", "M. RIZKY", "RIDWANSYAH", "TRIYONO", "UTI MUHAMMAD KHAIRUL HUDA", "ARDIANSYAH", "BAGUS SANTOSO", "BONDAN PRAMUDYA ANANTATUR", "M.ABDUL KHOLIP", "MUJHAHID ALWI", "RIRIH HARIANTO", "TAJAM SAPUTRA", "WAHYUDI", "DAYU SHANDY", "MEI NUGROHO DWI LAKSONO", "ARIF JONIAWAN"]},
     "Tarakan": {"spreadsheet_id": "1lRj1YdZGQwY5vHg8P4wudK9V1O_lJuEYjdyHkXoB-Wg", "clusters": ["Tarakan Inner", "Tarakan Outer"], "names": ["HENDRA WIRTASI SIMANULLANG", "ARIZONA ROSADI", "KUKUH BHASKARA", "NATAL SIMBOLON", "HERMAWAN", "IRVAN DINATA VANDITYAWAN", "ENDRAS SAPTA", "AHMADI", "EDI PANJI ERMAYANA", "HANS RISKY RONI TUAH GIRSANG", "IRMANSYAH B. SANGAJI", "REMO REMOLDUS MANALU", "MOHAMMAD RAFAI", "FIRMAN SYAHRUL", "AZMIR", "PETRUS RESI KELORE", "ANIR REZKY", "AHDAN", "PARJON SIMANULLANG", "RUSDI", "HASRIADI", "PURO SUGONDO", "ALIMUDIN M. SAER", "KORNELIUS USI KELORE", "RUSDIANSYAH", "JONTES YUSDA SIMANULLANG", "NANI SETIANINGSIH", "UNGGUL NUGRAHA", "YOGABITA INDOTENO", "JHON KENNEDI SIMANULLANG", "RAFI MUHAMAD SYARIF", "AGRIVA", "SEPTIAN ALVITO", "M. DEDI RIZALDI", "SAHARUDDIN.", "MUHAMMAD RASYID", "SUPRIADI", "JULIMAT SIHITE", "EFNI NURYADIN", "ERWIN SAPUTRA ARIANSYAH", "ALVEUS", "SUPRIADI BANDANGAN"]},
     "Pontianak": {"spreadsheet_id": "1VmoWPImNFMjnaIQpBXEVYdMiTEzsz3P4tpmzfA0EMDE", "clusters": ["Sintang", "Singkawang", "Pontianak"], "names": ["ALOYSIUS", "RUDI", "RONIYANTO", "SUKADI", "HAIRIL", "AZMI ASHADIQI", "SUYADI", "ARIEF DARUL IKHWAN", "MUHAMMAD AL FATAH", "YUDIANSYAH", "RAHMAD INDRA IRAWAN", "MATIUS MARTIN", "RYVAEEL DEWANGGA", "AMIRDA ANGGA SAPUTRA", "IZHARUDDIN", "VINSENSIUS YOGI", "GUSTI ARIZAL", "MUHAMMAD MIFTAHUDIN, A.MD", "BAYU ANGGARA PUTRA", "YONI IRAWAN", "SUGANDI", "IRVAN ANDRIYANA", "ALDIANSYAH", "ABANG HAMDANI", "ABANG KUSDIANSYAH", "SUMAN", "SANGGARA ISMARAWARI", "IBIN", "VALENTINUS PETRO", "DWI KURNIAWAN ISMANTO", "ARISAFRIADI", "DONATUS DONI", "NUR AHMAD KARDIYANTO", "AGRI PERDANA", "AKHSANUL FIKI", "ALI ALAMSYAH", "MUHAMMAD FIRZHA GIANNI HARSYA", "RICKY ARDILAY", "FAISAL", "WIJI SANTOSO", "HISYAM MUTHOYIB", "ARIF RAHMAN NUGROHO", "TOTOK SUGIARTO", "PURWANDI SETIAWAN", "JULIANTO BHAKTI PUTRO, SH", "ILHAMMUDIN", "AGUNG", "ROSIDI", "ABRAR ELZAH FATHALIF", "HENDRI YULIANSYAH", "JAMIL", "GORO SUKARTONO", "OKTAPIANUS JUMIN", "ONNIE SYAEFUDDIN", "BUDI", "ULUL AMRY", "RUHIAT, A.MD", "SUPIANDI", "WAHYUDI", "SUHENDRIK", "M. ARKAM", "SYAFRI APRIJAL", "ARIANTO SUMANTRI", "TUTU AGE ANDIKA", "VIRANDA SAPTA, A.MD", "TOTO HERMANSYAH", "KURNIAWAN", "ROBI ISKANDAR MASDIANSYAH", "MUTIIN CHANDRA", "MISJANI", "KHAIRUL FARISD", "ANDRA", "DODI RATMAYANTO", "WAWAN DARYANA", "MISWARDI", "JUPRILIAUS PICO", "DEDY PURNOMO", "EDI KURNIAWAN", "DEDE GUNAWAN", "WANDALA JAGOARDI PANDALO", "KARIYADI", "REZQI AL BARQAH", "FIRMANSYAH, SP"]}
 }
@@ -478,11 +478,18 @@ def update_pm_ticket_status(spreadsheet_id, tickets_to_update, new_status):
 
 @st.cache_data(ttl=600)
 def load_excel_data():
+    site_dict, site_list = {}, []
     try:
-        df_site = pd.read_excel("Hasil_910_Site.xlsx").fillna(0)
+        df_site_pky = pd.read_excel("Hasil_910_Site.xlsx").fillna(0)
+        try:
+            df_site_pbun = pd.read_excel("Site ID Sidata Pangkalanbun.xlsx").fillna(0)
+            df_site = pd.concat([df_site_pky, df_site_pbun], ignore_index=True)
+        except Exception:
+            df_site = df_site_pky
+            
         site_dict = df_site.set_index('Site ID')[['Latitude Tujuan', 'Longtitude Tujuan']].to_dict('index')
         site_list = df_site['Site ID'].astype(str).tolist()
-    except: site_dict, site_list = {}, []
+    except Exception: pass
     
     tim_dict, list_nopol_csv = {}, []
     try:
@@ -515,6 +522,25 @@ def load_excel_data():
                     if pic_name and nopol_val and nopol_val not in ["nan", "0", "None"]: 
                         tim_dict[pic_name]['NOPOL'] = nopol_val
     except Exception: pass
+
+    # =========================================================
+    # SUNTIKAN KHUSUS DATA PANGKALANBUN (ROLE & NOPOL MBP)
+    # =========================================================
+    try:
+        df_tim_pbun = pd.read_excel("NAMA NOP PANGKALANBUN & NOPOL MBP.xlsx").fillna("")
+        for _, row in df_tim_pbun.iterrows():
+            nama = str(row['NAMA']).strip().upper()
+            if nama and nama not in ["NAN", ""]:
+                if nama not in tim_dict:
+                    tim_dict[nama] = {'Latitude': 0, 'Longtitude': 0}
+                if str(row['ROLE']).strip():
+                    tim_dict[nama]['ROLE'] = str(row['ROLE']).strip().upper()
+                nopol = str(row['NOPOL']).strip().upper()
+                if nopol and nopol not in ["NAN", "0", "NONE", ""]:
+                    tim_dict[nama]['NOPOL'] = nopol
+                    if nopol not in list_nopol_csv:
+                        list_nopol_csv.append(nopol)
+    except Exception: pass
     
     nik_dict = {}
     try:
@@ -532,7 +558,6 @@ def load_excel_data():
     except Exception: pass
         
     return site_dict, site_list, tim_dict, list_nopol_csv, nik_dict
-
 def get_last_indicator(plat_raw, jns, pjb_r):
     if not plat_raw: return 0.0
     # Bersihkan spasi secara total agar sinkron
@@ -679,164 +704,14 @@ def save_new_nopol_to_csv(new_plat):
         pass 
 
 # ==========================================
-# 0.5. SISTEM KEAMANAN, AUTO LOGIN & ABSENSI
-# ==========================================
-@st.cache_data(ttl=60)
-def load_user_credentials():
-    try:
-        df = pd.read_excel("pass and username.xlsx")
-        df.columns = df.columns.astype(str).str.strip().str.upper() 
-        creds = {}
-        if 'NAMA' in df.columns and 'NIK' in df.columns:
-            for _, row in df.iterrows():
-                nama = str(row['NAMA']).strip().upper()
-                nik = str(row['NIK']).replace('.0', '').strip() 
-                if nama != 'NAN' and nik != 'NAN' and nama != '':
-                    creds[nama] = nik
-        else:
-            st.error("⚠️ Kolom 'NAMA' dan 'NIK' tidak ditemukan di baris pertama Excel!")
-        return creds
-    except Exception as e:
-        st.error(f"⚠️ Gagal membaca file Excel 'pass and username.xlsx'. Pastikan file sudah terupload. Error: {e}")
-        return {}
-
-if 'is_authenticated' not in st.session_state: st.session_state.is_authenticated = False
-if 'logged_in_user' not in st.session_state: st.session_state.logged_in_user = ""
-if 'needs_routing' not in st.session_state: st.session_state.needs_routing = False
-if 'has_absent' not in st.session_state: st.session_state.has_absent = False
-
-if not st.session_state.is_authenticated:
-    user_creds = load_user_credentials()
-    list_users = ["-- Pilih Nama Anda --"] + sorted(list(user_creds.keys()))
-    
-    c_log1, c_log2, c_log3 = st.columns([1, 2, 1])
-    with c_log2:
-        st.markdown("<div style='margin-top: 80px;'></div>", unsafe_allow_html=True)
-        try: st.image("koperasi-jasa-konstruksi-tower-event-organizer-network-monitoring-telekomunikasi-kisel-group-logo-kut.webp", use_container_width=True)
-        except: pass
-        
-        st.markdown("""
-            <div class="header-card" style="margin-bottom: 25px;">
-                <h2>🔒 PORTAL LOGIN TIM</h2>
-                <p>Pilih nama Anda, password akan otomatis terisi.</p>
-            </div>
-        """, unsafe_allow_html=True)
-        
-        selected_user = st.selectbox("👤 Nama Karyawan:", list_users)
-        
-        auto_nik = user_creds.get(selected_user, "") if selected_user != "-- Pilih Nama Anda --" else ""
-        st.text_input("🔑 Password (NIK):", value=auto_nik, type="password", disabled=True, help="Otomatis terisi untuk keamanan dan kemudahan.")
-
-        if st.button("🚀 MASUK KE SISTEM", use_container_width=True, type="primary"):
-            if selected_user == "-- Pilih Nama Anda --":
-                st.error("⚠️ Silakan pilih nama Anda terlebih dahulu!")
-            else:
-                st.session_state.is_authenticated = True
-                st.session_state.logged_in_user = selected_user
-                
-                sudah_absen = False
-                if selected_user in ["OKTA PRDIKA", "MAWARDAH", "OKTA PRADIKA"]:
-                    sudah_absen = True
-                else:
-                    try:
-                        found_nop = next((k for k, v in MASTER_DATA.items() if selected_user in v["names"]), "")
-                        if found_nop:
-                            d_cek = fetch_spreadsheet_data(MASTER_DATA[found_nop]["spreadsheet_id"])
-                            absen_data = d_cek.get(SHEET_ABSENSI, [])
-                            today_str_abs = datetime.now().strftime("%d/%m/%Y")
-                            for r in absen_data[1:]:
-                                if len(r) > 1 and str(r[1]).strip().upper() == selected_user.strip().upper():
-                                    if str(r[0]).split(" ")[0] == today_str_abs:
-                                        sudah_absen = True
-                                        break
-                    except: pass
-            st.session_state.has_absent = sudah_absen
-            st.session_state.needs_routing = sudah_absen
-            
-            # Menyimpan cookie dengan controller (Masa aktif 24 Jam = 86400 detik)
-            cookie_manager.set("user_sirapi", selected_user, max_age=86400)
-            cookie_manager.set("login_date", datetime.now().strftime("%Y-%m-%d"), max_age=86400)
-            # ---------------------------------------------------
-            
-            st.success(f"✅ Login Berhasil! Selamat datang, {selected_user}.")
-            time.sleep(1)
-            st.rerun()
-    st.stop()
-
-# ==========================================
-# 0.6. INTERCEPTOR: ABSENSI HARIAN
-# ==========================================
-if st.session_state.is_authenticated and not st.session_state.has_absent:
-    st.markdown("<div class='header-card'><h2>📸 ABSENSI HARIAN TIM</h2><p>Anda wajib melakukan absensi (Selfie & Lokasi). Cukup 1x Sehari.</p></div>", unsafe_allow_html=True)
-    c_ab1, c_ab2, c_ab3 = st.columns([1, 2, 1])
-    with c_ab2:
-        with st.form("form_absen"):
-            st.info(f"👤 **Identitas Absen:** {st.session_state.logged_in_user}")
-            status_absen = st.selectbox("Status Kehadiran Hari Ini:", ["Hadir / Bekerja", "Izin", "Sakit", "Cuti"])
-            lokasi_absen = st.text_input("Ketik Lokasi Bekerja Saat Ini")
-            foto_absen = st.file_uploader("Upload Foto Selfie Absen (WAJIB)", type=["jpg", "png", "jpeg"])
-            
-            if st.form_submit_button("✅ Submit Absen & Masuk Ruang Kerja", use_container_width=True):
-                if not lokasi_absen or not foto_absen:
-                    st.error("⚠️ Lokasi Pekerjaan dan Foto Selfie WAJIB diisi!")
-                else:
-                    with st.spinner("Menyimpan absensi..."):
-                        url_foto_absen = upload_foto_compressed(foto_absen)
-                        found_nop_absen = next((k for k, v in MASTER_DATA.items() if st.session_state.logged_in_user in v["names"]), "")
-                        if found_nop_absen:
-                            try: 
-                                append_data(SHEET_ABSENSI, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), st.session_state.logged_in_user, status_absen, lokasi_absen, url_foto_absen], MASTER_DATA[found_nop_absen]["spreadsheet_id"])
-                            except: pass
-                        st.session_state.has_absent = True
-                        st.session_state.needs_routing = True
-                        st.success("✅ Absensi Berhasil Disimpan!")
-                        time.sleep(1.5)
-                        st.rerun()
-    st.stop()
-
-# ==========================================
-# 0.7. SMART ROUTING ENGINE
-# ==========================================
-if st.session_state.get('needs_routing'):
-    with st.spinner("🔍 Menganalisa status tiket & mengatur rute otomatis..."):
-        user_now = st.session_state.logged_in_user
-        found_nop = next((k for k, v in MASTER_DATA.items() if user_now in v["names"]), "")
-        st.session_state.auto_nop = found_nop
-        
-        if user_now in ["OKTA PRADIKA", "MAWARDAH", "OKTA PRDIKA"]:
-            # --- JALUR VIP BOSS / ADMIN ---
-            st.session_state.admin_logged_in = True # Buka kunci akses Admin otomatis
-            st.session_state.page = "👀 Request & PJB Monitoring" # Langsung arahkan ke halaman Request Dana Tim
-        else:
-            if found_nop:
-                try:
-                    data_cek = fetch_spreadsheet_data(MASTER_DATA[found_nop]["spreadsheet_id"])
-                    _, out_lock, _, _ = get_user_tickets_status(user_now, data_cek[SHEET_REQUEST], data_cek[SHEET_PJB], data_cek[SHEET_APP])
-                    if len(out_lock) > 0:
-                        st.session_state.page = "✅ Form PJB Operasional"
-                    else:
-                        st.session_state.page = "📝 Form Request Dana"
-                except: st.session_state.page = "🏠 Hub Menu Utama"
-            else: st.session_state.page = "🏠 Hub Menu Utama"
-        st.session_state.needs_routing = False
-        st.rerun()
-
-# ==========================================
-# INISIALISASI SESSION STATE & NAVIGASI
+# 3. INISIALISASI SESSION STATE & NAVIGASI (LANGSUNG MASUK TANPA LOGIN)
 # ==========================================
 if 'page' not in st.session_state: st.session_state.page = "🏠 Hub Menu Utama"
 if 'admin_logged_in' not in st.session_state: st.session_state.admin_logged_in = False
 if 'pdf_ready' not in st.session_state: st.session_state.pdf_ready = False
+if 'logged_in_user' not in st.session_state: st.session_state.logged_in_user = "" 
 
-c_nav1, c_nav2, c_nav3 = st.columns([4, 1, 1])
-with c_nav3:
-    if st.button(f"🚪 Logout", help=f"Keluar dari akun {st.session_state.logged_in_user}", use_container_width=True):
-        st.session_state.is_authenticated = False
-        st.session_state.logged_in_user = ""
-        st.session_state.has_absent = False
-        st.session_state.page = "🏠 Hub Menu Utama"
-        st.rerun()
-
+c_nav1, c_nav2 = st.columns([4, 1])
 if st.session_state.page != "🏠 Hub Menu Utama":
     with c_nav1:
         if st.button("⬅️ KEMBALI KE MENU UTAMA", use_container_width=True):
@@ -846,6 +721,35 @@ if st.session_state.page != "🏠 Hub Menu Utama":
             
 st.markdown("<hr style='margin: 10px 0 30px 0;'>", unsafe_allow_html=True)
 
+# ==========================================
+# 4. SIDEBAR NAVIGATION & SHORTCUT SIDATA
+# ==========================================
+list_menu_sidebar = ["🏠 Hub Menu Utama", "📝 Form Request Dana", "✅ Form PJB Operasional", "🔍 Cek Status Tiket", "📝 Report Lapangan"]
+
+def ubah_menu():
+    st.session_state.page = st.session_state.sb_menu
+
+if st.session_state.page in list_menu_sidebar:
+    idx_menu = list_menu_sidebar.index(st.session_state.page)
+else:
+    idx_menu = 0 
+
+st.sidebar.selectbox("Navigasi Utama", list_menu_sidebar, index=idx_menu, key="sb_menu", on_change=ubah_menu)
+
+st.sidebar.markdown("<hr style='margin: 15px 0;'>", unsafe_allow_html=True)
+st.sidebar.markdown("<h3 style='text-align: center; color: #1E293B;'>📊 Wajib Lapor</h3>", unsafe_allow_html=True)
+st.sidebar.info("Khusus Role TE, MBP, & CME: Wajib lapor hasil kegiatan lapangan (Tshoot/PM) ke database SIDATA.")
+
+st.sidebar.markdown(
+    '''
+    <a href="https://sidata.streamlit.app/" target="_blank" style="display: block; text-align: center; background-color: #EF4444; color: white; padding: 12px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 15px; box-shadow: 0 4px 6px rgba(239,68,68,0.2); transition: all 0.3s ease;">
+        👉 BUKA PORTAL SIDATA
+    </a>
+    ''', unsafe_allow_html=True
+)
+st.sidebar.markdown("<hr style='margin: 15px 0;'>", unsafe_allow_html=True)
+
+# (DI BAWAH INI ADALAH KODE # PAGE 0: HUB MENU UTAMA ANDA, JANGAN DIHAPUS)
 
 # ==========================================
 # PAGE 0: HUB MENU UTAMA (1-SCREEN DASHBOARD)
