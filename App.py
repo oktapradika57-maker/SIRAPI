@@ -22,167 +22,491 @@ import numpy as np
 import pytesseract
 
 # ==========================================
-# 0. KONFIGURASI HALAMAN (HARUS PALING ATAS!)
+# 0. KONFIGURASI HALAMAN (WAJIB BARIS PERTAMA!)
 # ==========================================
-st.set_page_config(page_title="SiRAPI Enterprise", page_icon="💸", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SiRAPI NOP PLK & PBU Dashboard", page_icon="💸", layout="wide", initial_sidebar_state="collapsed")
 
 # =================================================================
-# 🎨 UI/UX DESIGN (GAYA ASLI SiDATA - CLEAN, KONTRAST, & JOSS)
+# 🎨 SUNTIKAN UI/UX: PERSIS SiDATA (100% HIGH CONTRAST & ANTI-BLUR)
 # =================================================================
 st.markdown("""
 <style>
-    /* Impor Font Modern */
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
-    
-    /* 1. Reset & Base Font */
-    html, body, [class*="css"] {
-        font-family: 'Plus Jakarta Sans', sans-serif !important;
-        background-color: #F4F7FE !important; /* Background ala Dashboard SiDATA */
-    }
-    
-    /* 2. Sembunyikan elemen bawaan Streamlit yang mengganggu */
+
+    /* 1. Sembunyikan Elemen Bawaan Streamlit */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {background-color: transparent !important;}
-    
-    /* 3. Panel Utama */
-    .block-container {
-        padding: 2rem 3rem !important;
-        max-width: 1200px !important;
-    }
-    
-    /* 4. FIX WARNA TEKS HILANG (Semua teks dipaksa Gelap agar tajam di background putih) */
-    p, label, span, div, li {
-        color: #334155 !important; 
-    }
-    h1, h2, h3, h4, h5, h6 {
+    [data-testid="collapsedControl"] { display: none; }
+
+    /* 2. Latar Belakang Aplikasi & Font Global (Terang & Bersih ala SiDATA) */
+    html, body, .stApp, .main {
+        background-color: #F4F7FE !important;
         color: #0F172A !important;
-        font-weight: 800 !important;
-        letter-spacing: -0.5px;
-    }
-    
-    /* 5. Header Card Gradient (Ini khusus untuk Banner atas yang teksnya putih) */
-    .header-card {
-        background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%);
-        padding: 40px 30px; 
-        border-radius: 20px; 
-        text-align: center;
-        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15);
-        margin-top: 10px; margin-bottom: 30px;
-        position: relative;
-        overflow: hidden;
-        border: 1px solid rgba(255,255,255,0.1);
-    }
-    .header-card p, .header-card h1, .header-card h2, .header-card span, .header-card div {
-        color: #FFFFFF !important; /* Paksa putih HANYA di dalam area ini */
-    }
-    .header-card h1 {
-        font-size: 2.5rem !important;
-        margin-bottom: 5px !important;
-    }
-    .header-card p {
-        font-size: 1.1rem !important;
-        font-weight: 400 !important;
-        opacity: 0.9 !important;
-    }
-    
-    /* 6. Desain Tombol Menu Kotak (Dashboard Style ala SiData) */
-    div[data-testid="stButton"] > button {
-        background-color: #FFFFFF !important;
-        border: 1.5px solid #E2E8F0 !important;
-        border-radius: 16px !important;
-        padding: 20px 10px !important;
-        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02), 0 2px 4px -2px rgba(0,0,0,0.02) !important;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-        display: flex; flex-direction: column; align-items: center; justify-content: center;
-        min-height: 110px;
-        width: 100%;
-    }
-    div[data-testid="stButton"] > button p {
-        color: #1E293B !important; 
-        font-weight: 700 !important; 
-        font-size: 1.05rem !important; 
-        transition: color 0.3s ease !important;
-    }
-    div[data-testid="stButton"] > button:hover {
-        background: linear-gradient(135deg, #0EA5E9 0%, #0284C7 100%) !important;
-        border-color: transparent !important;
-        transform: translateY(-5px) !important;
-        box-shadow: 0 15px 25px -5px rgba(2, 132, 199, 0.25) !important;
-    }
-    div[data-testid="stButton"] > button:hover p {
-        color: #FFFFFF !important; /* Ubah teks menu jadi putih saat di-hover biru */
-    }
-    
-    /* 7. Tombol Primary (Tombol Action / Submit / Merah) */
-    button[kind="primary"] {
-        background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%) !important;
-        border: none !important;
-        min-height: 52px !important;
-        border-radius: 12px !important;
-    }
-    button[kind="primary"] p { color: #FFFFFF !important; font-weight: 600 !important; font-size: 16px !important; }
-    button[kind="primary"]:hover {
-        background: linear-gradient(135deg, #0EA5E9 0%, #0284C7 100%) !important;
-        transform: translateY(-2px) !important;
-        box-shadow: 0 10px 15px -3px rgba(2, 132, 199, 0.3) !important;
+        font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif !important;
     }
 
-    /* 8. Judul Section Tiap Bagian */
-    .section-title { 
-        color: #0F172A !important; font-size: 1.25rem !important; font-weight: 800 !important; 
-        margin: 30px 0 15px 0 !important; display: flex !important; align-items: center !important; gap: 10px !important;
+    .main .block-container {
+        padding-top: 1rem !important;
+        padding-bottom: 3rem !important;
+        max-width: 1220px !important;
     }
-    .section-title::before {
-        content: ''; display: block; width: 6px; height: 22px; background: #0EA5E9; border-radius: 4px;
+
+    /* 3. KUNCI PAKSA SEMUA TEKS & LABEL AGAR GELAP TAJAM DI ATAS BACKGROUND PUTIH */
+    p, label, h1, h2, h3, h4, h5, h6, li,
+    div[data-testid="stMarkdownContainer"] p,
+    div[data-testid="stMarkdownContainer"] li,
+    div[data-testid="stWidgetLabel"] p,
+    div[data-testid="stWidgetLabel"] label,
+    div[data-testid="stWidgetLabel"] span,
+    div[data-testid="stCheckbox"] label span,
+    div[data-testid="stCheckbox"] p,
+    div[role="radiogroup"] label p,
+    div[role="radiogroup"] label span {
+        color: #0F172A !important;
     }
-    
-    /* 9. Input Form (Teks Pasti Hitam, Kotak Rapih) */
-    .stTextInput input, .stSelectbox select, .stNumberInput input, .stTextArea textarea, .stDateInput input {
-        background-color: #FFFFFF !important; 
-        color: #0F172A !important; 
-        border: 1px solid #CBD5E1 !important; 
+
+    div[data-testid="stWidgetLabel"] p,
+    div[data-testid="stWidgetLabel"] label {
+        font-weight: 700 !important;
+        font-size: 0.92rem !important;
+    }
+
+    /* 4. FIX SEMUA KOLOM INPUT (Text, Number, Date, Password, TextArea) */
+    div[data-baseweb="input"],
+    div[data-baseweb="base-input"],
+    div[data-baseweb="textarea"] {
+        background-color: #FFFFFF !important;
+        border: 1.5px solid #CBD5E1 !important;
         border-radius: 10px !important;
-        padding: 12px 16px !important; 
-        font-size: 15px !important; 
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03) !important;
+    }
+
+    div[data-baseweb="input"] input,
+    div[data-baseweb="base-input"] input,
+    div[data-baseweb="textarea"] textarea,
+    .stTextInput input,
+    .stNumberInput input,
+    .stDateInput input,
+    .stTextArea textarea {
+        background-color: #FFFFFF !important;
+        color: #0F172A !important;
+        -webkit-text-fill-color: #0F172A !important;
+        caret-color: #0F172A !important;
+        font-weight: 600 !important;
+        font-size: 0.95rem !important;
+        padding: 10px 14px !important;
+    }
+
+    /* Input Terkunci (Disabled) - Wajib Tetap Hitam Tebal agar Terbaca Jelas */
+    input:disabled,
+    textarea:disabled,
+    div[data-baseweb="base-input"] input:disabled {
+        background-color: #F1F5F9 !important;
+        color: #0F172A !important;
+        -webkit-text-fill-color: #0F172A !important;
+        opacity: 1 !important;
+        font-weight: 700 !important;
+    }
+
+    input::placeholder, textarea::placeholder {
+        color: #64748B !important;
+        -webkit-text-fill-color: #64748B !important;
+        opacity: 1 !important;
+    }
+
+    /* Tombol +/- pada NumberInput & Ikon Mata Password */
+    div[data-testid="stNumberInput"] button,
+    div[data-baseweb="input"] button {
+        background-color: #F8FAFC !important;
+        color: #0F172A !important;
+    }
+    div[data-testid="stNumberInput"] button svg,
+    div[data-baseweb="input"] button svg {
+        fill: #0F172A !important;
+        color: #0F172A !important;
+    }
+
+    /* 5. FIX DROPDOWN SELECTBOX & MULTISELECT (Beserta Menu Popover-nya) */
+    div[data-baseweb="select"] > div {
+        background-color: #FFFFFF !important;
+        border: 1.5px solid #CBD5E1 !important;
+        border-radius: 10px !important;
+        color: #0F172A !important;
+        min-height: 44px !important;
+    }
+
+    div[data-baseweb="select"] span,
+    div[data-baseweb="select"] div,
+    div[data-baseweb="select"] input {
+        color: #0F172A !important;
+        -webkit-text-fill-color: #0F172A !important;
         font-weight: 600 !important;
     }
-    .stTextInput input:focus, .stSelectbox select:focus, .stNumberInput input:focus, .stTextArea textarea:focus {
-        border-color: #0EA5E9 !important;
-        box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.15) !important;
+
+    div[data-baseweb="select"] svg {
+        fill: #0F172A !important;
+        color: #0F172A !important;
     }
-    
-    /* 10. Metric Cards 3D (SiDATA Style) */
-    .metric-3d {
-        background: #FFFFFF; padding: 25px 20px; border-radius: 16px; text-align: center;
-        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 10px 15px -3px rgba(0,0,0,0.05); 
-        border: 1px solid #E2E8F0; border-top: 4px solid #0EA5E9; margin-bottom: 20px; 
-        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+    /* Tag Pilihan pada MultiSelect */
+    span[data-baseweb="tag"] {
+        background-color: #E0F2FE !important;
+        border: 1px solid #7DD3FC !important;
+        border-radius: 6px !important;
     }
-    .metric-3d:hover { transform: translateY(-5px); box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); }
-    .metric-title { font-size: 0.85rem; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;}
-    .metric-value { font-size: 1.8rem; font-weight: 800; margin-top: 8px; color: #0f172a; }
-    
-    /* 11. Custom Tab Design (Agar Menu Tab Jelas) */
+    span[data-baseweb="tag"] span {
+        color: #0369A1 !important;
+        -webkit-text-fill-color: #0369A1 !important;
+        font-weight: 700 !important;
+    }
+
+    /* Daftar Menu Saat Dropdown Diklik (Portal Popover) */
+    div[data-baseweb="popover"],
+    div[data-baseweb="popover"] > div,
+    div[data-baseweb="menu"],
+    ul[role="listbox"],
+    li[role="option"] {
+        background-color: #FFFFFF !important;
+        color: #0F172A !important;
+    }
+    li[role="option"] span,
+    li[role="option"] div {
+        color: #0F172A !important;
+        font-weight: 600 !important;
+    }
+    li[role="option"]:hover,
+    li[role="option"][aria-selected="true"] {
+        background-color: #EFF6FF !important;
+        color: #007BFF !important;
+    }
+
+    /* 6. TOMBOL MERAH & BIRU PERSIS SiDATA (Teks Putih Tebal, Tidak Mungkin Hilang!) */
+    /* Tombol Primary & Submit Form -> MERAH MENYALA (Pangkalan Bun / Login Admin / Submit) */
+    div[data-testid="stButton"] > button[kind="primary"],
+    div[data-testid="stFormSubmitButton"] > button {
+        background: linear-gradient(135deg, #FF2E36 0%, #E11D48 100%) !important;
+        color: #FFFFFF !important;
+        border: none !important;
+        border-radius: 10px !important;
+        padding: 12px 18px !important;
+        min-height: 48px !important;
+        box-shadow: 0 6px 16px rgba(225, 29, 72, 0.25) !important;
+        transition: all 0.2s ease !important;
+        width: 100% !important;
+    }
+    div[data-testid="stButton"] > button[kind="primary"] *,
+    div[data-testid="stFormSubmitButton"] > button * {
+        color: #FFFFFF !important;
+        -webkit-text-fill-color: #FFFFFF !important;
+        font-weight: 700 !important;
+        font-size: 0.92rem !important;
+        letter-spacing: 0.3px !important;
+    }
+    div[data-testid="stButton"] > button[kind="primary"]:hover,
+    div[data-testid="stFormSubmitButton"] > button:hover {
+        background: linear-gradient(135deg, #E11D48 0%, #BE123C 100%) !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 10px 20px rgba(225, 29, 72, 0.35) !important;
+    }
+
+    /* Tombol Secondary -> BIRU CERAH SiDATA (Palangkaraya / Logistik / Menu Reguler) */
+    div[data-testid="stButton"] > button[kind="secondary"] {
+        background: linear-gradient(135deg, #007BFF 0%, #0056D2 100%) !important;
+        color: #FFFFFF !important;
+        border: none !important;
+        border-radius: 10px !important;
+        padding: 12px 18px !important;
+        min-height: 48px !important;
+        box-shadow: 0 6px 16px rgba(0, 123, 255, 0.22) !important;
+        transition: all 0.2s ease !important;
+        width: 100% !important;
+    }
+    div[data-testid="stButton"] > button[kind="secondary"] * {
+        color: #FFFFFF !important;
+        -webkit-text-fill-color: #FFFFFF !important;
+        font-weight: 700 !important;
+        font-size: 0.92rem !important;
+        letter-spacing: 0.3px !important;
+    }
+    div[data-testid="stButton"] > button[kind="secondary"]:hover {
+        background: linear-gradient(135deg, #0056D2 0%, #003E99 100%) !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 10px 20px rgba(0, 123, 255, 0.32) !important;
+    }
+
+    /* Tombol Saat Disabled (Belum Centang Checklist) */
+    div[data-testid="stButton"] > button:disabled,
+    div[data-testid="stFormSubmitButton"] > button:disabled {
+        background: #E2E8F0 !important;
+        color: #64748B !important;
+        border: 1.5px solid #CBD5E1 !important;
+        box-shadow: none !important;
+        transform: none !important;
+    }
+    div[data-testid="stButton"] > button:disabled *,
+    div[data-testid="stFormSubmitButton"] > button:disabled * {
+        color: #64748B !important;
+        -webkit-text-fill-color: #64748B !important;
+    }
+
+    /* Tombol Download */
+    div[data-testid="stDownloadButton"] > button {
+        background: linear-gradient(135deg, #10B981 0%, #059669 100%) !important;
+        color: #FFFFFF !important;
+        border: none !important;
+        border-radius: 10px !important;
+        min-height: 48px !important;
+    }
+    div[data-testid="stDownloadButton"] > button * {
+        color: #FFFFFF !important;
+        -webkit-text-fill-color: #FFFFFF !important;
+        font-weight: 700 !important;
+    }
+
+    /* 7. FILE UPLOADER & EXPANDER & TABS (Selalu Terang & Teks Gelap) */
+    section[data-testid="stFileUploaderDropzone"] {
+        background-color: #FFFFFF !important;
+        border: 2px dashed #94A3B8 !important;
+        border-radius: 12px !important;
+    }
+    section[data-testid="stFileUploaderDropzone"] * {
+        color: #0F172A !important;
+    }
+    section[data-testid="stFileUploaderDropzone"] button {
+        background-color: #F1F5F9 !important;
+        border: 1px solid #CBD5E1 !important;
+        color: #0F172A !important;
+    }
+
+    div[data-testid="stExpander"] {
+        background-color: #FFFFFF !important;
+        border: 1px solid #E2E8F0 !important;
+        border-radius: 12px !important;
+    }
+    div[data-testid="stExpander"] summary p,
+    div[data-testid="stExpander"] summary span {
+        color: #0F172A !important;
+        font-weight: 700 !important;
+    }
+
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
-        background-color: transparent;
+        background-color: transparent !important;
     }
     .stTabs [data-baseweb="tab"] {
-        background-color: #E2E8F0;
-        border-radius: 8px 8px 0 0;
-        padding: 10px 20px;
-        color: #475569 !important;
-        font-weight: 600;
+        background-color: #E2E8F0 !important;
+        border-radius: 10px 10px 0 0 !important;
+        padding: 10px 20px !important;
+        font-weight: 700 !important;
+    }
+    .stTabs [data-baseweb="tab"] * {
+        color: #334155 !important;
     }
     .stTabs [aria-selected="true"] {
-        background-color: #FFFFFF !important;
-        color: #0EA5E9 !important;
-        border-bottom-color: transparent !important;
-        border-top: 3px solid #0EA5E9;
+        background-color: #007BFF !important;
+    }
+    .stTabs [aria-selected="true"] * {
+        color: #FFFFFF !important;
+    }
+
+    /* 8. KOMPONEN KARTU IDENTIK SiDATA (Logo Badge, 3 Mode Cards, 2 Area Cards) */
+    .sidata-logo-badge {
+        background: #FFFFFF;
+        width: 190px;
+        margin: -1.5rem auto 20px auto;
+        padding: 18px 24px;
+        border-radius: 0 0 24px 24px;
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+        border: 1px solid #E2E8F0;
+        border-top: none;
+        text-align: center;
+    }
+    .sidata-logo-badge img {
+        width: 135px;
+        height: auto;
+        object-fit: contain;
+    }
+
+    .sidata-hero-title {
+        text-align: center;
+        margin-bottom: 35px;
+    }
+    .sidata-hero-title h1 {
+        font-size: 2.3rem !important;
+        font-weight: 800 !important;
+        color: #1E293B !important;
+        margin-bottom: 8px !important;
+        letter-spacing: -0.5px !important;
+    }
+    .sidata-hero-title p {
+        font-size: 1.05rem !important;
+        color: #475569 !important;
+        font-weight: 500 !important;
+        margin: 0 !important;
+    }
+
+    .sidata-mode-card {
+        background: #FFFFFF;
+        border-radius: 20px;
+        padding: 32px 24px 28px 24px;
+        text-align: center;
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
+        border: 1px solid #E2E8F0;
+        min-height: 235px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        margin-bottom: 14px;
+        transition: transform 0.25s ease, box-shadow 0.25s ease;
+    }
+    .sidata-mode-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 16px 35px rgba(15, 23, 42, 0.09);
+    }
+    .sidata-mode-icon {
+        font-size: 3.2rem;
+        line-height: 1;
+        margin-bottom: 16px;
+    }
+    .sidata-mode-card h3 {
+        font-size: 1.35rem !important;
+        font-weight: 800 !important;
+        color: #1E293B !important;
+        margin: 0 0 10px 0 !important;
+    }
+    .sidata-mode-card p {
+        font-size: 0.92rem !important;
+        color: #475569 !important;
+        line-height: 1.55 !important;
+        margin: 0 !important;
+    }
+
+    .sidata-area-card {
+        background: #FFFFFF;
+        border-radius: 22px;
+        padding: 36px 28px 30px 28px;
+        text-align: center;
+        box-shadow: 0 12px 32px rgba(15, 23, 42, 0.06);
+        border: 1px solid #E2E8F0;
+        min-height: 310px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 14px;
+        transition: transform 0.25s ease;
+    }
+    .sidata-area-card:hover {
+        transform: translateY(-4px);
+    }
+    .sidata-pill-blue {
+        display: inline-block;
+        background-color: #EFF6FF;
+        color: #007BFF !important;
+        border: 1.5px solid #93C5FD;
+        border-radius: 999px;
+        padding: 5px 18px;
+        font-size: 0.78rem;
+        font-weight: 800;
+        letter-spacing: 0.6px;
+        margin: 12px 0;
+    }
+    .sidata-pill-red {
+        display: inline-block;
+        background-color: #FFF1F2;
+        color: #FF2E36 !important;
+        border: 1.5px solid #FDA4AF;
+        border-radius: 999px;
+        padding: 5px 18px;
+        font-size: 0.78rem;
+        font-weight: 800;
+        letter-spacing: 0.6px;
+        margin: 12px 0;
+    }
+    .sidata-stat-blue {
+        font-size: 1.05rem;
+        font-weight: 800;
+        color: #007BFF !important;
+        margin-top: 14px;
+    }
+    .sidata-stat-red {
+        font-size: 1.05rem;
+        font-weight: 800;
+        color: #FF2E36 !important;
+        margin-top: 14px;
+    }
+
+    /* 9. HEADER CARD HALAMAN DALAM & SECTION TITLE */
+    .header-card {
+        background: #FFFFFF !important;
+        padding: 28px 30px !important;
+        border-radius: 20px !important;
+        text-align: center !important;
+        box-shadow: 0 10px 25px rgba(15, 23, 42, 0.06) !important;
+        margin-top: 5px !important;
+        margin-bottom: 28px !important;
+        border: 1px solid #E2E8F0 !important;
+        border-top: 5px solid #007BFF !important;
+    }
+    .header-card h1, .header-card h2, .header-card h3 {
+        color: #1E293B !important;
+        font-weight: 800 !important;
+        font-size: 1.75rem !important;
+        margin-bottom: 6px !important;
+        text-shadow: none !important;
+    }
+    .header-card p, .header-card span, .header-card div {
+        color: #475569 !important;
+        font-size: 1rem !important;
+        font-weight: 500 !important;
+        margin: 0 !important;
+    }
+
+    .section-title { 
+        color: #0F172A !important;
+        font-size: 1.25rem !important;
+        font-weight: 800 !important;
+        margin: 30px 0 16px 0 !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 10px !important;
+    }
+    .section-title::before {
+        content: '';
+        display: block;
+        width: 6px;
+        height: 22px;
+        background: #007BFF;
+        border-radius: 4px;
+    }
+
+    .metric-3d {
+        background: #FFFFFF !important;
+        padding: 24px 20px !important;
+        border-radius: 16px !important;
+        text-align: center !important;
+        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05) !important;
+        border: 1px solid #E2E8F0 !important;
+        border-top: 4px solid #007BFF !important;
+        margin-bottom: 20px !important;
+    }
+    .metric-title {
+        font-size: 0.85rem !important;
+        color: #64748B !important;
+        font-weight: 700 !important;
+        text-transform: uppercase !important;
+    }
+    .metric-value {
+        font-size: 1.8rem !important;
+        font-weight: 800 !important;
+        margin-top: 8px !important;
+        color: #0F172A !important;
     }
 </style>
 """, unsafe_allow_html=True)
+
 # ==========================================
 # 1. MASTER DATA & KONFIGURASI
 # ==========================================
@@ -223,36 +547,29 @@ def ai_nota_checker(uploaded_file, expected_nominal, expected_date=None):
         img = Image.open(uploaded_file)
         text = pytesseract.image_to_string(img).lower()
         uploaded_file.seek(0)
-        
-        # 1. Validasi Nominal
         angka_ditemukan = re.findall(r'\d+', text.replace('.', '').replace(',', ''))
         valid_nom = str(expected_nominal) in angka_ditemukan
-        
-        # 2. Validasi Tanggal
         msg_tgl = ""
         valid_date = True
         if expected_date:
             try:
                 d_obj = datetime.strptime(str(expected_date), "%d/%m/%Y") if isinstance(expected_date, str) else expected_date
                 tgl1, tgl2, tgl3 = d_obj.strftime("%d/%m"), d_obj.strftime("%d-%m"), d_obj.strftime("%d")
-                
                 if tgl1 not in text and tgl2 not in text and tgl3 not in text:
                     valid_date = False
                     msg_tgl = f" (Tanggal {d_obj.strftime('%d/%m/%Y')} tidak terbaca AI pada Nota)"
             except: pass
-            
-        # 3. Keputusan AI
         if not valid_nom and not valid_date:
             return False, f"Nominal Rp {expected_nominal:,.0f} & Tanggal tidak sesuai.{msg_tgl} Harap perbaiki nota!"
         elif not valid_nom:
             return False, f"Nominal Rp {expected_nominal:,.0f} tidak ditemukan pada foto Nota."
         elif not valid_date:
             return False, f"Peringatan AI:{msg_tgl}. Harap gunakan nota dengan tanggal yang valid & jelas."
-            
         return True, "Valid"
-    except Exception as e:
+    except Exception:
         uploaded_file.seek(0)
         return True, "Bypass AI (Tesseract belum siap)"
+
 def ai_image_checker(uploaded_file, file_name_label):
     if uploaded_file is None:
         return True, "Tidak ada file"
@@ -260,7 +577,6 @@ def ai_image_checker(uploaded_file, file_name_label):
         img = Image.open(uploaded_file)
         exif = img.getexif()
         uploaded_file.seek(0)
-        
         if exif:
             suspicious_software = ['photoshop', 'canva', 'picsart', 'lightroom', 'snapseed', 'gimp', 'coreldraw', 'illustrator', 'capcut', 'pics', 'edit']
             for tag_id, value in exif.items():
@@ -273,22 +589,18 @@ def ai_image_checker(uploaded_file, file_name_label):
     except Exception:
         uploaded_file.seek(0)
         pass
-
     try:
         file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
         img_cv = cv2.imdecode(file_bytes, 1)
         uploaded_file.seek(0)
-        
         if img_cv is not None:
             gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
             blur_score = cv2.Laplacian(gray, cv2.CV_64F).var()
-            
             if blur_score < 40.0:  
                 return False, f"🌫️ KUALITAS DITOLAK: Gambar {file_name_label} terdeteksi SANGAT BLUR / BURAM oleh AI (Skor Ketajaman: {blur_score:.1f}). Mohon pastikan fokus kamera stabil dan tulisan terbaca jelas!"
     except Exception:
         uploaded_file.seek(0)
         pass
-        
     return True, "Aman"
 
 def ui_image_uploader(label, key=None):
@@ -403,7 +715,6 @@ def load_excel_data():
             df_site = pd.concat([df_site_pky, df_site_pbun], ignore_index=True)
         except Exception:
             df_site = df_site_pky
-            
         site_dict = df_site.set_index('Site ID')[['Latitude Tujuan', 'Longtitude Tujuan']].to_dict('index')
         site_list = df_site['Site ID'].astype(str).tolist()
     except Exception: pass
@@ -414,7 +725,6 @@ def load_excel_data():
         col_nama = next((c for c in df_tim.columns if 'nama' in c.lower()), None)
         col_lat = next((c for c in df_tim.columns if 'lat' in c.lower()), None)
         col_lon = next((c for c in df_tim.columns if 'lon' in c.lower() or 'lng' in c.lower()), None)
-        
         if col_nama and col_lat and col_lon:
             for _, row in df_tim.iterrows():
                 nama_key = str(row[col_nama]).strip().upper()
@@ -426,7 +736,6 @@ def load_excel_data():
         if 'NOPOL' not in df_nopol.columns and 'PIC' not in df_nopol.columns:
             df_nopol.columns = df_nopol.iloc[0].astype(str).str.strip()
             df_nopol = df_nopol[1:].reset_index(drop=True)
-            
         df_nopol = df_nopol.fillna("")
         if 'NOPOL' in df_nopol.columns:
             list_nopol_raw = df_nopol['NOPOL'].astype(str).unique().tolist()
@@ -440,9 +749,6 @@ def load_excel_data():
                         tim_dict[pic_name]['NOPOL'] = nopol_val
     except Exception: pass
 
-    # =========================================================
-    # SUNTIKAN KHUSUS DATA PANGKALANBUN (ROLE & NOPOL MBP)
-    # =========================================================
     try:
         df_tim_pbun = pd.read_excel("NAMA NOP PANGKALANBUN & NOPOL MBP.xlsx").fillna("")
         for _, row in df_tim_pbun.iterrows():
@@ -478,15 +784,13 @@ def load_excel_data():
 
 def get_last_indicator(plat_raw, jns, pjb_r):
     if not plat_raw: return 0.0
-    # Bersihkan spasi secara total agar sinkron
     plat_clean = str(plat_raw).strip().replace(" ", "").upper()
     if plat_clean in ["", "0", "NAN", "NONE"]: return 0.0
-    
     for r in reversed(pjb_r[1:]):
         if len(r) > 12:
             h_plat = str(r[12]).strip().replace(" ", "").upper()
             if h_plat == plat_clean and (jns.lower() in str(r[8]).lower()):
-                return clean_indicator(r[10]) # Mengambil KM/RH Akhir sebelumnya
+                return clean_indicator(r[10])
     return 0.0
 
 def get_user_tickets_status(nama, req_rows, pjb_rows, app_rows):
@@ -559,11 +863,9 @@ def upload_foto_compressed(file):
         img = Image.open(file)
         if img.mode != 'RGB': img = img.convert('RGB')
         img.thumbnail((1024, 1024))
-        
         img_byte_arr = io.BytesIO()
         img.save(img_byte_arr, format='JPEG', quality=60)
         img_byte_arr.seek(0)
-        
         encoded = base64.b64encode(img_byte_arr.read()).decode('utf-8')
         return cloudinary.uploader.upload(f"data:image/jpeg;base64,{encoded}", resource_type="auto").get("secure_url") 
     except Exception:
@@ -571,7 +873,6 @@ def upload_foto_compressed(file):
 
 def get_local_img_base64(filepath):
     try:
-        import base64
         with open(filepath, "rb") as image_file:
             encoded_string = base64.b64encode(image_file.read()).decode("utf-8")
             return f"data:image/webp;base64,{encoded_string}"
@@ -622,80 +923,221 @@ def save_new_nopol_to_csv(new_plat):
         pass 
 
 # ==========================================
-# 3. INISIALISASI SESSION STATE & NAVIGASI (LANGSUNG MASUK TANPA LOGIN)
+# 3. INISIALISASI SESSION STATE & AUTO-ROUTING NOP
 # ==========================================
 if 'page' not in st.session_state: st.session_state.page = "🏠 Hub Menu Utama"
 if 'admin_logged_in' not in st.session_state: st.session_state.admin_logged_in = False
 if 'pdf_ready' not in st.session_state: st.session_state.pdf_ready = False
-if 'logged_in_user' not in st.session_state: st.session_state.logged_in_user = "" 
+if 'logged_in_user' not in st.session_state: st.session_state.logged_in_user = ""
+if 'selected_nop' not in st.session_state: st.session_state.selected_nop = ""
 
-c_nav1, c_nav2 = st.columns([4, 1])
+# Smart Auto-Select NOP: Saat tim klik tombol PANGKALAN BUN atau PALANGKARAYA di halaman utama,
+# dropdown NOP di semua halaman otomatis memilih wilayah tersebut!
+_orig_selectbox = st.selectbox
+def _smart_selectbox(label, options, index=0, *args, **kwargs):
+    opts = list(options)
+    sel_nop = st.session_state.get("selected_nop", "")
+    if index == 0 and sel_nop in opts and any(k in str(label) for k in ["NOP", "Wilayah", "Market", "Area"]):
+        index = opts.index(sel_nop)
+    return _orig_selectbox(label, opts, index=index, *args, **kwargs)
+st.selectbox = _smart_selectbox
+
 if st.session_state.page != "🏠 Hub Menu Utama":
+    c_nav1, c_nav2 = st.columns([3, 1])
     with c_nav1:
-        if st.button("⬅️ KEMBALI KE MENU UTAMA", use_container_width=True):
+        if st.button("⬅️ KEMBALI KE DASHBOARD UTAMA", use_container_width=True):
             st.session_state.page = "🏠 Hub Menu Utama"
             st.session_state.pdf_ready = False
             st.rerun()
-            
-st.markdown("<hr style='margin: 10px 0 30px 0;'>", unsafe_allow_html=True)
-
+    with c_nav2:
+        if st.session_state.selected_nop:
+            warna_badge = "#FF2E36" if st.session_state.selected_nop == "Pangkalanbun" else "#007BFF"
+            st.markdown(f"<div style='background:{warna_badge}; color:#FFFFFF !important; padding:12px; border-radius:10px; text-align:center; font-weight:800;'>📍 AREA: {st.session_state.selected_nop.upper()}</div>", unsafe_allow_html=True)
+    st.markdown("<hr style='margin: 10px 0 25px 0; border-color: #E2E8F0;'>", unsafe_allow_html=True)
 
 # ==========================================
 # 4. SIDEBAR NAVIGATION & SHORTCUT SIDATA
 # ==========================================
-list_menu_sidebar = ["🏠 Hub Menu Utama", "📝 Form Request Dana", "✅ Form PJB Operasional", "🔍 Cek Status Tiket", "📝 Report Lapangan"]
+list_menu_sidebar = ["🏠 Hub Menu Utama", "📝 Form Request Dana", "✅ Form PJB Operasional", "📝 Report Lapangan"]
 
 def ubah_menu():
     st.session_state.page = st.session_state.sb_menu
 
-if st.session_state.page in list_menu_sidebar:
-    idx_menu = list_menu_sidebar.index(st.session_state.page)
-else:
-    idx_menu = 0 
-
-st.sidebar.selectbox("Navigasi Utama", list_menu_sidebar, index=idx_menu, key="sb_menu", on_change=ubah_menu)
+idx_menu = list_menu_sidebar.index(st.session_state.page) if st.session_state.page in list_menu_sidebar else 0
+_orig_selectbox("Navigasi Utama", list_menu_sidebar, index=idx_menu, key="sb_menu", on_change=ubah_menu)
 
 st.sidebar.markdown("<hr style='margin: 15px 0;'>", unsafe_allow_html=True)
 st.sidebar.markdown("<h3 style='text-align: center; color: #1E293B;'>📊 Wajib Lapor</h3>", unsafe_allow_html=True)
 st.sidebar.info("Khusus Role TE, MBP, & CME: Wajib lapor hasil kegiatan lapangan (Tshoot/PM) ke database SIDATA.")
-
 st.sidebar.markdown(
     '''
-    <a href="https://sidata.streamlit.app/" target="_blank" style="display: block; text-align: center; background-color: #EF4444; color: white; padding: 12px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 15px; box-shadow: 0 4px 6px rgba(239,68,68,0.2); transition: all 0.3s ease;">
+    <a href="https://sidata.streamlit.app/" target="_blank" style="display: block; text-align: center; background-color: #EF4444; color: white !important; padding: 12px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 15px; box-shadow: 0 4px 6px rgba(239,68,68,0.2);">
         👉 BUKA PORTAL SIDATA
     </a>
     ''', unsafe_allow_html=True
 )
-st.sidebar.markdown("<hr style='margin: 15px 0;'>", unsafe_allow_html=True)
 
 # ==========================================
-# PAGE 0: HUB MENU UTAMA (1-SCREEN DASHBOARD)
+# PAGE 0: HUB MENU UTAMA (DESAIN IDENTIK SiDATA)
 # ==========================================
 if st.session_state.page == "🏠 Hub Menu Utama":
     
-    # Logo Dikecilkan & Disetting Center!
-    c_logo1, c_logo2, c_logo3 = st.columns([1, 1, 1])
-    with c_logo2:
-        try: 
-            st.markdown("<div style='display: flex; justify-content: center;'>", unsafe_allow_html=True)
-            st.image("koperasi-jasa-konstruksi-tower-event-organizer-network-monitoring-telekomunikasi-kisel-group-logo-kut.webp", width=120)
-            st.markdown("</div>", unsafe_allow_html=True)
-        except: pass
+    # 1. LOGO BADGE PUTIH MENGGANTUNG DI TENGAH ATAS (PERSIS SiDATA)
+    logo_b64 = get_local_img_base64("koperasi-jasa-konstruksi-tower-event-organizer-network-monitoring-telekomunikasi-kisel-group-logo-kut.webp")
+    if logo_b64:
+        st.markdown(f"""
+            <div class="sidata-logo-badge">
+                <img src="{logo_b64}" alt="Kinarya Utama Teknik">
+            </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown("""
+            <div class="sidata-logo-badge">
+                <div style="font-weight:900; font-size:1.2rem; color:#1E293B !important; letter-spacing:1px;">KINARYA</div>
+                <div style="font-weight:600; font-size:0.75rem; color:#64748B !important;">UTAMA TEKNIK</div>
+            </div>
+        """, unsafe_allow_html=True)
+
+    # 2. JUDUL UTAMA DASHBOARD
     st.markdown("""
-        <div class="header-card">
-            <h1>SiRAPI Enterprise</h1>
-            <p>Sistem Rekapitulasi Anggaran Pertanggungjawaban Informasi</p>
+        <div class="sidata-hero-title">
+            <h1>SiRAPI NOP PLK & PBU Dashboard</h1>
+            <p>Sistem Rekapitulasi Anggaran, Pertanggungjawaban Operasional & Monitoring Tim</p>
         </div>
     """, unsafe_allow_html=True)
 
-    st.markdown("<div class='section-title'>🚀 MENU OPERASIONAL TIM</div>", unsafe_allow_html=True)
-    c1, c2 = st.columns(2)
-    with c1:
-        if st.button("💸\nREQUEST DANA\n(Pengajuan Baru)", use_container_width=True): st.session_state.page = "📝 Form Request Dana"; st.rerun()
-    with c2:
-        if st.button("✅\nPJB OPERASIONAL\n(Nota Realisasi)", use_container_width=True): st.session_state.page = "✅ Form PJB Operasional"; st.rerun()
-        
-    if st.button("📝\nREPORT LAPANGAN\n(Update Progress & Generate WA)", use_container_width=True): st.session_state.page = "📝 Report Lapangan"; st.rerun()
+    # 3. TIGA KARTU UTAMA (MODE LAPANGAN | REPORT & STATUS | MODE ADMIN) PERSIS GAMBAR 1 SiDATA
+    col_m1, col_m2, col_m3 = st.columns(3, gap="medium")
+
+    with col_m1:
+        st.markdown("""
+            <div class="sidata-mode-card">
+                <div class="sidata-mode-icon">👷</div>
+                <h3>Mode Lapangan</h3>
+                <p>Pilih area operasional Anda agar langsung diarahkan ke form Request Dana & PJB yang tepat.</p>
+            </div>
+        """, unsafe_allow_html=True)
+        if st.button("🔴 PANGKALAN BUN", type="primary", use_container_width=True, key="btn_top_pbu"):
+            st.session_state.selected_nop = "Pangkalanbun"
+            st.session_state.page = "📝 Form Request Dana"
+            st.rerun()
+        if st.button("🔵 PALANGKARAYA", type="secondary", use_container_width=True, key="btn_top_plk"):
+            st.session_state.selected_nop = "Palangkaraya"
+            st.session_state.page = "📝 Form Request Dana"
+            st.rerun()
+
+    with col_m2:
+        st.markdown("""
+            <div class="sidata-mode-card">
+                <div class="sidata-mode-icon">📦</div>
+                <h3>Penyelesaian PJB & Report</h3>
+                <p>Akses cepat penyelesaian nota realisasi PJB operasional dan generator laporan progress WA.</p>
+            </div>
+        """, unsafe_allow_html=True)
+        if st.button("✅ MASUK FORM PJB OPERASIONAL", type="secondary", use_container_width=True, key="btn_top_pjb"):
+            st.session_state.page = "✅ Form PJB Operasional"
+            st.rerun()
+        if st.button("📝 REPORT LAPANGAN (UPDATE WA)", type="secondary", use_container_width=True, key="btn_top_wa"):
+            st.session_state.page = "📝 Report Lapangan"
+            st.rerun()
+
+    with col_m3:
+        st.markdown("""
+            <div class="sidata-mode-card">
+                <div class="sidata-mode-icon">🔐</div>
+                <h3>Mode Admin</h3>
+                <p>Akses khusus operasional untuk validasi PJB, manajemen kas, master tiket PM, dan analisa grafik.</p>
+            </div>
+        """, unsafe_allow_html=True)
+        if not st.session_state.admin_logged_in:
+            pass_input = st.text_input("Kata Sandi Admin:", type="password", placeholder="Masukkan Sandi...", key="pwd_admin_card")
+            if st.button("🔓 LOGIN ADMIN", type="primary", use_container_width=True, key="btn_login_admin"):
+                if pass_input in AUTHORIZED_PASSWORDS:
+                    st.session_state.admin_logged_in = True
+                    st.rerun()
+                else:
+                    st.error("❌ Kata Sandi Admin Salah!")
+        else:
+            st.success("✅ Mode Admin Terbuka")
+            if st.button("🔒 KELUAR MODE ADMIN", type="primary", use_container_width=True, key="btn_logout_admin"):
+                st.session_state.admin_logged_in = False
+                st.rerun()
+
+    # PANEL MENU ADMIN (MUNCUL OTOMATIS SAAT LOGIN ADMIN BERHASIL)
+    if st.session_state.admin_logged_in:
+        st.markdown("<hr style='margin: 35px 0 25px 0; border-color: #CBD5E1;'>", unsafe_allow_html=True)
+        st.markdown("<div style='text-align:center; font-size:1.45rem; font-weight:800; color:#1E293B !important; margin-bottom:20px;'>🛡️ Panel Kendali Khusus Admin</div>", unsafe_allow_html=True)
+        ca1, ca2, ca3 = st.columns(3, gap="medium")
+        with ca1:
+            if st.button("🛡️ APPROVAL CENTER (Validasi PJB)", type="secondary", use_container_width=True): st.session_state.page = "🛡️ Approval Center"; st.rerun()
+            if st.button("🏦 MANAJEMEN KAS & DISTRIBUSI", type="secondary", use_container_width=True): st.session_state.page = "🏦 Manajemen Kas & Distribusi"; st.rerun()
+        with ca2:
+            if st.button("👀 REQ & PJB MONITORING (Daily)", type="primary", use_container_width=True): st.session_state.page = "👀 Request & PJB Monitoring"; st.rerun()
+            if st.button("📈 LIVE MONITORING (Analisa)", type="secondary", use_container_width=True): st.session_state.page = "📈 Live Monitoring"; st.rerun()
+        with ca3:
+            if st.button("🎫 MASTER TIKET PM BULANAN", type="secondary", use_container_width=True): st.session_state.page = "🎫 Master Tiket PM"; st.rerun()
+            if st.button("🖨️ REPORT & AUTO PJB (Export PDF)", type="secondary", use_container_width=True): st.session_state.page = "🖨️ Auto PJB Report"; st.rerun()
+
+    # 4. PEMISAH AREA OPERASIONAL: NOP PALANGKARAYA vs NOP PANGKALAN BUN (PERSIS GAMBAR 2 SiDATA)
+    st.markdown("<hr style='margin: 40px 0 30px 0; border-color: #E2E8F0;'>", unsafe_allow_html=True)
+    st.markdown("<div style='text-align:center; font-size:1.55rem; font-weight:800; color:#1E293B !important; margin-bottom:25px;'>📍 Pilih Area Operasional untuk Membuka Menu Kerja</div>", unsafe_allow_html=True)
+
+    col_area1, col_area2 = st.columns(2, gap="large")
+
+    with col_area1:
+        st.markdown(f"""
+            <div class="sidata-area-card">
+                <div>
+                    <div style="font-size: 3rem; line-height:1;">🗼</div>
+                    <div class="sidata-pill-blue">AREA OPERASIONAL 1</div>
+                    <h3 style="font-size:1.5rem !important; font-weight:800 !important; color:#1E293B !important; margin:6px 0 12px 0 !important;">NOP PALANGKARAYA</h3>
+                    <p style="font-size:0.94rem !important; color:#475569 !important; line-height:1.6 !important;">
+                        Cluster Palangkaraya & Barito Raya — Pengajuan Dana Operasional (BBM, Akomodasi, Material), Penyelesaian Nota PJB, & Tracking Tiket.
+                    </p>
+                </div>
+                <div class="sidata-stat-blue">📊 {len(MASTER_DATA['Palangkaraya']['names'])} Personel Terdaftar</div>
+            </div>
+        """, unsafe_allow_html=True)
+        b_plk1, b_plk2 = st.columns(2)
+        with b_plk1:
+            if st.button("🔵 REQUEST DANA PLK", type="secondary", use_container_width=True, key="req_plk_card"):
+                st.session_state.selected_nop = "Palangkaraya"
+                st.session_state.page = "📝 Form Request Dana"
+                st.rerun()
+        with b_plk2:
+            if st.button("🔵 PENYELESAIAN PJB PLK", type="secondary", use_container_width=True, key="pjb_plk_card"):
+                st.session_state.selected_nop = "Palangkaraya"
+                st.session_state.page = "✅ Form PJB Operasional"
+                st.rerun()
+
+    with col_area2:
+        st.markdown(f"""
+            <div class="sidata-area-card">
+                <div>
+                    <div style="font-size: 3rem; line-height:1;">📡</div>
+                    <div class="sidata-pill-red">AREA OPERASIONAL 2</div>
+                    <h3 style="font-size:1.5rem !important; font-weight:800 !important; color:#1E293B !important; margin:6px 0 12px 0 !important;">NOP PANGKALAN BUN</h3>
+                    <p style="font-size:0.94rem !important; color:#475569 !important; line-height:1.6 !important;">
+                        Cluster Pangkalanbun, Sampit & Ketapang — Pengajuan Dana Operasional (BBM, Akomodasi, Material), Penyelesaian Nota PJB, & Tracking Tiket.
+                    </p>
+                </div>
+                <div class="sidata-stat-red">📊 {len(MASTER_DATA['Pangkalanbun']['names'])} Personel Terdaftar</div>
+            </div>
+        """, unsafe_allow_html=True)
+        b_pbu1, b_pbu2 = st.columns(2)
+        with b_pbu1:
+            if st.button("🔴 REQUEST DANA PBU", type="primary", use_container_width=True, key="req_pbu_card"):
+                st.session_state.selected_nop = "Pangkalanbun"
+                st.session_state.page = "📝 Form Request Dana"
+                st.rerun()
+        with b_pbu2:
+            if st.button("🔴 PENYELESAIAN PJB PBU", type="primary", use_container_width=True, key="pjb_pbu_card"):
+                st.session_state.selected_nop = "Pangkalanbun"
+                st.session_state.page = "✅ Form PJB Operasional"
+                st.rerun()
+
+    # 5. PANEL CEK STATUS TIKET PRIBADI & TIM (TETAP UTUH 100%)
+    st.markdown("<hr style='margin: 40px 0 25px 0; border-color: #E2E8F0;'>", unsafe_allow_html=True)
     st.markdown("<div class='section-title'>🔍 CEK STATUS TIKET (PRIBADI & TIM)</div>", unsafe_allow_html=True)
     cek_nop = st.selectbox("Pilih Area Wilayah", ["-- Pilih Area --"] + list(MASTER_DATA.keys()), key="cek_area_hub")
     
@@ -703,8 +1145,8 @@ if st.session_state.page == "🏠 Hub Menu Utama":
         tab_pribadi, tab_tim_pending = st.tabs(["👤 Status Pribadi Anda", "🚨 Tim Belum PJB (Mulai Agustus)"])
         
         with tab_pribadi:
-            cek_nama = st.selectbox("Nama Petugas", ["-- Pilih Nama --"] + MASTER_DATA[cek_nop]["names"], key="cek_nama_hub")
-            if st.button("Cari Status Saya", use_container_width=True):
+            cek_nama = _orig_selectbox("Nama Petugas", ["-- Pilih Nama --"] + MASTER_DATA[cek_nop]["names"], key="cek_nama_hub")
+            if st.button("🔍 Cari Status Saya", type="secondary", use_container_width=True):
                 if cek_nama != "-- Pilih Nama --" and cek_nama != "":
                     with st.spinner("Menarik data server..."):
                         data_cek = fetch_spreadsheet_data(MASTER_DATA[cek_nop]["spreadsheet_id"])
@@ -719,7 +1161,7 @@ if st.session_state.page == "🏠 Hub Menu Utama":
                     
         with tab_tim_pending:
             st.info("Fitur ini menampilkan daftar tiket tim yang masih gantung (belum disubmit) mulai dari Agustus 2026 dan seterusnya ke depan.")
-            if st.button("🔍 Tarik Data Tim Belum PJB", use_container_width=True, type="primary"):
+            if st.button("🚨 Tarik Data Tim Belum PJB", use_container_width=True, type="primary"):
                 with st.spinner("Memindai seluruh data tim wilayah ini..."):
                     data_cek = fetch_spreadsheet_data(MASTER_DATA[cek_nop]["spreadsheet_id"])
                     req_r, pjb_r, app_r = data_cek[SHEET_REQUEST], data_cek[SHEET_PJB], data_cek[SHEET_APP]
@@ -746,37 +1188,7 @@ if st.session_state.page == "🏠 Hub Menu Utama":
                     else:
                         st.success("🎉 Luar biasa! Seluruh tim di wilayah ini sudah menyelesaikan PJB aktif.")
 
-    st.markdown("<div class='section-title'>🛡️ MENU KHUSUS ADMIN</div>", unsafe_allow_html=True)
-    if not st.session_state.admin_logged_in:
-        pass_input = st.text_input("Masukkan Password Admin (Pusat):", type="password")
-        if st.button("Buka Kunci Akses Admin"):
-            if pass_input in AUTHORIZED_PASSWORDS:
-                st.session_state.admin_logged_in = True
-                st.rerun()
-            else:
-                st.error("Password Salah!")
-    else:
-        st.success("✅ Akses Admin Terbuka")
-        if st.button("🔒 Keluar Mode Admin"):
-            st.session_state.admin_logged_in = False
-            st.rerun()
-            
-        st.markdown("<div class='btn-admin'>", unsafe_allow_html=True)
-        
-        if st.button("🎫 MASTER TIKET PM (Input Data PM Bulanan)", use_container_width=True): st.session_state.page = "🎫 Master Tiket PM"; st.rerun()
-        
-        c_a1, c_a2 = st.columns(2)
-        with c_a1:
-            if st.button("🛡️ APPROVAL CENTER\n(Validasi PJB & Revisi)", use_container_width=True): st.session_state.page = "🛡️ Approval Center"; st.rerun()
-            if st.button("📈 LIVE MONITORING\n(Dashboard Analisa)", use_container_width=True): st.session_state.page = "📈 Live Monitoring"; st.rerun()
-            if st.button("👀 REQ & PJB MONITORING\n(Pantau Tim & Warning)", use_container_width=True): st.session_state.page = "👀 Request & PJB Monitoring"; st.rerun()
-        with c_a2:
-            if st.button("🏦 MANAJEMEN KAS\n(Distribusi Dana)", use_container_width=True): st.session_state.page = "🏦 Manajemen Kas & Distribusi"; st.rerun()
-            if st.button("🖨️ REPORT & AUTO PJB\n(Export Laporan)", use_container_width=True): st.session_state.page = "🖨️ Auto PJB Report"; st.rerun()
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    st.markdown("<div style='text-align: center; color: #94a3b8; font-size: 0.8rem; margin-top:50px;'>Created by Okta Pradika<br>KUT SYSTEM - v8.7 Enterprise Mobile Edition (3D)</div>", unsafe_allow_html=True)
-
+    st.markdown("<div style='text-align: center; color: #64748B !important; font-size: 0.85rem; margin-top:50px; font-weight:600;'>Created by Okta Pradika<br>KUT SYSTEM - SiRAPI Enterprise Edition</div>", unsafe_allow_html=True)
 
 # ==========================================
 # PAGE ADMIN: MASTER TIKET PM
