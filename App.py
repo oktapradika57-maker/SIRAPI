@@ -673,15 +673,14 @@ st.sidebar.markdown("<hr style='margin: 15px 0;'>", unsafe_allow_html=True)
 # ==========================================
 if st.session_state.page == "🏠 Hub Menu Utama":
     
+    # Logo Dikecilkan & Disetting Center!
     c_logo1, c_logo2, c_logo3 = st.columns([1, 1, 1])
     with c_logo2:
         try: 
-            # LOGO DIPERKECIL & DIGESER PERSIS KE TENGAH
-            st.markdown("<div style='display: flex; justify-content: center; margin-bottom: 10px;'>", unsafe_allow_html=True)
-            st.image("koperasi-jasa-konstruksi-tower-event-organizer-network-monitoring-telekomunikasi-kisel-group-logo-kut.webp", width=130)
+            st.markdown("<div style='display: flex; justify-content: center;'>", unsafe_allow_html=True)
+            st.image("koperasi-jasa-konstruksi-tower-event-organizer-network-monitoring-telekomunikasi-kisel-group-logo-kut.webp", width=120)
             st.markdown("</div>", unsafe_allow_html=True)
         except: pass
-
     st.markdown("""
         <div class="header-card">
             <h1>SiRAPI Enterprise</h1>
