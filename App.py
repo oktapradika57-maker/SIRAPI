@@ -22,9 +22,9 @@ import numpy as np
 import pytesseract
 
 # ==========================================
-# 0. KONFIGURASI HALAMAN (WAJIB PALING ATAS)
+# 0. KONFIGURASI HALAMAN (HARUS PALING ATAS!)
 # ==========================================
-st.set_page_config(page_title="SiRAPI Enterprise", page_icon="💰", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SiRAPI Enterprise", page_icon="💸", layout="wide", initial_sidebar_state="collapsed")
 
 # =================================================================
 # 🎨 UI/UX DESIGN (GAYA ASLI SiDATA - CLEAN, KONTRAST, & JOSS)
