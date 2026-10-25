@@ -920,7 +920,7 @@ def save_new_nopol_to_csv(new_plat):
         pass 
 
 # ==========================================
-# 3. INISIALISASI SESSION STATE & AUTO-ROUTING NOP
+# 3. INISIALISASI SESSION STATE & AUTO-ROUTING NOP (ANTI RECURSION ERROR)
 # ==========================================
 if 'page' not in st.session_state: st.session_state.page = "🏠 Hub Menu Utama"
 if 'admin_logged_in' not in st.session_state: st.session_state.admin_logged_in = False
@@ -929,13 +929,18 @@ if 'logged_in_user' not in st.session_state: st.session_state.logged_in_user = "
 if 'selected_nop' not in st.session_state: st.session_state.selected_nop = ""
 if 'req_wa_ready' not in st.session_state: st.session_state.req_wa_ready = ""
 
-_orig_selectbox = st.selectbox
+# Kunci fungsi asli st.selectbox 1x saja agar TIDAK PERNAH RecursionError saat rerun
+if not hasattr(st, "_real_selectbox"):
+    st._real_selectbox = st.selectbox
+_orig_selectbox = st._real_selectbox
+
 def _smart_selectbox(label, options, index=0, *args, **kwargs):
     opts = list(options)
     sel_nop = st.session_state.get("selected_nop", "")
     if index == 0 and sel_nop in opts and any(k in str(label) for k in ["NOP", "Wilayah", "Market", "Area"]):
         index = opts.index(sel_nop)
-    return _orig_selectbox(label, opts, index=index, *args, **kwargs)
+    return st._real_selectbox(label, opts, index=index, *args, **kwargs)
+
 st.selectbox = _smart_selectbox
 
 if st.session_state.page != "🏠 Hub Menu Utama":
@@ -962,7 +967,7 @@ def ubah_menu():
     st.session_state.page = st.session_state.sb_menu
 
 idx_menu = list_menu_sidebar.index(st.session_state.page) if st.session_state.page in list_menu_sidebar else 0
-_orig_selectbox("Navigasi Utama", list_menu_sidebar, index=idx_menu, key="sb_menu", on_change=ubah_menu)
+st.sidebar.selectbox("Navigasi Utama", list_menu_sidebar, index=idx_menu, key="sb_menu", on_change=ubah_menu)
 
 st.sidebar.markdown("<hr style='margin: 15px 0;'>", unsafe_allow_html=True)
 st.sidebar.markdown("<h3 style='text-align: center; color: #1E293B;'>📊 Wajib Lapor</h3>", unsafe_allow_html=True)
@@ -974,7 +979,6 @@ st.sidebar.markdown(
     </a>
     ''', unsafe_allow_html=True
 )
-
 # ==========================================
 # PAGE 0: HUB MENU UTAMA (LANGSUNG AREA OPERASIONAL & ARAHAN SIDATA)
 # ==========================================
