@@ -543,31 +543,28 @@ import gc
 def ai_nota_checker(uploaded_file, expected_nominal, expected_date=None):
     if uploaded_file is None: return True, "Tidak ada file"
     try:
-        raw_bytes = uploaded_file.getvalue()
-        with Image.open(io.BytesIO(raw_bytes)) as img:
-            img.thumbnail((1200, 1200))
-            text = pytesseract.image_to_string(img).lower()
-        del raw_bytes
+        img = Image.open(uploaded_file)
+        img.thumbnail((1200, 1200)) # Perkecil di RAM agar Tesseract tidak memakan memori besar
+        text = pytesseract.image_to_string(img).lower()
+        img.close()
+        del img
         gc.collect()
+        uploaded_file.seek(0)
         
-        # 1. Validasi Nominal
         angka_ditemukan = re.findall(r'\d+', text.replace('.', '').replace(',', ''))
         valid_nom = str(expected_nominal) in angka_ditemukan
         
-        # 2. Validasi Tanggal
         msg_tgl = ""
         valid_date = True
         if expected_date:
             try:
                 d_obj = datetime.strptime(str(expected_date), "%d/%m/%Y") if isinstance(expected_date, str) else expected_date
                 tgl1, tgl2, tgl3 = d_obj.strftime("%d/%m"), d_obj.strftime("%d-%m"), d_obj.strftime("%d")
-                
                 if tgl1 not in text and tgl2 not in text and tgl3 not in text:
                     valid_date = False
                     msg_tgl = f" (Tanggal {d_obj.strftime('%d/%m/%Y')} tidak terbaca AI pada Nota)"
             except: pass
             
-        # 3. Keputusan AI
         if not valid_nom and not valid_date:
             return False, f"Nominal Rp {expected_nominal:,.0f} & Tanggal tidak sesuai.{msg_tgl} Harap perbaiki nota!"
         elif not valid_nom:
@@ -577,41 +574,41 @@ def ai_nota_checker(uploaded_file, expected_nominal, expected_date=None):
             
         return True, "Valid"
     except Exception:
+        uploaded_file.seek(0)
         gc.collect()
         return True, "Bypass AI (Tesseract belum siap)"
 
 def ai_image_checker(uploaded_file, file_name_label):
     if uploaded_file is None:
         return True, "Tidak ada file"
+    try:
+        img = Image.open(uploaded_file)
+        exif = img.getexif()
+        img.close()
+        del img
+        uploaded_file.seek(0)
         
-    try:
-        raw_bytes = uploaded_file.getvalue()
+        if exif:
+            suspicious_software = ['photoshop', 'canva', 'picsart', 'lightroom', 'snapseed', 'gimp', 'coreldraw', 'illustrator', 'capcut', 'pics', 'edit']
+            for tag_id, value in exif.items():
+                tag = ExifTags.TAGS.get(tag_id, tag_id)
+                if tag == 'Software':
+                    val_lower = str(value).lower()
+                    for sw in suspicious_software:
+                        if sw in val_lower:
+                            return False, f"🚨 FORENSIK DITOLAK: Gambar {file_name_label} terdeteksi sebagai hasil editan aplikasi ({value}). Sistem KUT mengharuskan foto murni dari kamera!"
     except Exception:
-        return True, "Aman"
-
-    # 1. Cek Forensik EXIF menggunakan salinan BytesIO (File asli tetap aman terbuka)
-    try:
-        with Image.open(io.BytesIO(raw_bytes)) as img:
-            exif = img.getexif()
-            if exif:
-                suspicious_software = ['photoshop', 'canva', 'picsart', 'lightroom', 'snapseed', 'gimp', 'coreldraw', 'illustrator', 'capcut', 'pics', 'edit']
-                for tag_id, value in exif.items():
-                    tag = ExifTags.TAGS.get(tag_id, tag_id)
-                    if tag == 'Software':
-                        val_lower = str(value).lower()
-                        for sw in suspicious_software:
-                            if sw in val_lower:
-                                return False, f"🚨 FORENSIK DITOLAK: Gambar {file_name_label} terdeteksi sebagai hasil editan aplikasi ({value}). Sistem KUT mengharuskan foto murni dari kamera!"
-    except Exception:
+        uploaded_file.seek(0)
         pass
 
-    # 2. Cek Ketajaman / Blur Gambar dengan OpenCV
     try:
-        file_bytes = np.frombuffer(raw_bytes, dtype=np.uint8)
+        file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
         img_cv = cv2.imdecode(file_bytes, 1)
-        del file_bytes, raw_bytes
+        del file_bytes
+        uploaded_file.seek(0)
         
         if img_cv is not None:
+            # Perkecil ukuran array sebelum cek blur agar hemat RAM 80%
             h, w = img_cv.shape[:2]
             if max(h, w) > 1024:
                 scale = 1024.0 / max(h, w)
@@ -624,11 +621,297 @@ def ai_image_checker(uploaded_file, file_name_label):
             if blur_score < 40.0:  
                 return False, f"🌫️ KUALITAS DITOLAK: Gambar {file_name_label} terdeteksi SANGAT BLUR / BURAM oleh AI (Skor Ketajaman: {blur_score:.1f}). Mohon pastikan fokus kamera stabil dan tulisan terbaca jelas!"
     except Exception:
+        uploaded_file.seek(0)
         gc.collect()
         pass
         
     return True, "Aman"
 
+def ui_image_uploader(label, key=None):
+    file = st.file_uploader(label, type=["jpg", "png", "jpeg"], key=key)
+    if file:
+        with st.status("🤖 AI Memindai Kualitas & Metadata Gambar...", expanded=True) as status:
+            is_valid, msg = ai_image_checker(file, label)
+            if is_valid:
+                status.update(label="✅ Lolos Uji AI: Gambar Asli & Jelas", state="complete")
+            else:
+                status.update(label="🚨 Peringatan AI: Gambar Bermasalah", state="error")
+                st.error(msg)
+    return file
+
+def parse_date(date_str):
+    try: return datetime.strptime(str(date_str).strip(), "%d/%m/%Y").date()
+    except: return datetime(1970, 1, 1).date()
+
+def clean_nominal(val):
+    if pd.isna(val) or val == "": return 0
+    v = str(val).replace('Rp', '').replace(' ', '').strip()
+    if v.endswith(',00'): v = v[:-3]
+    if v.endswith('.00'): v = v[:-3]
+    v = v.replace('.', '').replace(',', '')
+    try: return int(v)
+    except: return 0
+
+def clean_indicator(val):
+    try:
+        if pd.isna(val) or val == "": return 0.0
+        v = str(val).replace(',', '.').replace(' ', '').strip()
+        return float(v)
+    except: return 0.0
+
+def clean_coord(val):
+    try:
+        if pd.isna(val) or val == "": return 0.0
+        return float(str(val).replace(',', '.').strip())
+    except: return 0.0
+
+def haversine(lat1, lon1, lat2, lon2):
+    R = 6371.0 
+    dlat, dlon = math.radians(lat2 - lat1), math.radians(lon2 - lon1)
+    a = math.sin(dlat / 2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2)**2
+    return R * (2 * math.atan2(math.sqrt(a), math.sqrt(1 - a)))
+
+def decode_polyline(polyline_str):
+    index, lat, lng, coordinates = 0, 0, 0, []
+    while index < len(polyline_str):
+        changes = {'lat': 0, 'lng': 0}
+        for unit in ['lat', 'lng']:
+            shift, result = 0, 0
+            while True:
+                byte = ord(polyline_str[index]) - 63
+                index += 1
+                result |= (byte & 0x1f) << shift
+                shift += 5
+                if not byte >= 0x20: break
+            changes[unit] = ~(result >> 1) if (result & 1) else (result >> 1)
+        lat += changes['lat']; lng += changes['lng']
+        coordinates.append([lng / 100000.0, lat / 100000.0])
+    return coordinates
+
+def get_route_and_distance(lon1, lat1, lon2, lat2):
+    try:
+        url = f"http://router.project-osrm.org/route/v1/driving/{lon1},{lat1};{lon2},{lat2}?overview=simplified"
+        res = requests.get(url, timeout=5).json()
+        if res.get("code") == "Ok":
+            dist_km = res["routes"][0]["distance"] / 1000
+            durasi_sec = res["routes"][0]["duration"]
+            poly = decode_polyline(res["routes"][0]["geometry"])
+            return dist_km, poly, durasi_sec
+    except: pass
+    dist_km = haversine(lat1, lon1, lat2, lon2) * 1.3 
+    durasi_sec = (dist_km / 40.0) * 3600
+    return dist_km, [[lon1, lat1], [lon2, lat2]], durasi_sec
+
+@st.cache_resource
+def get_gspread_client():
+    with open("credentials.json", "w") as f: f.write(st.secrets["gcp_json"])
+    creds = Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
+    return gspread.authorize(creds)
+
+def get_credentials():
+    with open("credentials.json", "w") as f: f.write(st.secrets["gcp_json"])
+    return Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
+
+# BATASI max_entries=2 AGAR RAM SERVER TIDAK PENUH OLEH CACHE SPREADSHEET
+@st.cache_data(ttl=300, max_entries=2, show_spinner=False)
+def fetch_spreadsheet_data(spreadsheet_id):
+    client = get_gspread_client().open_by_key(spreadsheet_id)
+    ws_names = [SHEET_REQUEST, SHEET_PJB, SHEET_UM, SHEET_DISTRIBUSI, SHEET_APP, "Rekap PJB", SHEET_TIKET_PM, SHEET_ABSENSI]
+    data = {}
+    for name in ws_names:
+        try: data[name] = client.worksheet(name).get_all_values()
+        except: data[name] = []
+    gc.collect()
+    return data
+
+def update_pm_ticket_status(spreadsheet_id, tickets_to_update, new_status):
+    try:
+        client = get_gspread_client().open_by_key(spreadsheet_id)
+        ws = client.worksheet(SHEET_TIKET_PM)
+        rows = ws.get_all_values()
+        t_list = [str(t).strip().upper() for t in tickets_to_update]
+        for i, r in enumerate(rows):
+            if len(r) > 3 and str(r[3]).strip().upper() in t_list:
+                ws.update_cell(i + 1, 6, new_status)
+        fetch_spreadsheet_data.clear()
+    except Exception: pass
+
+@st.cache_data(ttl=1800, max_entries=1, show_spinner=False)
+def load_excel_data():
+    site_dict, site_list = {}, []
+    try:
+        df_site_pky = pd.read_excel("Hasil_910_Site.xlsx").fillna(0)
+        try:
+            df_site_pbun = pd.read_excel("Site ID Sidata Pangkalanbun.xlsx").fillna(0)
+            df_site = pd.concat([df_site_pky, df_site_pbun], ignore_index=True)
+        except Exception:
+            df_site = df_site_pky
+        site_dict = df_site.set_index('Site ID')[['Latitude Tujuan', 'Longtitude Tujuan']].to_dict('index')
+        site_list = df_site['Site ID'].astype(str).tolist()
+        del df_site
+    except Exception: pass
+    
+    tim_dict, list_nopol_csv = {}, []
+    try:
+        df_tim = pd.read_excel("lonlat tim.xlsx").fillna(0)
+        col_nama = next((c for c in df_tim.columns if 'nama' in c.lower()), None)
+        col_lat = next((c for c in df_tim.columns if 'lat' in c.lower()), None)
+        col_lon = next((c for c in df_tim.columns if 'lon' in c.lower() or 'lng' in c.lower()), None)
+        if col_nama and col_lat and col_lon:
+            for _, row in df_tim.iterrows():
+                nama_key = str(row[col_nama]).strip().upper()
+                tim_dict[nama_key] = {'Latitude': row.get(col_lat, 0), 'Longtitude': row.get(col_lon, 0)}
+        del df_tim
+    except Exception: pass
+        
+    try:
+        df_nopol = pd.read_csv("DATA NOPOL MOBIL DAN GENSET NOP PLK.csv", sep=None, engine='python')
+        if 'NOPOL' not in df_nopol.columns and 'PIC' not in df_nopol.columns:
+            df_nopol.columns = df_nopol.iloc[0].astype(str).str.strip()
+            df_nopol = df_nopol[1:].reset_index(drop=True)
+        df_nopol = df_nopol.fillna("")
+        if 'NOPOL' in df_nopol.columns:
+            list_nopol_raw = df_nopol['NOPOL'].astype(str).unique().tolist()
+            list_nopol_csv = sorted([n for n in list_nopol_raw if n.strip() not in ["", "0", "nan", "None", "NOPOL"]])
+            for _, row in df_nopol.iterrows():
+                if 'PIC' in df_nopol.columns:
+                    pic_name = str(row['PIC']).strip().upper()
+                    nopol_val = str(row['NOPOL']).strip()
+                    if pic_name and pic_name not in tim_dict: tim_dict[pic_name] = {'Latitude': 0, 'Longtitude': 0}
+                    if pic_name and nopol_val and nopol_val not in ["nan", "0", "None"]: 
+                        tim_dict[pic_name]['NOPOL'] = nopol_val
+        del df_nopol
+    except Exception: pass
+
+    try:
+        df_tim_pbun = pd.read_excel("NAMA NOP PANGKALANBUN & NOPOL MBP.xlsx").fillna("")
+        for _, row in df_tim_pbun.iterrows():
+            nama = str(row['NAMA']).strip().upper()
+            if nama and nama not in ["NAN", ""]:
+                if nama not in tim_dict:
+                    tim_dict[nama] = {'Latitude': 0, 'Longtitude': 0}
+                if str(row['ROLE']).strip():
+                    tim_dict[nama]['ROLE'] = str(row['ROLE']).strip().upper()
+                nopol = str(row['NOPOL']).strip().upper()
+                if nopol and nopol not in ["NAN", "0", "NONE", ""]:
+                    tim_dict[nama]['NOPOL'] = nopol
+                    if nopol not in list_nopol_csv:
+                        list_nopol_csv.append(nopol)
+        del df_tim_pbun
+    except Exception: pass
+    
+    nik_dict = {}
+    try:
+        for nik_file in ["NIK NOP PLK.xlsx", "Database_NIK.xlsx"]:
+            if os.path.exists(nik_file):
+                df_nik = pd.read_excel(nik_file).fillna("")
+                col_nama = next((c for c in df_nik.columns if 'nama' in c.lower()), None)
+                col_nik = next((c for c in df_nik.columns if 'nik' in c.lower() or 'nip' in c.lower()), None)
+                if col_nama and col_nik:
+                    for _, row in df_nik.iterrows():
+                        nm_key = str(row[col_nama]).strip().upper()
+                        nik_val = str(row[col_nik]).strip()
+                        if nm_key and nik_val and nik_val not in ["nan", "0", "None"]:
+                            nik_dict[nm_key] = nik_val
+                del df_nik
+    except Exception: pass
+    
+    gc.collect()
+    return site_dict, site_list, tim_dict, list_nopol_csv, nik_dict
+
+def get_last_indicator(plat_raw, jns, pjb_r):
+    if not plat_raw: return 0.0
+    plat_clean = str(plat_raw).strip().replace(" ", "").upper()
+    if plat_clean in ["", "0", "NAN", "NONE"]: return 0.0
+    for r in reversed(pjb_r[1:]):
+        if len(r) > 12:
+            h_plat = str(r[12]).strip().replace(" ", "").upper()
+            if h_plat == plat_clean and (jns.lower() in str(r[8]).lower()):
+                return clean_indicator(r[10])
+    return 0.0
+
+def get_user_tickets_status(nama, req_rows, pjb_rows, app_rows):
+    if nama == "-- Pilih Nama --" or nama == "": return [], [], [], []
+    req_tickets = {}
+    for r in req_rows[1:]:
+        if len(r) > 5 and r[5].strip().upper() == nama.strip().upper():
+            tk_raw = r[3].strip().upper()
+            if tk_raw != "": req_tickets[tk_raw] = r[1]
+                
+    pjb_tickets_all_set = set()
+    for r in pjb_rows[1:]:
+        if len(r) > 21 and r[4].strip().upper() == nama.strip().upper() and r[21].strip() != "":
+            tk_str = r[36].strip() if (len(r) > 36 and r[36].strip()) else r[21].strip()
+            pjb_tickets_all_set.update([t.strip().upper() for t in tk_str.split(",")])
+            
+    pjb_app_status = {}
+    req_app_status = {}
+    for r in app_rows[1:]:
+        if len(r) > 5:
+            tiket_app = str(r[2]).strip().upper()
+            if r[3] == "Verifikasi PJB":
+                if tiket_app != "": pjb_app_status[tiket_app] = {"status": r[5].strip(), "catatan": r[6] if len(r)>6 else ""}
+            elif r[3] == "Request Dana":
+                if tiket_app != "": req_app_status[tiket_app] = str(r[5]).strip().upper()
+
+    outstanding_all, outstanding_lock, aging_tickets, history = [], [], [], []
+    today = datetime.now().date()
+    
+    for req_tk_raw, tgl in req_tickets.items():
+        req_tk_list = [t.strip() for t in req_tk_raw.split(",") if t.strip()]
+        req_set = set(req_tk_list)
+        
+        if req_app_status.get(req_tk_raw) == "REJECTED":
+            history.append({"Tiket": req_tk_raw, "Tanggal": tgl, "Status": "❌ REQUEST DITOLAK Admin (Harap Ajukan Ulang)"})
+            continue
+            
+        if not req_set.issubset(pjb_tickets_all_set):
+            outstanding_all.append(req_tk_raw)
+            req_date = parse_date(tgl)
+            if req_date >= CUTOFF_DATE: outstanding_lock.append(req_tk_raw)
+            aging_days = (today - req_date).days
+            
+            if req_date >= CUTOFF_DATE and aging_days > 3:
+                aging_tickets.append(req_tk_raw)
+                history.append({"Tiket": req_tk_raw, "Tanggal": tgl, "Status": f"🚨 Telat {aging_days} Hari"})
+            else: history.append({"Tiket": req_tk_raw, "Tanggal": tgl, "Status": "🔴 Menunggu PJB (Belum Selesai)"})
+        else:
+            app_data = pjb_app_status.get(req_tk_raw, {"status": "APPROVED", "catatan": ""})
+            if app_data["status"] == "PENDING":
+                outstanding_all.append(req_tk_raw); outstanding_lock.append(req_tk_raw)
+                history.append({"Tiket": req_tk_raw, "Tanggal": tgl, "Status": "⏳ PJB Menunggu Verifikasi Admin"})
+            elif app_data["status"] == "REJECTED":
+                outstanding_all.append(req_tk_raw); outstanding_lock.append(req_tk_raw)
+                history.append({"Tiket": req_tk_raw, "Tanggal": tgl, "Status": f"❌ PJB DITOLAK: {app_data['catatan']}"})
+            else: history.append({"Tiket": req_tk_raw, "Tanggal": tgl, "Status": "🟢 PJB Selesai & Approved"})
+            
+    return outstanding_all, outstanding_lock, aging_tickets, sorted(history, key=lambda x: x["Status"], reverse=True)
+
+def upload_foto(file):
+    # Semua foto otomatis dikompresi ke ukuran optimal (maks 1280px) sebelum masuk RAM & Cloudinary
+    return upload_foto_compressed(file)
+
+def upload_foto_compressed(file):
+    if file is None: return ""
+    try:
+        img = Image.open(file)
+        if img.mode != 'RGB': img = img.convert('RGB')
+        img.thumbnail((1280, 1280))
+        img_byte_arr = io.BytesIO()
+        img.save(img_byte_arr, format='JPEG', quality=65)
+        img.close()
+        del img
+        img_byte_arr.seek(0)
+        encoded = base64.b64encode(img_byte_arr.read()).decode('utf-8')
+        img_byte_arr.close()
+        del img_byte_arr
+        url = cloudinary.uploader.upload(f"data:image/jpeg;base64,{encoded}", resource_type="auto").get("secure_url")
+        del encoded
+        gc.collect()
+        return url
+    except Exception:
+        gc.collect()
+        return ""
 def append_data(sheet_name, data, spreadsheet_id):
     try:
         client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
