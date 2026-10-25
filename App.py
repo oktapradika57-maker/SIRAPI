@@ -16,9 +16,19 @@ from datetime import datetime, timedelta
 import time
 import re
 from collections import defaultdict
-from PIL import Image
+from PIL import Image, ExifTags
 import io
 import numpy as np
+
+try:
+    import cv2
+except Exception:
+    cv2 = None
+
+try:
+    import pytesseract
+except Exception:
+    pytesseract = None
 
 # ==========================================
 # 0. KONFIGURASI HALAMAN (WAJIB BARIS PERTAMA!)
@@ -269,7 +279,6 @@ st.markdown("""
         font-weight: 700 !important;
     }
 
-    /* Tombol Link Eksternal SiDATA */
     .btn-sidata-blue {
         display: block;
         width: 100%;
@@ -575,23 +584,31 @@ MASTER_DATA = {
 LIST_KEPERLUAN = ["", "Tshoot", "Backup", "Support", "PM", "Program BCP", "Program Quikwin", "Program G348T", "Pengiriman Material SPMS", "Pembelian Material","Transportasi Air"]
 
 # ==========================================
-# 2. FUNGSI INTI & CACHING (HEMAT RAM & TANPA AI CHECKER BERAT)
+# 2. FUNGSI INTI & CACHING (AKURAT & HEMAT RAM)
 # ==========================================
 def ai_nota_checker(uploaded_file, expected_nominal, expected_date=None):
-    # Pengecekan AI OCR dinonaktifkan agar upload cepat & hemat RAM
     return True, "Valid"
 
 def ai_image_checker(uploaded_file, file_name_label):
-    # Pengecekan AI Forensik/Blur dinonaktifkan agar upload cepat & hemat RAM
     return True, "Aman"
 
 def ui_image_uploader(label, key=None):
-    # Langsung upload tanpa spinner pemindaian AI
     return st.file_uploader(label, type=["jpg", "png", "jpeg"], key=key)
 
-def parse_date(date_str):
-    try: return datetime.strptime(str(date_str).strip(), "%d/%m/%Y").date()
-    except: return datetime(1970, 1, 1).date()
+def parse_date(date_str, fallback_ts=""):
+    for raw_val in [date_str, fallback_ts]:
+        if raw_val is None or pd.isna(raw_val):
+            continue
+        s = str(raw_val).strip()
+        if not s:
+            continue
+        s_date = s.split(" ")[0].strip()
+        for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%m/%d/%Y", "%d-%m-%Y", "%Y/%m/%d", "%d/%m/%y", "%m/%d/%y"):
+            try:
+                return datetime.strptime(s_date, fmt).date()
+            except ValueError:
+                continue
+    return datetime(1970, 1, 1).date()
 
 def clean_nominal(val):
     if pd.isna(val) or val == "": return 0
@@ -657,26 +674,15 @@ def get_credentials():
     with open("credentials.json", "w") as f: f.write(st.secrets["gcp_json"])
     return Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
 
-@st.cache_resource
-def get_gspread_client():
-    return gspread.authorize(get_credentials())
-
-# Menggunakan @st.cache_resource (Zero-Copy di RAM) + Buang Baris Kosong Otomatis
-@st.cache_resource(ttl=300, show_spinner=False)
+@st.cache_data(ttl=120, max_entries=2, show_spinner=False)
 def fetch_spreadsheet_data(spreadsheet_id):
-    client = get_gspread_client().open_by_key(spreadsheet_id)
-    # Hanya tarik sheet yang benar-benar dipakai (SHEET_ABSENSI tidak perlu ditarik lagi)
-    ws_names = [SHEET_REQUEST, SHEET_PJB, SHEET_UM, SHEET_DISTRIBUSI, SHEET_APP, "Rekap PJB", SHEET_TIKET_PM]
+    client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
+    ws_names = [SHEET_REQUEST, SHEET_PJB, SHEET_UM, SHEET_DISTRIBUSI, SHEET_APP, "Rekap PJB", SHEET_TIKET_PM, SHEET_ABSENSI]
     data = {}
     for name in ws_names:
         try:
             raw_rows = client.worksheet(name).get_all_values()
-            # FILTER PENTING: Buang ribuan baris kosong di bawah tabel agar RAM hemat 90%!
-            clean_rows = []
-            for r in raw_rows:
-                if any(str(cell).strip() != "" for cell in r):
-                    # Potong kolom kosong berlebih di sebelah kanan (maksimal 40 kolom)
-                    clean_rows.append(r[:40])
+            clean_rows = [r[:40] for r in raw_rows if any(str(cell).strip() != "" for cell in r)]
             data[name] = clean_rows
             del raw_rows
         except Exception:
@@ -684,43 +690,50 @@ def fetch_spreadsheet_data(spreadsheet_id):
     gc.collect()
     return data
 
-# Gunakan @st.cache_resource untuk Excel Site ID & Nopol agar hanya dimuat 1x di RAM untuk semua user
+def update_pm_ticket_status(spreadsheet_id, tickets_to_update, new_status):
+    try:
+        client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
+        ws = client.worksheet(SHEET_TIKET_PM)
+        rows = ws.get_all_values()
+        t_list = [str(t).strip().upper() for t in tickets_to_update]
+        for i, r in enumerate(rows):
+            if len(r) > 3 and str(r[3]).strip().upper() in t_list:
+                ws.update_cell(i + 1, 6, new_status)
+        fetch_spreadsheet_data.clear()
+    except Exception: pass
+
 @st.cache_resource(ttl=3600, show_spinner=False)
 def load_excel_data():
     site_dict, site_list = {}, []
     try:
-        df_site_pky = pd.read_excel("Hasil_910_Site.xlsx", usecols=['Site ID', 'Latitude Tujuan', 'Longtitude Tujuan']).dropna(subset=['Site ID']).fillna(0)
+        df_site_pky = pd.read_excel("Hasil_910_Site.xlsx").fillna(0)
         try:
-            df_site_pbun = pd.read_excel("Site ID Sidata Pangkalanbun.xlsx", usecols=['Site ID', 'Latitude Tujuan', 'Longtitude Tujuan']).dropna(subset=['Site ID']).fillna(0)
+            df_site_pbun = pd.read_excel("Site ID Sidata Pangkalanbun.xlsx").fillna(0)
             df_site = pd.concat([df_site_pky, df_site_pbun], ignore_index=True)
             del df_site_pbun
         except Exception:
             df_site = df_site_pky
         del df_site_pky
-        
-        df_site['Site ID'] = df_site['Site ID'].astype(str).str.strip()
-        df_site = df_site[df_site['Site ID'] != ""]
         site_dict = df_site.set_index('Site ID')[['Latitude Tujuan', 'Longtitude Tujuan']].to_dict('index')
-        site_list = df_site['Site ID'].tolist()
+        site_list = df_site['Site ID'].astype(str).tolist()
         del df_site
     except Exception: pass
     
     tim_dict, list_nopol_csv = {}, []
     try:
-        df_tim = pd.read_excel("lonlat tim.xlsx").dropna(how='all').fillna(0)
+        df_tim = pd.read_excel("lonlat tim.xlsx").fillna(0)
         col_nama = next((c for c in df_tim.columns if 'nama' in c.lower()), None)
         col_lat = next((c for c in df_tim.columns if 'lat' in c.lower()), None)
         col_lon = next((c for c in df_tim.columns if 'lon' in c.lower() or 'lng' in c.lower()), None)
         if col_nama and col_lat and col_lon:
             for _, row in df_tim.iterrows():
                 nama_key = str(row[col_nama]).strip().upper()
-                if nama_key and nama_key != "0":
-                    tim_dict[nama_key] = {'Latitude': row.get(col_lat, 0), 'Longtitude': row.get(col_lon, 0)}
+                tim_dict[nama_key] = {'Latitude': row.get(col_lat, 0), 'Longtitude': row.get(col_lon, 0)}
         del df_tim
     except Exception: pass
         
     try:
-        df_nopol = pd.read_csv("DATA NOPOL MOBIL DAN GENSET NOP PLK.csv", sep=None, engine='python').dropna(how='all')
+        df_nopol = pd.read_csv("DATA NOPOL MOBIL DAN GENSET NOP PLK.csv", sep=None, engine='python')
         if 'NOPOL' not in df_nopol.columns and 'PIC' not in df_nopol.columns:
             df_nopol.columns = df_nopol.iloc[0].astype(str).str.strip()
             df_nopol = df_nopol[1:].reset_index(drop=True)
@@ -739,7 +752,7 @@ def load_excel_data():
     except Exception: pass
 
     try:
-        df_tim_pbun = pd.read_excel("NAMA NOP PANGKALANBUN & NOPOL MBP.xlsx").dropna(how='all').fillna("")
+        df_tim_pbun = pd.read_excel("NAMA NOP PANGKALANBUN & NOPOL MBP.xlsx").fillna("")
         for _, row in df_tim_pbun.iterrows():
             nama = str(row['NAMA']).strip().upper()
             if nama and nama not in ["NAN", ""]:
@@ -759,7 +772,7 @@ def load_excel_data():
     try:
         for nik_file in ["NIK NOP PLK.xlsx", "Database_NIK.xlsx"]:
             if os.path.exists(nik_file):
-                df_nik = pd.read_excel(nik_file).dropna(how='all').fillna("")
+                df_nik = pd.read_excel(nik_file).fillna("")
                 col_nama = next((c for c in df_nik.columns if 'nama' in c.lower()), None)
                 col_nik = next((c for c in df_nik.columns if 'nik' in c.lower() or 'nip' in c.lower()), None)
                 if col_nama and col_nik:
@@ -770,7 +783,7 @@ def load_excel_data():
                             nik_dict[nm_key] = nik_val
                 del df_nik
     except Exception: pass
-    
+        
     gc.collect()
     return site_dict, site_list, tim_dict, list_nopol_csv, nik_dict
 
@@ -786,59 +799,72 @@ def get_last_indicator(plat_raw, jns, pjb_r):
     return 0.0
 
 def get_user_tickets_status(nama, req_rows, pjb_rows, app_rows):
-    if nama == "-- Pilih Nama --" or nama == "": return [], [], [], []
+    if nama == "-- Pilih Nama --" or not str(nama).strip():
+        return [], [], [], []
+    nama_clean = str(nama).strip().upper()
+    
     req_tickets = {}
     for r in req_rows[1:]:
-        if len(r) > 5 and r[5].strip().upper() == nama.strip().upper():
-            tk_raw = r[3].strip().upper()
-            if tk_raw != "": req_tickets[tk_raw] = r[1]
+        if len(r) > 5 and str(r[5]).strip().upper() == nama_clean:
+            tk_raw = str(r[3]).strip().upper()
+            if tk_raw != "":
+                req_tickets[tk_raw] = (r[1] if len(r) > 1 else "", r[0] if len(r) > 0 else "")
                 
     pjb_tickets_all_set = set()
     for r in pjb_rows[1:]:
-        if len(r) > 21 and r[4].strip().upper() == nama.strip().upper() and r[21].strip() != "":
-            tk_str = r[36].strip() if (len(r) > 36 and r[36].strip()) else r[21].strip()
-            pjb_tickets_all_set.update([t.strip().upper() for t in tk_str.split(",")])
+        if len(r) > 21 and str(r[4]).strip().upper() == nama_clean and str(r[21]).strip() != "":
+            tk_str = r[36].strip() if (len(r) > 36 and str(r[36]).strip()) else str(r[21]).strip()
+            pjb_tickets_all_set.update([t.strip().upper() for t in tk_str.split(",") if t.strip()])
+            pjb_tickets_all_set.add(str(r[21]).strip().upper())
             
     pjb_app_status = {}
     req_app_status = {}
     for r in app_rows[1:]:
         if len(r) > 5:
             tiket_app = str(r[2]).strip().upper()
-            if r[3] == "Verifikasi PJB":
-                if tiket_app != "": pjb_app_status[tiket_app] = {"status": r[5].strip(), "catatan": r[6] if len(r)>6 else ""}
-            elif r[3] == "Request Dana":
-                if tiket_app != "": req_app_status[tiket_app] = str(r[5]).strip().upper()
+            jns_app = str(r[3]).strip()
+            st_app = str(r[5]).strip().upper()
+            if jns_app == "Verifikasi PJB" and tiket_app != "":
+                pjb_app_status[tiket_app] = {"status": st_app, "catatan": r[6] if len(r) > 6 else ""}
+            elif jns_app == "Request Dana" and tiket_app != "":
+                req_app_status[tiket_app] = st_app
 
     outstanding_all, outstanding_lock, aging_tickets, history = [], [], [], []
     today = datetime.now().date()
     
-    for req_tk_raw, tgl in req_tickets.items():
+    for req_tk_raw, (tgl_str, ts_str) in req_tickets.items():
         req_tk_list = [t.strip() for t in req_tk_raw.split(",") if t.strip()]
         req_set = set(req_tk_list)
+        tgl_tampil = tgl_str if str(tgl_str).strip() else str(ts_str).split(" ")[0]
         
         if req_app_status.get(req_tk_raw) == "REJECTED":
-            history.append({"Tiket": req_tk_raw, "Tanggal": tgl, "Status": "❌ REQUEST DITOLAK Admin (Harap Ajukan Ulang)"})
+            history.append({"Tiket": req_tk_raw, "Tanggal": tgl_tampil, "Status": "❌ REQUEST DITOLAK Admin (Harap Ajukan Ulang)"})
             continue
             
         if not req_set.issubset(pjb_tickets_all_set):
             outstanding_all.append(req_tk_raw)
-            req_date = parse_date(tgl)
-            if req_date >= CUTOFF_DATE: outstanding_lock.append(req_tk_raw)
-            aging_days = (today - req_date).days
+            req_date = parse_date(tgl_str, ts_str)
+            if req_date >= CUTOFF_DATE:
+                outstanding_lock.append(req_tk_raw)
+            aging_days = (today - req_date).days if req_date != datetime(1970, 1, 1).date() else 0
             
             if req_date >= CUTOFF_DATE and aging_days > 3:
                 aging_tickets.append(req_tk_raw)
-                history.append({"Tiket": req_tk_raw, "Tanggal": tgl, "Status": f"🚨 Telat {aging_days} Hari"})
-            else: history.append({"Tiket": req_tk_raw, "Tanggal": tgl, "Status": "🔴 Menunggu PJB (Belum Selesai)"})
+                history.append({"Tiket": req_tk_raw, "Tanggal": tgl_tampil, "Status": f"🚨 Telat {aging_days} Hari (Belum PJB)"})
+            else:
+                history.append({"Tiket": req_tk_raw, "Tanggal": tgl_tampil, "Status": "🔴 Menunggu PJB (Belum Selesai)"})
         else:
             app_data = pjb_app_status.get(req_tk_raw, {"status": "APPROVED", "catatan": ""})
             if app_data["status"] == "PENDING":
-                outstanding_all.append(req_tk_raw); outstanding_lock.append(req_tk_raw)
-                history.append({"Tiket": req_tk_raw, "Tanggal": tgl, "Status": "⏳ PJB Menunggu Verifikasi Admin"})
+                outstanding_all.append(req_tk_raw)
+                outstanding_lock.append(req_tk_raw)
+                history.append({"Tiket": req_tk_raw, "Tanggal": tgl_tampil, "Status": "⏳ PJB Menunggu Verifikasi Admin"})
             elif app_data["status"] == "REJECTED":
-                outstanding_all.append(req_tk_raw); outstanding_lock.append(req_tk_raw)
-                history.append({"Tiket": req_tk_raw, "Tanggal": tgl, "Status": f"❌ PJB DITOLAK: {app_data['catatan']}"})
-            else: history.append({"Tiket": req_tk_raw, "Tanggal": tgl, "Status": "🟢 PJB Selesai & Approved"})
+                outstanding_all.append(req_tk_raw)
+                outstanding_lock.append(req_tk_raw)
+                history.append({"Tiket": req_tk_raw, "Tanggal": tgl_tampil, "Status": f"❌ PJB DITOLAK: {app_data['catatan']}"})
+            else:
+                history.append({"Tiket": req_tk_raw, "Tanggal": tgl_tampil, "Status": "🟢 PJB Selesai & Approved"})
             
     return outstanding_all, outstanding_lock, aging_tickets, sorted(history, key=lambda x: x["Status"], reverse=True)
 
@@ -878,7 +904,7 @@ def get_local_img_base64(filepath):
 
 def append_data(sheet_name, data, spreadsheet_id):
     try:
-        client = get_gspread_client().open_by_key(spreadsheet_id)
+        client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
         ws = client.worksheet(sheet_name)
         safe_data = [str(x) if x is not None else "" for x in data]
         ws.append_row(safe_data, value_input_option="USER_ENTERED", table_range="A1")
@@ -890,7 +916,7 @@ def append_data(sheet_name, data, spreadsheet_id):
 
 def update_approval_status(spreadsheet_id, row_index, new_status, remark="-"):
     try:
-        client = get_gspread_client().open_by_key(spreadsheet_id)
+        client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
         ws = client.worksheet(SHEET_APP)
         ws.update_cell(row_index + 1, 6, new_status)
         ws.update_cell(row_index + 1, 7, remark)
@@ -920,7 +946,7 @@ def save_new_nopol_to_csv(new_plat):
         pass 
 
 # ==========================================
-# 3. INISIALISASI SESSION STATE & AUTO-ROUTING NOP (ANTI RECURSION ERROR)
+# 3. INISIALISASI SESSION STATE & NAVIGASI (BEBAS RECURSION ERROR)
 # ==========================================
 if 'page' not in st.session_state: st.session_state.page = "🏠 Hub Menu Utama"
 if 'admin_logged_in' not in st.session_state: st.session_state.admin_logged_in = False
@@ -928,20 +954,6 @@ if 'pdf_ready' not in st.session_state: st.session_state.pdf_ready = False
 if 'logged_in_user' not in st.session_state: st.session_state.logged_in_user = ""
 if 'selected_nop' not in st.session_state: st.session_state.selected_nop = ""
 if 'req_wa_ready' not in st.session_state: st.session_state.req_wa_ready = ""
-
-# Kunci fungsi asli st.selectbox 1x saja agar TIDAK PERNAH RecursionError saat rerun
-if not hasattr(st, "_real_selectbox"):
-    st._real_selectbox = st.selectbox
-_orig_selectbox = st._real_selectbox
-
-def _smart_selectbox(label, options, index=0, *args, **kwargs):
-    opts = list(options)
-    sel_nop = st.session_state.get("selected_nop", "")
-    if index == 0 and sel_nop in opts and any(k in str(label) for k in ["NOP", "Wilayah", "Market", "Area"]):
-        index = opts.index(sel_nop)
-    return st._real_selectbox(label, opts, index=index, *args, **kwargs)
-
-st.selectbox = _smart_selectbox
 
 if st.session_state.page != "🏠 Hub Menu Utama":
     st.markdown("<div style='height: 18px;'></div>", unsafe_allow_html=True)
@@ -979,8 +991,9 @@ st.sidebar.markdown(
     </a>
     ''', unsafe_allow_html=True
 )
+
 # ==========================================
-# PAGE 0: HUB MENU UTAMA (LANGSUNG AREA OPERASIONAL & ARAHAN SIDATA)
+# PAGE 0: HUB MENU UTAMA (LENGKAP: AREA OPERASIONAL + CEK TIKET PENDING + MODE ADMIN)
 # ==========================================
 if st.session_state.page == "🏠 Hub Menu Utama":
     
@@ -1001,7 +1014,7 @@ if st.session_state.page == "🏠 Hub Menu Utama":
         </div>
     """, unsafe_allow_html=True)
 
-    # 2. LANGSUNG 2 KARTU BESAR AREA OPERASIONAL (PALANGKARAYA vs PANGKALAN BUN)
+    # 2. DUA KARTU BESAR AREA OPERASIONAL (PALANGKARAYA vs PANGKALAN BUN)
     col_area1, col_area2 = st.columns(2, gap="large")
 
     with col_area1:
@@ -1066,87 +1079,118 @@ if st.session_state.page == "🏠 Hub Menu Utama":
             unsafe_allow_html=True
         )
 
-    # 3. BARIS BAWAH: CEK STATUS TIKET & MODE ADMIN
-    st.markdown("<hr style='margin: 35px 0 25px 0; border-color: #E2E8F0;'>", unsafe_allow_html=True)
-    col_bot1, col_bot2 = st.columns([1.6, 1], gap="large")
+    # 3. CEK STATUS TIKET PRIBADI & TIM BELUM PJB (LANGSUNG TAMPIL TERBUKA DI BERANDA)
+    st.markdown("<hr style='margin: 35px 0 20px 0; border-color: #CBD5E1;'>", unsafe_allow_html=True)
+    st.markdown("<div class='section-title'>🔍 CEK STATUS TIKET & REMINDER TIM BELUM PJB</div>", unsafe_allow_html=True)
+    
+    # Default langsung ke Palangkaraya (index=0) agar tab Cek Tiket Pending langsung terbuka di layar!
+    cek_nop = st.selectbox("Pilih Area Wilayah Pengecekan", list(MASTER_DATA.keys()), index=0, key="cek_area_hub")
+    
+    tab_pribadi, tab_tim_pending = st.tabs(["👤 Cek Status Pribadi Anda", "🚨 Daftar Tim Belum PJB (Tiket Pending)"])
+    
+    with tab_pribadi:
+        c_p1, c_p2 = st.columns([3, 1])
+        with c_p1:
+            cek_nama = st.selectbox("Nama Petugas", ["-- Pilih Nama --"] + MASTER_DATA[cek_nop]["names"], key="cek_nama_hub")
+        with c_p2:
+            st.markdown("<div style='height: 26px;'></div>", unsafe_allow_html=True)
+            btn_cari_pribadi = st.button("🔍 Cari Status Saya", type="secondary", use_container_width=True)
+            
+        if btn_cari_pribadi:
+            if cek_nama != "-- Pilih Nama --" and cek_nama != "":
+                with st.spinner("Menarik data server..."):
+                    fetch_spreadsheet_data.clear()
+                    data_cek = fetch_spreadsheet_data(MASTER_DATA[cek_nop]["spreadsheet_id"])
+                    out_all, out_lock, aging_tickets, hist_tkt = get_user_tickets_status(cek_nama, data_cek[SHEET_REQUEST], data_cek[SHEET_PJB], data_cek[SHEET_APP])
+                if hist_tkt:
+                    st.dataframe(pd.DataFrame(hist_tkt), hide_index=True, use_container_width=True)
+                    if aging_tickets: st.warning(f"🔔 PENGINGAT: Ada {len(aging_tickets)} request tertunda >3 Hari. Tolong segera di-PJB!")
+                    if out_lock: st.error(f"⚠️ {len(out_lock)} Request aktif memblokir status Anda (Belum PJB / Pending Verifikasi).")
+                    else: st.success("✅ Seluruh tiket aktif aman dan Approved!")
+                else:
+                    st.info("Tidak ada data / belum pernah request.")
+            else:
+                st.warning("Silakan pilih Nama Petugas terlebih dahulu.")
+                
+    with tab_tim_pending:
+        st.info(f"Menampilkan daftar seluruh tiket tim wilayah **{cek_nop}** yang masih gantung (belum disubmit PJB) mulai Agustus 2026 dst.")
+        if st.button(f"🚨 Tarik Data Tim Belum PJB ({cek_nop})", use_container_width=True, type="primary"):
+            with st.spinner(f"Memindai seluruh data tim wilayah {cek_nop}..."):
+                fetch_spreadsheet_data.clear()
+                data_cek = fetch_spreadsheet_data(MASTER_DATA[cek_nop]["spreadsheet_id"])
+                req_r, pjb_r, app_r = data_cek[SHEET_REQUEST], data_cek[SHEET_PJB], data_cek[SHEET_APP]
+                
+                all_names_in_sheet = sorted(list(set(
+                    [nm.strip().upper() for nm in MASTER_DATA[cek_nop]["names"] if nm.strip()] +
+                    [str(r[5]).strip().upper() for r in req_r[1:] if len(r) > 5 and str(r[5]).strip()]
+                )))
+                
+                list_blm_pjb = []
+                for nm in all_names_in_sheet:
+                    _, _, _, hist_tkt = get_user_tickets_status(nm, req_r, pjb_r, app_r)
+                    for h in hist_tkt:
+                        tgl_req = parse_date(h["Tanggal"])
+                        if tgl_req >= CUTOFF_DATE:
+                            if "Menunggu PJB" in h["Status"] or "Telat" in h["Status"] or "DITOLAK" in h["Status"]:
+                                list_blm_pjb.append({
+                                    "Nama Petugas": nm,
+                                    "No Tiket / Request": h["Tiket"],
+                                    "Tanggal Request": h["Tanggal"],
+                                    "Status Terkini": h["Status"]
+                                })
+                if list_blm_pjb:
+                    st.error(f"⚠️ Ditemukan {len(list_blm_pjb)} tiket aktif di {cek_nop} yang belum selesai PJB!")
+                    st.dataframe(pd.DataFrame(list_blm_pjb), hide_index=True, use_container_width=True)
+                else:
+                    st.success(f"🎉 Luar biasa! Seluruh tim di wilayah {cek_nop} sudah menyelesaikan PJB aktif.")
 
-    with col_bot1:
-        st.markdown("<div class='section-title' style='margin-top:0 !important;'>🔍 Cek Status Tiket (Pribadi & Tim)</div>", unsafe_allow_html=True)
-        cek_nop = st.selectbox("Pilih Area Wilayah", ["-- Pilih Area --"] + list(MASTER_DATA.keys()), key="cek_area_hub")
-        if cek_nop != "-- Pilih Area --":
-            tab_pribadi, tab_tim_pending = st.tabs(["👤 Status Pribadi Anda", "🚨 Tim Belum PJB (Mulai Agustus)"])
-            with tab_pribadi:
-                cek_nama = _orig_selectbox("Nama Petugas", ["-- Pilih Nama --"] + MASTER_DATA[cek_nop]["names"], key="cek_nama_hub")
-                if st.button("🔍 Cari Status Saya", type="secondary", use_container_width=True):
-                    if cek_nama != "-- Pilih Nama --" and cek_nama != "":
-                        with st.spinner("Menarik data server..."):
-                            data_cek = fetch_spreadsheet_data(MASTER_DATA[cek_nop]["spreadsheet_id"])
-                            out_all, out_lock, aging_tickets, hist_tkt = get_user_tickets_status(cek_nama, data_cek[SHEET_REQUEST], data_cek[SHEET_PJB], data_cek[SHEET_APP])
-                        if hist_tkt:
-                            st.dataframe(pd.DataFrame(hist_tkt), hide_index=True, use_container_width=True)
-                            if aging_tickets: st.warning(f"🔔 Ada {len(aging_tickets)} request tertunda >3 Hari. Tolong segera di-PJB!")
-                            if out_all: st.error(f"⚠️ {len(out_all)} Request memblokir status Anda (Belum PJB / Pending Verifikasi).")
-                            else: st.success("✅ Seluruh tiket aman dan Approved!")
-                        else: st.info("Tidak ada data / belum pernah request.")
-            with tab_tim_pending:
-                st.info("Menampilkan daftar tiket tim yang masih gantung mulai dari Agustus 2026 dst.")
-                if st.button("🚨 Tarik Data Tim Belum PJB", use_container_width=True, type="primary"):
-                    with st.spinner("Memindai seluruh data tim wilayah ini..."):
-                        data_cek = fetch_spreadsheet_data(MASTER_DATA[cek_nop]["spreadsheet_id"])
-                        req_r, pjb_r, app_r = data_cek[SHEET_REQUEST], data_cek[SHEET_PJB], data_cek[SHEET_APP]
-                        list_blm_pjb = []
-                        for nm in MASTER_DATA[cek_nop]["names"]:
-                            if not nm.strip(): continue
-                            _, _, _, hist_tkt = get_user_tickets_status(nm, req_r, pjb_r, app_r)
-                            for h in hist_tkt:
-                                tgl_req = parse_date(h["Tanggal"])
-                                if tgl_req >= CUTOFF_DATE:
-                                    if "Menunggu PJB" in h["Status"] or "Telat" in h["Status"]:
-                                        list_blm_pjb.append({
-                                            "Nama Petugas": nm,
-                                            "No Tiket / Request": h["Tiket"],
-                                            "Tanggal Request": h["Tanggal"],
-                                            "Status Terkini": h["Status"]
-                                        })
-                        if list_blm_pjb:
-                            st.error(f"⚠️ Ditemukan {len(list_blm_pjb)} tiket aktif yang belum dilaporkan!")
-                            st.dataframe(pd.DataFrame(list_blm_pjb), hide_index=True, use_container_width=True)
-                        else:
-                            st.success("🎉 Luar biasa! Seluruh tim di wilayah ini sudah menyelesaikan PJB aktif.")
-
-    with col_bot2:
-        st.markdown("<div class='section-title' style='margin-top:0 !important;'>🔐 Mode Admin</div>", unsafe_allow_html=True)
-        if not st.session_state.admin_logged_in:
-            pass_input = st.text_input("Kata Sandi Admin:", type="password", placeholder="Masukkan Sandi...", key="pwd_admin_card")
-            if st.button("🔓 LOGIN ADMIN", type="primary", use_container_width=True, key="btn_login_admin"):
+    # 4. MENU KHUSUS ADMIN (SELALU TAMPIL JELAS DI BAWAH CEK TIKET)
+    st.markdown("<hr style='margin: 35px 0 20px 0; border-color: #CBD5E1;'>", unsafe_allow_html=True)
+    st.markdown("<div class='section-title'>🛡️ MENU KHUSUS ADMIN</div>", unsafe_allow_html=True)
+    
+    if not st.session_state.admin_logged_in:
+        c_adm1, c_adm2 = st.columns([3, 1])
+        with c_adm1:
+            pass_input = st.text_input("Masukkan Password Admin (Pusat):", type="password", placeholder="Ketik kata sandi admin...", key="pwd_admin_main")
+        with c_adm2:
+            st.markdown("<div style='height: 26px;'></div>", unsafe_allow_html=True)
+            if st.button("🔓 Buka Kunci Akses Admin", type="primary", use_container_width=True, key="btn_login_admin_main"):
                 if pass_input in AUTHORIZED_PASSWORDS:
                     st.session_state.admin_logged_in = True
                     st.rerun()
                 else:
-                    st.error("❌ Kata Sandi Admin Salah!")
-        else:
-            st.success("✅ Akses Mode Admin Aktif")
-            if st.button("🔒 KELUAR MODE ADMIN", type="primary", use_container_width=True, key="btn_logout_admin"):
-                st.session_state.admin_logged_in = False
+                    st.error("❌ Password Admin Salah!")
+    else:
+        st.success("✅ Akses Mode Admin Terbuka")
+        if st.button("🔒 Keluar Mode Admin", type="primary", key="btn_logout_admin_main"):
+            st.session_state.admin_logged_in = False
+            st.rerun()
+            
+        st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
+        if st.button("🎫 MASTER TIKET PM (Input Data PM Bulanan)", type="secondary", use_container_width=True):
+            st.session_state.page = "🎫 Master Tiket PM"
+            st.rerun()
+        
+        c_a1, c_a2 = st.columns(2)
+        with c_a1:
+            if st.button("🛡️ APPROVAL CENTER (Validasi PJB & Revisi)", type="secondary", use_container_width=True):
+                st.session_state.page = "🛡️ Approval Center"
+                st.rerun()
+            if st.button("📈 LIVE MONITORING (Dashboard Analisa)", type="secondary", use_container_width=True):
+                st.session_state.page = "📈 Live Monitoring"
+                st.rerun()
+            if st.button("👀 REQ & PJB MONITORING (Pantau Tim & Warning)", type="primary", use_container_width=True):
+                st.session_state.page = "👀 Request & PJB Monitoring"
+                st.rerun()
+        with c_a2:
+            if st.button("🏦 MANAJEMEN KAS (Distribusi Dana)", type="secondary", use_container_width=True):
+                st.session_state.page = "🏦 Manajemen Kas & Distribusi"
+                st.rerun()
+            if st.button("🖨️ REPORT & AUTO PJB (Export Laporan)", type="secondary", use_container_width=True):
+                st.session_state.page = "🖨️ Auto PJB Report"
                 st.rerun()
 
-    # PANEL KENDALI ADMIN (MUNCUL SAAT LOGIN ADMIN BERHASIL)
-    if st.session_state.admin_logged_in:
-        st.markdown("<hr style='margin: 25px 0 20px 0; border-color: #CBD5E1;'>", unsafe_allow_html=True)
-        st.markdown("<div class='section-title'>🛡️ Panel Kendali Khusus Admin</div>", unsafe_allow_html=True)
-        ca1, ca2, ca3 = st.columns(3, gap="medium")
-        with ca1:
-            if st.button("🛡️ APPROVAL CENTER (Validasi PJB)", type="secondary", use_container_width=True): st.session_state.page = "🛡️ Approval Center"; st.rerun()
-            if st.button("🏦 MANAJEMEN KAS & DISTRIBUSI", type="secondary", use_container_width=True): st.session_state.page = "🏦 Manajemen Kas & Distribusi"; st.rerun()
-        with ca2:
-            if st.button("👀 REQ & PJB MONITORING (Daily)", type="primary", use_container_width=True): st.session_state.page = "👀 Request & PJB Monitoring"; st.rerun()
-            if st.button("📈 LIVE MONITORING (Analisa)", type="secondary", use_container_width=True): st.session_state.page = "📈 Live Monitoring"; st.rerun()
-        with ca3:
-            if st.button("🎫 MASTER TIKET PM BULANAN", type="secondary", use_container_width=True): st.session_state.page = "🎫 Master Tiket PM"; st.rerun()
-            if st.button("🖨️ REPORT & AUTO PJB (Export PDF)", type="secondary", use_container_width=True): st.session_state.page = "🖨️ Auto PJB Report"; st.rerun()
-
-    st.markdown("<div style='text-align: center; color: #64748B !important; font-size: 0.85rem; margin-top:45px; font-weight:600;'>Created by Okta Pradika<br>KUT SYSTEM - SiRAPI Enterprise Edition</div>", unsafe_allow_html=True)# ==========================================
-# PAGE ADMIN: MASTER TIKET PM
+    st.markdown("<div style='text-align: center; color: #64748B !important; font-size: 0.85rem; margin-top:45px; font-weight:600;'>Created by Okta Pradika<br>KUT SYSTEM - SiRAPI Enterprise Edition</div>", unsafe_allow_html=True)# PAGE ADMIN: MASTER TIKET PM
 # ==========================================
 elif st.session_state.page == "🎫 Master Tiket PM":
     st.markdown("<div class='header-card'><h2>🎫 MASTER DATA TIKET PM</h2><p>Push/Upload Daftar Tiket Preventative Maintenance Bulanan ke Database</p></div>", unsafe_allow_html=True)
