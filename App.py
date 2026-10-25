@@ -22,85 +22,167 @@ import numpy as np
 import pytesseract
 
 # ==========================================
-# 0. KONFIGURASI HALAMAN (HARUS PALING ATAS!)
+# 0. KONFIGURASI HALAMAN (WAJIB PALING ATAS)
 # ==========================================
-st.set_page_config(page_title="SiRAPI Enterprise", page_icon="💸", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SiRAPI Enterprise", page_icon="💰", layout="wide", initial_sidebar_state="collapsed")
 
 # =================================================================
-# 🎨 UI/UX DESIGN (GAYA ASLI SiDATA - CLEAN & JOSS)
+# 🎨 UI/UX DESIGN (GAYA ASLI SiDATA - CLEAN, KONTRAST, & JOSS)
 # =================================================================
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+    /* Impor Font Modern */
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
     
-    /* Global Background & Font */
-    .stApp { background-color: #f8fafc; font-family: 'Plus Jakarta Sans', sans-serif; }
+    /* 1. Reset & Base Font */
+    html, body, [class*="css"] {
+        font-family: 'Plus Jakarta Sans', sans-serif !important;
+        background-color: #F4F7FE !important; /* Background ala Dashboard SiDATA */
+    }
     
-    /* Sembunyikan elemen bawaan Streamlit (Beri ruang bersih) */
+    /* 2. Sembunyikan elemen bawaan Streamlit yang mengganggu */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {background-color: transparent !important;}
     
-    /* Premium Header Card (Glassmorphism & Clean Gradient) */
+    /* 3. Panel Utama */
+    .block-container {
+        padding: 2rem 3rem !important;
+        max-width: 1200px !important;
+    }
+    
+    /* 4. FIX WARNA TEKS HILANG (Semua teks dipaksa Gelap agar tajam di background putih) */
+    p, label, span, div, li {
+        color: #334155 !important; 
+    }
+    h1, h2, h3, h4, h5, h6 {
+        color: #0F172A !important;
+        font-weight: 800 !important;
+        letter-spacing: -0.5px;
+    }
+    
+    /* 5. Header Card Gradient (Ini khusus untuk Banner atas yang teksnya putih) */
     .header-card {
-        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-        padding: 40px 30px; border-radius: 20px; color: #ffffff !important; text-align: center;
-        box-shadow: 0 15px 35px rgba(15, 23, 42, 0.1);
-        margin-top: 10px; margin-bottom: 35px; border: 1px solid rgba(255,255,255,0.05);
-        position: relative; overflow: hidden;
+        background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%);
+        padding: 40px 30px; 
+        border-radius: 20px; 
+        text-align: center;
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15);
+        margin-top: 10px; margin-bottom: 30px;
+        position: relative;
+        overflow: hidden;
+        border: 1px solid rgba(255,255,255,0.1);
     }
-    .header-card::before {
-        content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
-        background: radial-gradient(circle, rgba(56,189,248,0.08) 0%, transparent 50%);
-        pointer-events: none;
+    .header-card p, .header-card h1, .header-card h2, .header-card span, .header-card div {
+        color: #FFFFFF !important; /* Paksa putih HANYA di dalam area ini */
     }
-    .header-card h1, .header-card h2 { font-weight: 800; font-size: 2.5rem; letter-spacing: -0.5px; margin-bottom: 5px; text-shadow: 0 2px 4px rgba(0,0,0,0.3); color: #ffffff !important;}
-    .header-card p { font-size: 1.1rem; color: #cbd5e1 !important; font-weight: 400; margin: 0; }
+    .header-card h1 {
+        font-size: 2.5rem !important;
+        margin-bottom: 5px !important;
+    }
+    .header-card p {
+        font-size: 1.1rem !important;
+        font-weight: 400 !important;
+        opacity: 0.9 !important;
+    }
     
-    /* Menu Buttons - Modern Clean Soft UI */
+    /* 6. Desain Tombol Menu Kotak (Dashboard Style ala SiData) */
     div[data-testid="stButton"] > button {
-        background: #ffffff !important;
-        border: 1px solid #e2e8f0 !important; 
+        background-color: #FFFFFF !important;
+        border: 1.5px solid #E2E8F0 !important;
         border-radius: 16px !important;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.02), 0 10px 15px rgba(0,0,0,0.03) !important;
-        padding: 22px 10px !important; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        padding: 20px 10px !important;
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02), 0 2px 4px -2px rgba(0,0,0,0.02) !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
         display: flex; flex-direction: column; align-items: center; justify-content: center;
+        min-height: 110px;
+        width: 100%;
     }
-    div[data-testid="stButton"] > button:hover, div[data-testid="stButton"] > button:active {
-        background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%) !important;
+    div[data-testid="stButton"] > button p {
+        color: #1E293B !important; 
+        font-weight: 700 !important; 
+        font-size: 1.05rem !important; 
+        transition: color 0.3s ease !important;
+    }
+    div[data-testid="stButton"] > button:hover {
+        background: linear-gradient(135deg, #0EA5E9 0%, #0284C7 100%) !important;
+        border-color: transparent !important;
         transform: translateY(-5px) !important;
-        box-shadow: 0 15px 25px rgba(2,132,199,0.2) !important; border-color: transparent !important;
+        box-shadow: 0 15px 25px -5px rgba(2, 132, 199, 0.25) !important;
     }
-    div[data-testid="stButton"] > button p { color: #1e293b !important; font-weight: 700 !important; font-size: 1.1rem !important; margin:0; transition: color 0.3s ease; }
-    div[data-testid="stButton"] > button:hover p, div[data-testid="stButton"] > button:active p { color: #ffffff !important; }
+    div[data-testid="stButton"] > button:hover p {
+        color: #FFFFFF !important; /* Ubah teks menu jadi putih saat di-hover biru */
+    }
     
-    /* Section Titles Modern */
+    /* 7. Tombol Primary (Tombol Action / Submit / Merah) */
+    button[kind="primary"] {
+        background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%) !important;
+        border: none !important;
+        min-height: 52px !important;
+        border-radius: 12px !important;
+    }
+    button[kind="primary"] p { color: #FFFFFF !important; font-weight: 600 !important; font-size: 16px !important; }
+    button[kind="primary"]:hover {
+        background: linear-gradient(135deg, #0EA5E9 0%, #0284C7 100%) !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 10px 15px -3px rgba(2, 132, 199, 0.3) !important;
+    }
+
+    /* 8. Judul Section Tiap Bagian */
     .section-title { 
-        color: #0f172a; font-size: 1.3rem; font-weight: 800; letter-spacing: -0.3px;
-        margin: 35px 0 20px 0; display: flex; align-items: center; gap: 10px;
+        color: #0F172A !important; font-size: 1.25rem !important; font-weight: 800 !important; 
+        margin: 30px 0 15px 0 !important; display: flex !important; align-items: center !important; gap: 10px !important;
     }
     .section-title::before {
-        content: ''; display: block; width: 5px; height: 24px; background: #0ea5e9; border-radius: 4px;
+        content: ''; display: block; width: 6px; height: 22px; background: #0EA5E9; border-radius: 4px;
     }
     
-    /* Metric Cards Clean Modern */
-    .metric-3d {
-        background: #ffffff; padding: 25px 20px; border-radius: 16px; text-align: center;
-        box-shadow: 0 10px 20px rgba(0,0,0,0.03); border: 1px solid #e2e8f0;
-        border-top: 4px solid #0ea5e9; margin-bottom: 20px; transition: transform 0.3s;
+    /* 9. Input Form (Teks Pasti Hitam, Kotak Rapih) */
+    .stTextInput input, .stSelectbox select, .stNumberInput input, .stTextArea textarea, .stDateInput input {
+        background-color: #FFFFFF !important; 
+        color: #0F172A !important; 
+        border: 1px solid #CBD5E1 !important; 
+        border-radius: 10px !important;
+        padding: 12px 16px !important; 
+        font-size: 15px !important; 
+        font-weight: 600 !important;
     }
-    .metric-3d:hover { transform: translateY(-4px); box-shadow: 0 15px 30px rgba(0,0,0,0.06); }
+    .stTextInput input:focus, .stSelectbox select:focus, .stNumberInput input:focus, .stTextArea textarea:focus {
+        border-color: #0EA5E9 !important;
+        box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.15) !important;
+    }
+    
+    /* 10. Metric Cards 3D (SiDATA Style) */
+    .metric-3d {
+        background: #FFFFFF; padding: 25px 20px; border-radius: 16px; text-align: center;
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 10px 15px -3px rgba(0,0,0,0.05); 
+        border: 1px solid #E2E8F0; border-top: 4px solid #0EA5E9; margin-bottom: 20px; 
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .metric-3d:hover { transform: translateY(-5px); box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); }
     .metric-title { font-size: 0.85rem; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;}
     .metric-value { font-size: 1.8rem; font-weight: 800; margin-top: 8px; color: #0f172a; }
     
-    /* Sidebar Kosong */
-    [data-testid="stSidebar"] {
-        background-color: #f8fafc !important;
-        border-right: 1px solid #e2e8f0 !important;
+    /* 11. Custom Tab Design (Agar Menu Tab Jelas) */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background-color: transparent;
+    }
+    .stTabs [data-baseweb="tab"] {
+        background-color: #E2E8F0;
+        border-radius: 8px 8px 0 0;
+        padding: 10px 20px;
+        color: #475569 !important;
+        font-weight: 600;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: #FFFFFF !important;
+        color: #0EA5E9 !important;
+        border-bottom-color: transparent !important;
+        border-top: 3px solid #0EA5E9;
     }
 </style>
 """, unsafe_allow_html=True)
-
 # ==========================================
 # 1. MASTER DATA & KONFIGURASI
 # ==========================================
@@ -594,8 +676,9 @@ if st.session_state.page == "🏠 Hub Menu Utama":
     c_logo1, c_logo2, c_logo3 = st.columns([1, 1, 1])
     with c_logo2:
         try: 
-            st.markdown("<div style='display: flex; justify-content: center;'>", unsafe_allow_html=True)
-            st.image("koperasi-jasa-konstruksi-tower-event-organizer-network-monitoring-telekomunikasi-kisel-group-logo-kut.webp", width=120)
+            # LOGO DIPERKECIL & DIGESER PERSIS KE TENGAH
+            st.markdown("<div style='display: flex; justify-content: center; margin-bottom: 10px;'>", unsafe_allow_html=True)
+            st.image("koperasi-jasa-konstruksi-tower-event-organizer-network-monitoring-telekomunikasi-kisel-group-logo-kut.webp", width=130)
             st.markdown("</div>", unsafe_allow_html=True)
         except: pass
 
@@ -614,7 +697,6 @@ if st.session_state.page == "🏠 Hub Menu Utama":
         if st.button("✅\nPJB OPERASIONAL\n(Nota Realisasi)", use_container_width=True): st.session_state.page = "✅ Form PJB Operasional"; st.rerun()
         
     if st.button("📝\nREPORT LAPANGAN\n(Update Progress & Generate WA)", use_container_width=True): st.session_state.page = "📝 Report Lapangan"; st.rerun()
-
     st.markdown("<div class='section-title'>🔍 CEK STATUS TIKET (PRIBADI & TIM)</div>", unsafe_allow_html=True)
     cek_nop = st.selectbox("Pilih Area Wilayah", ["-- Pilih Area --"] + list(MASTER_DATA.keys()), key="cek_area_hub")
     
