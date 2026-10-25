@@ -536,98 +536,70 @@ MASTER_DATA = {
 LIST_KEPERLUAN = ["", "Tshoot", "Backup", "Support", "PM", "Program BCP", "Program Quikwin", "Program G348T", "Pengiriman Material SPMS", "Pembelian Material","Transportasi Air"]
 
 # ==========================================
-# 2. FUNGSI INTI & CACHING (OPTIMASI HEMAT RAM ANTI-CRASH)
+# 2. FUNGSI INTI & CACHING
 # ==========================================
-import gc
-
 def ai_nota_checker(uploaded_file, expected_nominal, expected_date=None):
     if uploaded_file is None: return True, "Tidak ada file"
     try:
-        raw_bytes = uploaded_file.getvalue()
-        with Image.open(io.BytesIO(raw_bytes)) as img:
-            img.thumbnail((1200, 1200))
-            text = pytesseract.image_to_string(img).lower()
-        del raw_bytes
-        gc.collect()
-        
-        # 1. Validasi Nominal
+        img = Image.open(uploaded_file)
+        text = pytesseract.image_to_string(img).lower()
+        uploaded_file.seek(0)
         angka_ditemukan = re.findall(r'\d+', text.replace('.', '').replace(',', ''))
         valid_nom = str(expected_nominal) in angka_ditemukan
-        
-        # 2. Validasi Tanggal
         msg_tgl = ""
         valid_date = True
         if expected_date:
             try:
                 d_obj = datetime.strptime(str(expected_date), "%d/%m/%Y") if isinstance(expected_date, str) else expected_date
                 tgl1, tgl2, tgl3 = d_obj.strftime("%d/%m"), d_obj.strftime("%d-%m"), d_obj.strftime("%d")
-                
                 if tgl1 not in text and tgl2 not in text and tgl3 not in text:
                     valid_date = False
                     msg_tgl = f" (Tanggal {d_obj.strftime('%d/%m/%Y')} tidak terbaca AI pada Nota)"
             except: pass
-            
-        # 3. Keputusan AI
         if not valid_nom and not valid_date:
             return False, f"Nominal Rp {expected_nominal:,.0f} & Tanggal tidak sesuai.{msg_tgl} Harap perbaiki nota!"
         elif not valid_nom:
             return False, f"Nominal Rp {expected_nominal:,.0f} tidak ditemukan pada foto Nota."
         elif not valid_date:
             return False, f"Peringatan AI:{msg_tgl}. Harap gunakan nota dengan tanggal yang valid & jelas."
-            
         return True, "Valid"
     except Exception:
-        gc.collect()
+        uploaded_file.seek(0)
         return True, "Bypass AI (Tesseract belum siap)"
 
 def ai_image_checker(uploaded_file, file_name_label):
     if uploaded_file is None:
         return True, "Tidak ada file"
-        
     try:
-        raw_bytes = uploaded_file.getvalue()
+        img = Image.open(uploaded_file)
+        exif = img.getexif()
+        uploaded_file.seek(0)
+        if exif:
+            suspicious_software = ['photoshop', 'canva', 'picsart', 'lightroom', 'snapseed', 'gimp', 'coreldraw', 'illustrator', 'capcut', 'pics', 'edit']
+            for tag_id, value in exif.items():
+                tag = ExifTags.TAGS.get(tag_id, tag_id)
+                if tag == 'Software':
+                    val_lower = str(value).lower()
+                    for sw in suspicious_software:
+                        if sw in val_lower:
+                            return False, f"🚨 FORENSIK DITOLAK: Gambar {file_name_label} terdeteksi sebagai hasil editan aplikasi ({value}). Sistem KUT mengharuskan foto murni dari kamera!"
     except Exception:
-        return True, "Aman"
-
-    # 1. Cek Forensik EXIF menggunakan salinan BytesIO (File asli tetap aman terbuka)
-    try:
-        with Image.open(io.BytesIO(raw_bytes)) as img:
-            exif = img.getexif()
-            if exif:
-                suspicious_software = ['photoshop', 'canva', 'picsart', 'lightroom', 'snapseed', 'gimp', 'coreldraw', 'illustrator', 'capcut', 'pics', 'edit']
-                for tag_id, value in exif.items():
-                    tag = ExifTags.TAGS.get(tag_id, tag_id)
-                    if tag == 'Software':
-                        val_lower = str(value).lower()
-                        for sw in suspicious_software:
-                            if sw in val_lower:
-                                return False, f"🚨 FORENSIK DITOLAK: Gambar {file_name_label} terdeteksi sebagai hasil editan aplikasi ({value}). Sistem KUT mengharuskan foto murni dari kamera!"
-    except Exception:
+        uploaded_file.seek(0)
         pass
-
-    # 2. Cek Ketajaman / Blur Gambar dengan OpenCV
     try:
-        file_bytes = np.frombuffer(raw_bytes, dtype=np.uint8)
+        file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
         img_cv = cv2.imdecode(file_bytes, 1)
-        del file_bytes, raw_bytes
-        
+        uploaded_file.seek(0)
         if img_cv is not None:
-            h, w = img_cv.shape[:2]
-            if max(h, w) > 1024:
-                scale = 1024.0 / max(h, w)
-                img_cv = cv2.resize(img_cv, (int(w * scale), int(h * scale)))
             gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
             blur_score = cv2.Laplacian(gray, cv2.CV_64F).var()
-            del img_cv, gray
-            gc.collect()
-            
             if blur_score < 40.0:  
                 return False, f"🌫️ KUALITAS DITOLAK: Gambar {file_name_label} terdeteksi SANGAT BLUR / BURAM oleh AI (Skor Ketajaman: {blur_score:.1f}). Mohon pastikan fokus kamera stabil dan tulisan terbaca jelas!"
     except Exception:
-        gc.collect()
+        uploaded_file.seek(0)
         pass
-        
     return True, "Aman"
+
 def ui_image_uploader(label, key=None):
     file = st.file_uploader(label, type=["jpg", "png", "jpeg"], key=key)
     if file:
@@ -704,30 +676,23 @@ def get_route_and_distance(lon1, lat1, lon2, lat2):
     return dist_km, [[lon1, lat1], [lon2, lat2]], durasi_sec
 
 @st.cache_resource
-def get_gspread_client():
-    with open("credentials.json", "w") as f: f.write(st.secrets["gcp_json"])
-    creds = Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
-    return gspread.authorize(creds)
-
 def get_credentials():
     with open("credentials.json", "w") as f: f.write(st.secrets["gcp_json"])
     return Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
 
-# BATASI max_entries=2 AGAR RAM SERVER TIDAK PENUH OLEH CACHE SPREADSHEET
-@st.cache_data(ttl=300, max_entries=2, show_spinner=False)
+@st.cache_data(ttl=600)
 def fetch_spreadsheet_data(spreadsheet_id):
-    client = get_gspread_client().open_by_key(spreadsheet_id)
+    client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
     ws_names = [SHEET_REQUEST, SHEET_PJB, SHEET_UM, SHEET_DISTRIBUSI, SHEET_APP, "Rekap PJB", SHEET_TIKET_PM, SHEET_ABSENSI]
     data = {}
     for name in ws_names:
         try: data[name] = client.worksheet(name).get_all_values()
         except: data[name] = []
-    gc.collect()
     return data
 
 def update_pm_ticket_status(spreadsheet_id, tickets_to_update, new_status):
     try:
-        client = get_gspread_client().open_by_key(spreadsheet_id)
+        client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
         ws = client.worksheet(SHEET_TIKET_PM)
         rows = ws.get_all_values()
         t_list = [str(t).strip().upper() for t in tickets_to_update]
@@ -737,7 +702,7 @@ def update_pm_ticket_status(spreadsheet_id, tickets_to_update, new_status):
         fetch_spreadsheet_data.clear()
     except Exception: pass
 
-@st.cache_data(ttl=1800, max_entries=1, show_spinner=False)
+@st.cache_data(ttl=600)
 def load_excel_data():
     site_dict, site_list = {}, []
     try:
@@ -749,7 +714,6 @@ def load_excel_data():
             df_site = df_site_pky
         site_dict = df_site.set_index('Site ID')[['Latitude Tujuan', 'Longtitude Tujuan']].to_dict('index')
         site_list = df_site['Site ID'].astype(str).tolist()
-        del df_site
     except Exception: pass
     
     tim_dict, list_nopol_csv = {}, []
@@ -762,7 +726,6 @@ def load_excel_data():
             for _, row in df_tim.iterrows():
                 nama_key = str(row[col_nama]).strip().upper()
                 tim_dict[nama_key] = {'Latitude': row.get(col_lat, 0), 'Longtitude': row.get(col_lon, 0)}
-        del df_tim
     except Exception: pass
         
     try:
@@ -781,7 +744,6 @@ def load_excel_data():
                     if pic_name and pic_name not in tim_dict: tim_dict[pic_name] = {'Latitude': 0, 'Longtitude': 0}
                     if pic_name and nopol_val and nopol_val not in ["nan", "0", "None"]: 
                         tim_dict[pic_name]['NOPOL'] = nopol_val
-        del df_nopol
     except Exception: pass
 
     try:
@@ -798,7 +760,6 @@ def load_excel_data():
                     tim_dict[nama]['NOPOL'] = nopol
                     if nopol not in list_nopol_csv:
                         list_nopol_csv.append(nopol)
-        del df_tim_pbun
     except Exception: pass
     
     nik_dict = {}
@@ -814,10 +775,8 @@ def load_excel_data():
                         nik_val = str(row[col_nik]).strip()
                         if nm_key and nik_val and nik_val not in ["nan", "0", "None"]:
                             nik_dict[nm_key] = nik_val
-                del df_nik
     except Exception: pass
-    
-    gc.collect()
+        
     return site_dict, site_list, tim_dict, list_nopol_csv, nik_dict
 
 def get_last_indicator(plat_raw, jns, pjb_r):
@@ -889,29 +848,34 @@ def get_user_tickets_status(nama, req_rows, pjb_rows, app_rows):
     return outstanding_all, outstanding_lock, aging_tickets, sorted(history, key=lambda x: x["Status"], reverse=True)
 
 def upload_foto(file):
-    return upload_foto_compressed(file)
+    if file is None: return ""
+    try:
+        encoded = base64.b64encode(file.getvalue()).decode('utf-8')
+        return cloudinary.uploader.upload(f"data:{file.type};base64,{encoded}", resource_type="auto").get("secure_url") 
+    except Exception: return ""
 
 def upload_foto_compressed(file):
     if file is None: return ""
     try:
-        raw_bytes = file.getvalue()
-        with Image.open(io.BytesIO(raw_bytes)) as img:
-            if img.mode != 'RGB':
-                img = img.convert('RGB')
-            img.thumbnail((1280, 1280))
-            img_byte_arr = io.BytesIO()
-            img.save(img_byte_arr, format='JPEG', quality=65)
-            img_byte_arr.seek(0)
-            encoded = base64.b64encode(img_byte_arr.read()).decode('utf-8')
-            img_byte_arr.close()
-        del raw_bytes
-        url = cloudinary.uploader.upload(f"data:image/jpeg;base64,{encoded}", resource_type="auto").get("secure_url")
-        del encoded
-        gc.collect()
-        return url
+        img = Image.open(file)
+        if img.mode != 'RGB': img = img.convert('RGB')
+        img.thumbnail((1024, 1024))
+        img_byte_arr = io.BytesIO()
+        img.save(img_byte_arr, format='JPEG', quality=60)
+        img_byte_arr.seek(0)
+        encoded = base64.b64encode(img_byte_arr.read()).decode('utf-8')
+        return cloudinary.uploader.upload(f"data:image/jpeg;base64,{encoded}", resource_type="auto").get("secure_url") 
     except Exception:
-        gc.collect()
         return ""
+
+def get_local_img_base64(filepath):
+    try:
+        with open(filepath, "rb") as image_file:
+            encoded_string = base64.b64encode(image_file.read()).decode("utf-8")
+            return f"data:image/webp;base64,{encoded_string}"
+    except Exception:
+        return ""
+
 def append_data(sheet_name, data, spreadsheet_id):
     try:
         client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
