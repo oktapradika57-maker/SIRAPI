@@ -27,19 +27,32 @@ import pytesseract
 st.set_page_config(page_title="SiRAPI NOP PLK & PBU Dashboard", page_icon="💸", layout="wide", initial_sidebar_state="collapsed")
 
 # =================================================================
-# 🎨 SUNTIKAN UI/UX: PERSIS SiDATA (100% HIGH CONTRAST & ANTI-BLUR)
+# 🎨 SUNTIKAN UI/UX: PERSIS SiDATA (TANPA MENU BAR ATAS & LOGO PRESISI)
 # =================================================================
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
-    /* 1. Sembunyikan Elemen Bawaan Streamlit */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {background-color: transparent !important;}
-    [data-testid="collapsedControl"] { display: none; }
+    /* 1. HILANGKAN 100% MENU BAR ATAS, TOOLBAR, FOOTER & ANCHOR LINK */
+    #MainMenu,
+    footer,
+    header,
+    header[data-testid="stHeader"],
+    div[data-testid="stHeader"],
+    div[data-testid="stToolbar"],
+    div[data-testid="stDecoration"],
+    div[data-testid="stStatusWidget"],
+    [data-testid="collapsedControl"],
+    [data-testid="stHeaderActionElements"] {
+        visibility: hidden !important;
+        display: none !important;
+        height: 0px !important;
+        width: 0px !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
 
-    /* 2. Latar Belakang Aplikasi & Font Global (Terang & Bersih ala SiDATA) */
+    /* 2. Latar Belakang Aplikasi & Font Global */
     html, body, .stApp, .main {
         background-color: #F4F7FE !important;
         color: #0F172A !important;
@@ -47,9 +60,10 @@ st.markdown("""
     }
 
     .main .block-container {
-        padding-top: 1rem !important;
+        padding-top: 0rem !important;
         padding-bottom: 3rem !important;
-        max-width: 1220px !important;
+        max-width: 1180px !important;
+        margin: 0 auto !important;
     }
 
     /* 3. KUNCI PAKSA SEMUA TEKS & LABEL AGAR GELAP TAJAM DI ATAS BACKGROUND PUTIH */
@@ -98,7 +112,6 @@ st.markdown("""
         padding: 10px 14px !important;
     }
 
-    /* Input Terkunci (Disabled) - Wajib Tetap Hitam Tebal agar Terbaca Jelas */
     input:disabled,
     textarea:disabled,
     div[data-baseweb="base-input"] input:disabled {
@@ -115,7 +128,6 @@ st.markdown("""
         opacity: 1 !important;
     }
 
-    /* Tombol +/- pada NumberInput & Ikon Mata Password */
     div[data-testid="stNumberInput"] button,
     div[data-baseweb="input"] button {
         background-color: #F8FAFC !important;
@@ -127,7 +139,7 @@ st.markdown("""
         color: #0F172A !important;
     }
 
-    /* 5. FIX DROPDOWN SELECTBOX & MULTISELECT (Beserta Menu Popover-nya) */
+    /* 5. FIX DROPDOWN SELECTBOX & MULTISELECT */
     div[data-baseweb="select"] > div {
         background-color: #FFFFFF !important;
         border: 1.5px solid #CBD5E1 !important;
@@ -149,7 +161,6 @@ st.markdown("""
         color: #0F172A !important;
     }
 
-    /* Tag Pilihan pada MultiSelect */
     span[data-baseweb="tag"] {
         background-color: #E0F2FE !important;
         border: 1px solid #7DD3FC !important;
@@ -161,7 +172,6 @@ st.markdown("""
         font-weight: 700 !important;
     }
 
-    /* Daftar Menu Saat Dropdown Diklik (Portal Popover) */
     div[data-baseweb="popover"],
     div[data-baseweb="popover"] > div,
     div[data-baseweb="menu"],
@@ -181,8 +191,7 @@ st.markdown("""
         color: #007BFF !important;
     }
 
-    /* 6. TOMBOL MERAH & BIRU PERSIS SiDATA (Teks Putih Tebal, Tidak Mungkin Hilang!) */
-    /* Tombol Primary & Submit Form -> MERAH MENYALA (Pangkalan Bun / Login Admin / Submit) */
+    /* 6. TOMBOL MERAH & BIRU PERSIS SiDATA */
     div[data-testid="stButton"] > button[kind="primary"],
     div[data-testid="stFormSubmitButton"] > button {
         background: linear-gradient(135deg, #FF2E36 0%, #E11D48 100%) !important;
@@ -210,7 +219,6 @@ st.markdown("""
         box-shadow: 0 10px 20px rgba(225, 29, 72, 0.35) !important;
     }
 
-    /* Tombol Secondary -> BIRU CERAH SiDATA (Palangkaraya / Logistik / Menu Reguler) */
     div[data-testid="stButton"] > button[kind="secondary"] {
         background: linear-gradient(135deg, #007BFF 0%, #0056D2 100%) !important;
         color: #FFFFFF !important;
@@ -235,7 +243,6 @@ st.markdown("""
         box-shadow: 0 10px 20px rgba(0, 123, 255, 0.32) !important;
     }
 
-    /* Tombol Saat Disabled (Belum Centang Checklist) */
     div[data-testid="stButton"] > button:disabled,
     div[data-testid="stFormSubmitButton"] > button:disabled {
         background: #E2E8F0 !important;
@@ -250,7 +257,6 @@ st.markdown("""
         -webkit-text-fill-color: #64748B !important;
     }
 
-    /* Tombol Download */
     div[data-testid="stDownloadButton"] > button {
         background: linear-gradient(135deg, #10B981 0%, #059669 100%) !important;
         color: #FFFFFF !important;
@@ -264,7 +270,7 @@ st.markdown("""
         font-weight: 700 !important;
     }
 
-    /* 7. FILE UPLOADER & EXPANDER & TABS (Selalu Terang & Teks Gelap) */
+    /* 7. FILE UPLOADER, EXPANDER & TABS */
     section[data-testid="stFileUploaderDropzone"] {
         background-color: #FFFFFF !important;
         border: 2px dashed #94A3B8 !important;
@@ -310,96 +316,87 @@ st.markdown("""
         color: #FFFFFF !important;
     }
 
-    /* 8. KOMPONEN KARTU IDENTIK SiDATA (Logo Badge, 3 Mode Cards, 2 Area Cards) */
+    /* 8. LOGO BADGE PRESISI 100% DI TENGAH ATAS & KARTU AREA OPERASIONAL SiDATA */
+    .sidata-top-wrapper {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        margin-top: 0px;
+        margin-bottom: 28px;
+    }
     .sidata-logo-badge {
         background: #FFFFFF;
-        width: 190px;
-        margin: -1.5rem auto 20px auto;
-        padding: 18px 24px;
+        width: 210px;
+        padding: 20px 26px 18px 26px;
         border-radius: 0 0 24px 24px;
-        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+        box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
         border: 1px solid #E2E8F0;
         border-top: none;
-        text-align: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 22px auto;
     }
     .sidata-logo-badge img {
-        width: 135px;
+        width: 145px;
         height: auto;
+        display: block;
+        margin: 0 auto;
         object-fit: contain;
     }
-
-    .sidata-hero-title {
-        text-align: center;
-        margin-bottom: 35px;
-    }
-    .sidata-hero-title h1 {
-        font-size: 2.3rem !important;
+    .sidata-main-title {
+        font-size: 2.25rem !important;
         font-weight: 800 !important;
         color: #1E293B !important;
-        margin-bottom: 8px !important;
+        margin: 0 0 8px 0 !important;
         letter-spacing: -0.5px !important;
+        text-align: center !important;
+        width: 100%;
     }
-    .sidata-hero-title p {
-        font-size: 1.05rem !important;
+    .sidata-main-sub {
+        font-size: 1.02rem !important;
         color: #475569 !important;
         font-weight: 500 !important;
         margin: 0 !important;
-    }
-
-    .sidata-mode-card {
-        background: #FFFFFF;
-        border-radius: 20px;
-        padding: 32px 24px 28px 24px;
-        text-align: center;
-        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
-        border: 1px solid #E2E8F0;
-        min-height: 235px;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        margin-bottom: 14px;
-        transition: transform 0.25s ease, box-shadow 0.25s ease;
-    }
-    .sidata-mode-card:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 16px 35px rgba(15, 23, 42, 0.09);
-    }
-    .sidata-mode-icon {
-        font-size: 3.2rem;
-        line-height: 1;
-        margin-bottom: 16px;
-    }
-    .sidata-mode-card h3 {
-        font-size: 1.35rem !important;
-        font-weight: 800 !important;
-        color: #1E293B !important;
-        margin: 0 0 10px 0 !important;
-    }
-    .sidata-mode-card p {
-        font-size: 0.92rem !important;
-        color: #475569 !important;
-        line-height: 1.55 !important;
-        margin: 0 !important;
+        text-align: center !important;
+        width: 100%;
     }
 
     .sidata-area-card {
         background: #FFFFFF;
         border-radius: 22px;
-        padding: 36px 28px 30px 28px;
+        padding: 34px 28px 28px 28px;
         text-align: center;
         box-shadow: 0 12px 32px rgba(15, 23, 42, 0.06);
         border: 1px solid #E2E8F0;
-        min-height: 310px;
+        min-height: 285px;
         display: flex;
         flex-direction: column;
         justify-content: space-between;
         align-items: center;
         margin-bottom: 14px;
-        transition: transform 0.25s ease;
+        transition: transform 0.25s ease, box-shadow 0.25s ease;
     }
     .sidata-area-card:hover {
         transform: translateY(-4px);
+        box-shadow: 0 18px 36px rgba(15, 23, 42, 0.09);
+    }
+    .sidata-card-heading {
+        font-size: 1.45rem !important;
+        font-weight: 800 !important;
+        color: #1E293B !important;
+        margin: 6px 0 10px 0 !important;
+        text-align: center !important;
+    }
+    .sidata-card-desc {
+        font-size: 0.93rem !important;
+        color: #475569 !important;
+        line-height: 1.6 !important;
+        margin: 0 !important;
+        text-align: center !important;
     }
     .sidata-pill-blue {
         display: inline-block;
@@ -426,13 +423,13 @@ st.markdown("""
         margin: 12px 0;
     }
     .sidata-stat-blue {
-        font-size: 1.05rem;
+        font-size: 1.02rem;
         font-weight: 800;
         color: #007BFF !important;
         margin-top: 14px;
     }
     .sidata-stat-red {
-        font-size: 1.05rem;
+        font-size: 1.02rem;
         font-weight: 800;
         color: #FF2E36 !important;
         margin-top: 14px;
@@ -445,7 +442,7 @@ st.markdown("""
         border-radius: 20px !important;
         text-align: center !important;
         box-shadow: 0 10px 25px rgba(15, 23, 42, 0.06) !important;
-        margin-top: 5px !important;
+        margin-top: 10px !important;
         margin-bottom: 28px !important;
         border: 1px solid #E2E8F0 !important;
         border-top: 5px solid #007BFF !important;
@@ -466,9 +463,9 @@ st.markdown("""
 
     .section-title { 
         color: #0F172A !important;
-        font-size: 1.25rem !important;
+        font-size: 1.22rem !important;
         font-weight: 800 !important;
-        margin: 30px 0 16px 0 !important;
+        margin: 28px 0 14px 0 !important;
         display: flex !important;
         align-items: center !important;
         gap: 10px !important;
@@ -931,8 +928,6 @@ if 'pdf_ready' not in st.session_state: st.session_state.pdf_ready = False
 if 'logged_in_user' not in st.session_state: st.session_state.logged_in_user = ""
 if 'selected_nop' not in st.session_state: st.session_state.selected_nop = ""
 
-# Smart Auto-Select NOP: Saat tim klik tombol PANGKALAN BUN atau PALANGKARAYA di halaman utama,
-# dropdown NOP di semua halaman otomatis memilih wilayah tersebut!
 _orig_selectbox = st.selectbox
 def _smart_selectbox(label, options, index=0, *args, **kwargs):
     opts = list(options)
@@ -943,9 +938,10 @@ def _smart_selectbox(label, options, index=0, *args, **kwargs):
 st.selectbox = _smart_selectbox
 
 if st.session_state.page != "🏠 Hub Menu Utama":
+    st.markdown("<div style='height: 18px;'></div>", unsafe_allow_html=True)
     c_nav1, c_nav2 = st.columns([3, 1])
     with c_nav1:
-        if st.button("⬅️ KEMBALI KE DASHBOARD UTAMA", use_container_width=True):
+        if st.button("⬅️ KEMBALI KE BERANDA UTAMA", use_container_width=True):
             st.session_state.page = "🏠 Hub Menu Utama"
             st.session_state.pdf_ready = False
             st.rerun()
@@ -978,122 +974,40 @@ st.sidebar.markdown(
 )
 
 # ==========================================
-# PAGE 0: HUB MENU UTAMA (DESAIN IDENTIK SiDATA)
+# PAGE 0: HUB MENU UTAMA (LANGSUNG AREA OPERASIONAL & LOGO PRESISI TENGAH)
 # ==========================================
 if st.session_state.page == "🏠 Hub Menu Utama":
     
-    # 1. LOGO BADGE PUTIH MENGGANTUNG DI TENGAH ATAS (PERSIS SiDATA)
+    # 1. LOGO BADGE PUTIH & JUDUL UTAMA (100% PRESISI TENGAH)
     logo_b64 = get_local_img_base64("koperasi-jasa-konstruksi-tower-event-organizer-network-monitoring-telekomunikasi-kisel-group-logo-kut.webp")
     if logo_b64:
-        st.markdown(f"""
-            <div class="sidata-logo-badge">
-                <img src="{logo_b64}" alt="Kinarya Utama Teknik">
-            </div>
-        """, unsafe_allow_html=True)
+        logo_html = f'<img src="{logo_b64}" alt="Kinarya Utama Teknik">'
     else:
-        st.markdown("""
-            <div class="sidata-logo-badge">
-                <div style="font-weight:900; font-size:1.2rem; color:#1E293B !important; letter-spacing:1px;">KINARYA</div>
-                <div style="font-weight:600; font-size:0.75rem; color:#64748B !important;">UTAMA TEKNIK</div>
-            </div>
-        """, unsafe_allow_html=True)
+        logo_html = '<div><div style="font-weight:900; font-size:1.25rem; color:#1E293B !important; letter-spacing:1px;">KINARYA</div><div style="font-weight:600; font-size:0.75rem; color:#64748B !important;">UTAMA TEKNIK</div></div>'
 
-    # 2. JUDUL UTAMA DASHBOARD
-    st.markdown("""
-        <div class="sidata-hero-title">
-            <h1>SiRAPI NOP PLK & PBU Dashboard</h1>
-            <p>Sistem Rekapitulasi Anggaran, Pertanggungjawaban Operasional & Monitoring Tim</p>
+    st.markdown(f"""
+        <div class="sidata-top-wrapper">
+            <div class="sidata-logo-badge">
+                {logo_html}
+            </div>
+            <div class="sidata-main-title">SiRAPI NOP PLK & PBU Dashboard</div>
+            <div class="sidata-main-sub">📍 Pilih Area Operasional untuk Membuka Menu Request Dana, Penyelesaian PJB & Report</div>
         </div>
     """, unsafe_allow_html=True)
 
-    # 3. TIGA KARTU UTAMA (MODE LAPANGAN | REPORT & STATUS | MODE ADMIN) PERSIS GAMBAR 1 SiDATA
-    col_m1, col_m2, col_m3 = st.columns(3, gap="medium")
-
-    with col_m1:
-        st.markdown("""
-            <div class="sidata-mode-card">
-                <div class="sidata-mode-icon">👷</div>
-                <h3>Mode Lapangan</h3>
-                <p>Pilih area operasional Anda agar langsung diarahkan ke form Request Dana & PJB yang tepat.</p>
-            </div>
-        """, unsafe_allow_html=True)
-        if st.button("🔴 PANGKALAN BUN", type="primary", use_container_width=True, key="btn_top_pbu"):
-            st.session_state.selected_nop = "Pangkalanbun"
-            st.session_state.page = "📝 Form Request Dana"
-            st.rerun()
-        if st.button("🔵 PALANGKARAYA", type="secondary", use_container_width=True, key="btn_top_plk"):
-            st.session_state.selected_nop = "Palangkaraya"
-            st.session_state.page = "📝 Form Request Dana"
-            st.rerun()
-
-    with col_m2:
-        st.markdown("""
-            <div class="sidata-mode-card">
-                <div class="sidata-mode-icon">📦</div>
-                <h3>Penyelesaian PJB & Report</h3>
-                <p>Akses cepat penyelesaian nota realisasi PJB operasional dan generator laporan progress WA.</p>
-            </div>
-        """, unsafe_allow_html=True)
-        if st.button("✅ MASUK FORM PJB OPERASIONAL", type="secondary", use_container_width=True, key="btn_top_pjb"):
-            st.session_state.page = "✅ Form PJB Operasional"
-            st.rerun()
-        if st.button("📝 REPORT LAPANGAN (UPDATE WA)", type="secondary", use_container_width=True, key="btn_top_wa"):
-            st.session_state.page = "📝 Report Lapangan"
-            st.rerun()
-
-    with col_m3:
-        st.markdown("""
-            <div class="sidata-mode-card">
-                <div class="sidata-mode-icon">🔐</div>
-                <h3>Mode Admin</h3>
-                <p>Akses khusus operasional untuk validasi PJB, manajemen kas, master tiket PM, dan analisa grafik.</p>
-            </div>
-        """, unsafe_allow_html=True)
-        if not st.session_state.admin_logged_in:
-            pass_input = st.text_input("Kata Sandi Admin:", type="password", placeholder="Masukkan Sandi...", key="pwd_admin_card")
-            if st.button("🔓 LOGIN ADMIN", type="primary", use_container_width=True, key="btn_login_admin"):
-                if pass_input in AUTHORIZED_PASSWORDS:
-                    st.session_state.admin_logged_in = True
-                    st.rerun()
-                else:
-                    st.error("❌ Kata Sandi Admin Salah!")
-        else:
-            st.success("✅ Mode Admin Terbuka")
-            if st.button("🔒 KELUAR MODE ADMIN", type="primary", use_container_width=True, key="btn_logout_admin"):
-                st.session_state.admin_logged_in = False
-                st.rerun()
-
-    # PANEL MENU ADMIN (MUNCUL OTOMATIS SAAT LOGIN ADMIN BERHASIL)
-    if st.session_state.admin_logged_in:
-        st.markdown("<hr style='margin: 35px 0 25px 0; border-color: #CBD5E1;'>", unsafe_allow_html=True)
-        st.markdown("<div style='text-align:center; font-size:1.45rem; font-weight:800; color:#1E293B !important; margin-bottom:20px;'>🛡️ Panel Kendali Khusus Admin</div>", unsafe_allow_html=True)
-        ca1, ca2, ca3 = st.columns(3, gap="medium")
-        with ca1:
-            if st.button("🛡️ APPROVAL CENTER (Validasi PJB)", type="secondary", use_container_width=True): st.session_state.page = "🛡️ Approval Center"; st.rerun()
-            if st.button("🏦 MANAJEMEN KAS & DISTRIBUSI", type="secondary", use_container_width=True): st.session_state.page = "🏦 Manajemen Kas & Distribusi"; st.rerun()
-        with ca2:
-            if st.button("👀 REQ & PJB MONITORING (Daily)", type="primary", use_container_width=True): st.session_state.page = "👀 Request & PJB Monitoring"; st.rerun()
-            if st.button("📈 LIVE MONITORING (Analisa)", type="secondary", use_container_width=True): st.session_state.page = "📈 Live Monitoring"; st.rerun()
-        with ca3:
-            if st.button("🎫 MASTER TIKET PM BULANAN", type="secondary", use_container_width=True): st.session_state.page = "🎫 Master Tiket PM"; st.rerun()
-            if st.button("🖨️ REPORT & AUTO PJB (Export PDF)", type="secondary", use_container_width=True): st.session_state.page = "🖨️ Auto PJB Report"; st.rerun()
-
-    # 4. PEMISAH AREA OPERASIONAL: NOP PALANGKARAYA vs NOP PANGKALAN BUN (PERSIS GAMBAR 2 SiDATA)
-    st.markdown("<hr style='margin: 40px 0 30px 0; border-color: #E2E8F0;'>", unsafe_allow_html=True)
-    st.markdown("<div style='text-align:center; font-size:1.55rem; font-weight:800; color:#1E293B !important; margin-bottom:25px;'>📍 Pilih Area Operasional untuk Membuka Menu Kerja</div>", unsafe_allow_html=True)
-
+    # 2. LANGSUNG 2 KARTU BESAR AREA OPERASIONAL (PALANGKARAYA vs PANGKALAN BUN) TANPA DUPLIKASI KARTU ATAS
     col_area1, col_area2 = st.columns(2, gap="large")
 
     with col_area1:
         st.markdown(f"""
             <div class="sidata-area-card">
                 <div>
-                    <div style="font-size: 3rem; line-height:1;">🗼</div>
+                    <div style="font-size: 3.1rem; line-height:1;">🗼</div>
                     <div class="sidata-pill-blue">AREA OPERASIONAL 1</div>
-                    <h3 style="font-size:1.5rem !important; font-weight:800 !important; color:#1E293B !important; margin:6px 0 12px 0 !important;">NOP PALANGKARAYA</h3>
-                    <p style="font-size:0.94rem !important; color:#475569 !important; line-height:1.6 !important;">
-                        Cluster Palangkaraya & Barito Raya — Pengajuan Dana Operasional (BBM, Akomodasi, Material), Penyelesaian Nota PJB, & Tracking Tiket.
-                    </p>
+                    <div class="sidata-card-heading">NOP PALANGKARAYA</div>
+                    <div class="sidata-card-desc">
+                        Cluster Palangkaraya & Barito Raya — Pengajuan Dana Operasional (BBM, Akomodasi, Material), Penyelesaian Nota PJB, & Update Report WA.
+                    </div>
                 </div>
                 <div class="sidata-stat-blue">📊 {len(MASTER_DATA['Palangkaraya']['names'])} Personel Terdaftar</div>
             </div>
@@ -1109,17 +1023,21 @@ if st.session_state.page == "🏠 Hub Menu Utama":
                 st.session_state.selected_nop = "Palangkaraya"
                 st.session_state.page = "✅ Form PJB Operasional"
                 st.rerun()
+        if st.button("📝 REPORT LAPANGAN (UPDATE WA) - PALANGKARAYA", type="secondary", use_container_width=True, key="wa_plk_card"):
+            st.session_state.selected_nop = "Palangkaraya"
+            st.session_state.page = "📝 Report Lapangan"
+            st.rerun()
 
     with col_area2:
         st.markdown(f"""
             <div class="sidata-area-card">
                 <div>
-                    <div style="font-size: 3rem; line-height:1;">📡</div>
+                    <div style="font-size: 3.1rem; line-height:1;">📡</div>
                     <div class="sidata-pill-red">AREA OPERASIONAL 2</div>
-                    <h3 style="font-size:1.5rem !important; font-weight:800 !important; color:#1E293B !important; margin:6px 0 12px 0 !important;">NOP PANGKALAN BUN</h3>
-                    <p style="font-size:0.94rem !important; color:#475569 !important; line-height:1.6 !important;">
-                        Cluster Pangkalanbun, Sampit & Ketapang — Pengajuan Dana Operasional (BBM, Akomodasi, Material), Penyelesaian Nota PJB, & Tracking Tiket.
-                    </p>
+                    <div class="sidata-card-heading">NOP PANGKALAN BUN</div>
+                    <div class="sidata-card-desc">
+                        Cluster Pangkalanbun, Sampit & Ketapang — Pengajuan Dana Operasional (BBM, Akomodasi, Material), Penyelesaian Nota PJB, & Update Report WA.
+                    </div>
                 </div>
                 <div class="sidata-stat-red">📊 {len(MASTER_DATA['Pangkalanbun']['names'])} Personel Terdaftar</div>
             </div>
@@ -1135,61 +1053,91 @@ if st.session_state.page == "🏠 Hub Menu Utama":
                 st.session_state.selected_nop = "Pangkalanbun"
                 st.session_state.page = "✅ Form PJB Operasional"
                 st.rerun()
+        if st.button("📝 REPORT LAPANGAN (UPDATE WA) - PANGKALAN BUN", type="primary", use_container_width=True, key="wa_pbu_card"):
+            st.session_state.selected_nop = "Pangkalanbun"
+            st.session_state.page = "📝 Report Lapangan"
+            st.rerun()
 
-    # 5. PANEL CEK STATUS TIKET PRIBADI & TIM (TETAP UTUH 100%)
-    st.markdown("<hr style='margin: 40px 0 25px 0; border-color: #E2E8F0;'>", unsafe_allow_html=True)
-    st.markdown("<div class='section-title'>🔍 CEK STATUS TIKET (PRIBADI & TIM)</div>", unsafe_allow_html=True)
-    cek_nop = st.selectbox("Pilih Area Wilayah", ["-- Pilih Area --"] + list(MASTER_DATA.keys()), key="cek_area_hub")
-    
-    if cek_nop != "-- Pilih Area --":
-        tab_pribadi, tab_tim_pending = st.tabs(["👤 Status Pribadi Anda", "🚨 Tim Belum PJB (Mulai Agustus)"])
-        
-        with tab_pribadi:
-            cek_nama = _orig_selectbox("Nama Petugas", ["-- Pilih Nama --"] + MASTER_DATA[cek_nop]["names"], key="cek_nama_hub")
-            if st.button("🔍 Cari Status Saya", type="secondary", use_container_width=True):
-                if cek_nama != "-- Pilih Nama --" and cek_nama != "":
-                    with st.spinner("Menarik data server..."):
+    # 3. BARIS BAWAH: CEK STATUS TIKET & MODE ADMIN (RAPI & RINGKAS)
+    st.markdown("<hr style='margin: 35px 0 25px 0; border-color: #E2E8F0;'>", unsafe_allow_html=True)
+    col_bot1, col_bot2 = st.columns([1.6, 1], gap="large")
+
+    with col_bot1:
+        st.markdown("<div class='section-title' style='margin-top:0 !important;'>🔍 Cek Status Tiket (Pribadi & Tim)</div>", unsafe_allow_html=True)
+        cek_nop = st.selectbox("Pilih Area Wilayah", ["-- Pilih Area --"] + list(MASTER_DATA.keys()), key="cek_area_hub")
+        if cek_nop != "-- Pilih Area --":
+            tab_pribadi, tab_tim_pending = st.tabs(["👤 Status Pribadi Anda", "🚨 Tim Belum PJB (Mulai Agustus)"])
+            with tab_pribadi:
+                cek_nama = _orig_selectbox("Nama Petugas", ["-- Pilih Nama --"] + MASTER_DATA[cek_nop]["names"], key="cek_nama_hub")
+                if st.button("🔍 Cari Status Saya", type="secondary", use_container_width=True):
+                    if cek_nama != "-- Pilih Nama --" and cek_nama != "":
+                        with st.spinner("Menarik data server..."):
+                            data_cek = fetch_spreadsheet_data(MASTER_DATA[cek_nop]["spreadsheet_id"])
+                            out_all, out_lock, aging_tickets, hist_tkt = get_user_tickets_status(cek_nama, data_cek[SHEET_REQUEST], data_cek[SHEET_PJB], data_cek[SHEET_APP])
+                        if hist_tkt:
+                            st.dataframe(pd.DataFrame(hist_tkt), hide_index=True, use_container_width=True)
+                            if aging_tickets: st.warning(f"🔔 Ada {len(aging_tickets)} request tertunda >3 Hari. Tolong segera di-PJB!")
+                            if out_all: st.error(f"⚠️ {len(out_all)} Request memblokir status Anda (Belum PJB / Pending Verifikasi).")
+                            else: st.success("✅ Seluruh tiket aman dan Approved!")
+                        else: st.info("Tidak ada data / belum pernah request.")
+            with tab_tim_pending:
+                st.info("Menampilkan daftar tiket tim yang masih gantung mulai dari Agustus 2026 dst.")
+                if st.button("🚨 Tarik Data Tim Belum PJB", use_container_width=True, type="primary"):
+                    with st.spinner("Memindai seluruh data tim wilayah ini..."):
                         data_cek = fetch_spreadsheet_data(MASTER_DATA[cek_nop]["spreadsheet_id"])
-                        out_all, out_lock, aging_tickets, hist_tkt = get_user_tickets_status(cek_nama, data_cek[SHEET_REQUEST], data_cek[SHEET_PJB], data_cek[SHEET_APP])
-                    
-                    if hist_tkt:
-                        st.dataframe(pd.DataFrame(hist_tkt), hide_index=True, use_container_width=True)
-                        if aging_tickets: st.warning(f"🔔 Ada {len(aging_tickets)} request tertunda >3 Hari. Tolong segera di-PJB!")
-                        if out_all: st.error(f"⚠️ {len(out_all)} Request memblokir status Anda (Belum PJB / Pending Verifikasi).")
-                        else: st.success("✅ Seluruh tiket aman dan Approved!")
-                    else: st.info("Tidak ada data / belum pernah request.")
-                    
-        with tab_tim_pending:
-            st.info("Fitur ini menampilkan daftar tiket tim yang masih gantung (belum disubmit) mulai dari Agustus 2026 dan seterusnya ke depan.")
-            if st.button("🚨 Tarik Data Tim Belum PJB", use_container_width=True, type="primary"):
-                with st.spinner("Memindai seluruh data tim wilayah ini..."):
-                    data_cek = fetch_spreadsheet_data(MASTER_DATA[cek_nop]["spreadsheet_id"])
-                    req_r, pjb_r, app_r = data_cek[SHEET_REQUEST], data_cek[SHEET_PJB], data_cek[SHEET_APP]
-                    
-                    list_blm_pjb = []
-                    for nm in MASTER_DATA[cek_nop]["names"]:
-                        if not nm.strip(): continue
-                        _, _, _, hist_tkt = get_user_tickets_status(nm, req_r, pjb_r, app_r)
-                        
-                        for h in hist_tkt:
-                            tgl_req = parse_date(h["Tanggal"])
-                            if tgl_req >= CUTOFF_DATE:
-                                if "Menunggu PJB" in h["Status"] or "Telat" in h["Status"]:
-                                    list_blm_pjb.append({
-                                        "Nama Petugas": nm,
-                                        "No Tiket / Request": h["Tiket"],
-                                        "Tanggal Request": h["Tanggal"],
-                                        "Status Terkini": h["Status"]
-                                    })
-                    
-                    if list_blm_pjb:
-                        st.error(f"⚠️ Ditemukan {len(list_blm_pjb)} tiket aktif yang belum dilaporkan!")
-                        st.dataframe(pd.DataFrame(list_blm_pjb), hide_index=True, use_container_width=True)
-                    else:
-                        st.success("🎉 Luar biasa! Seluruh tim di wilayah ini sudah menyelesaikan PJB aktif.")
+                        req_r, pjb_r, app_r = data_cek[SHEET_REQUEST], data_cek[SHEET_PJB], data_cek[SHEET_APP]
+                        list_blm_pjb = []
+                        for nm in MASTER_DATA[cek_nop]["names"]:
+                            if not nm.strip(): continue
+                            _, _, _, hist_tkt = get_user_tickets_status(nm, req_r, pjb_r, app_r)
+                            for h in hist_tkt:
+                                tgl_req = parse_date(h["Tanggal"])
+                                if tgl_req >= CUTOFF_DATE:
+                                    if "Menunggu PJB" in h["Status"] or "Telat" in h["Status"]:
+                                        list_blm_pjb.append({
+                                            "Nama Petugas": nm,
+                                            "No Tiket / Request": h["Tiket"],
+                                            "Tanggal Request": h["Tanggal"],
+                                            "Status Terkini": h["Status"]
+                                        })
+                        if list_blm_pjb:
+                            st.error(f"⚠️ Ditemukan {len(list_blm_pjb)} tiket aktif yang belum dilaporkan!")
+                            st.dataframe(pd.DataFrame(list_blm_pjb), hide_index=True, use_container_width=True)
+                        else:
+                            st.success("🎉 Luar biasa! Seluruh tim di wilayah ini sudah menyelesaikan PJB aktif.")
 
-    st.markdown("<div style='text-align: center; color: #64748B !important; font-size: 0.85rem; margin-top:50px; font-weight:600;'>Created by Okta Pradika<br>KUT SYSTEM - SiRAPI Enterprise Edition</div>", unsafe_allow_html=True)
+    with col_bot2:
+        st.markdown("<div class='section-title' style='margin-top:0 !important;'>🔐 Mode Admin</div>", unsafe_allow_html=True)
+        if not st.session_state.admin_logged_in:
+            pass_input = st.text_input("Kata Sandi Admin:", type="password", placeholder="Masukkan Sandi...", key="pwd_admin_card")
+            if st.button("🔓 LOGIN ADMIN", type="primary", use_container_width=True, key="btn_login_admin"):
+                if pass_input in AUTHORIZED_PASSWORDS:
+                    st.session_state.admin_logged_in = True
+                    st.rerun()
+                else:
+                    st.error("❌ Kata Sandi Admin Salah!")
+        else:
+            st.success("✅ Akses Mode Admin Aktif")
+            if st.button("🔒 KELUAR MODE ADMIN", type="primary", use_container_width=True, key="btn_logout_admin"):
+                st.session_state.admin_logged_in = False
+                st.rerun()
 
+    # PANEL KENDALI ADMIN (MUNCUL SAAT LOGIN ADMIN BERHASIL)
+    if st.session_state.admin_logged_in:
+        st.markdown("<hr style='margin: 25px 0 20px 0; border-color: #CBD5E1;'>", unsafe_allow_html=True)
+        st.markdown("<div class='section-title'>🛡️ Panel Kendali Khusus Admin</div>", unsafe_allow_html=True)
+        ca1, ca2, ca3 = st.columns(3, gap="medium")
+        with ca1:
+            if st.button("🛡️ APPROVAL CENTER (Validasi PJB)", type="secondary", use_container_width=True): st.session_state.page = "🛡️ Approval Center"; st.rerun()
+            if st.button("🏦 MANAJEMEN KAS & DISTRIBUSI", type="secondary", use_container_width=True): st.session_state.page = "🏦 Manajemen Kas & Distribusi"; st.rerun()
+        with ca2:
+            if st.button("👀 REQ & PJB MONITORING (Daily)", type="primary", use_container_width=True): st.session_state.page = "👀 Request & PJB Monitoring"; st.rerun()
+            if st.button("📈 LIVE MONITORING (Analisa)", type="secondary", use_container_width=True): st.session_state.page = "📈 Live Monitoring"; st.rerun()
+        with ca3:
+            if st.button("🎫 MASTER TIKET PM BULANAN", type="secondary", use_container_width=True): st.session_state.page = "🎫 Master Tiket PM"; st.rerun()
+            if st.button("🖨️ REPORT & AUTO PJB (Export PDF)", type="secondary", use_container_width=True): st.session_state.page = "🖨️ Auto PJB Report"; st.rerun()
+
+    st.markdown("<div style='text-align: center; color: #64748B !important; font-size: 0.85rem; margin-top:45px; font-weight:600;'>Created by Okta Pradika<br>KUT SYSTEM - SiRAPI Enterprise Edition</div>", unsafe_allow_html=True)
 # ==========================================
 # PAGE ADMIN: MASTER TIKET PM
 # ==========================================
