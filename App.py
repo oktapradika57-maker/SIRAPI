@@ -543,28 +543,31 @@ import gc
 def ai_nota_checker(uploaded_file, expected_nominal, expected_date=None):
     if uploaded_file is None: return True, "Tidak ada file"
     try:
-        img = Image.open(uploaded_file)
-        img.thumbnail((1200, 1200)) # Perkecil di RAM agar Tesseract tidak memakan memori besar
-        text = pytesseract.image_to_string(img).lower()
-        img.close()
-        del img
+        raw_bytes = uploaded_file.getvalue()
+        with Image.open(io.BytesIO(raw_bytes)) as img:
+            img.thumbnail((1200, 1200))
+            text = pytesseract.image_to_string(img).lower()
+        del raw_bytes
         gc.collect()
-        uploaded_file.seek(0)
         
+        # 1. Validasi Nominal
         angka_ditemukan = re.findall(r'\d+', text.replace('.', '').replace(',', ''))
         valid_nom = str(expected_nominal) in angka_ditemukan
         
+        # 2. Validasi Tanggal
         msg_tgl = ""
         valid_date = True
         if expected_date:
             try:
                 d_obj = datetime.strptime(str(expected_date), "%d/%m/%Y") if isinstance(expected_date, str) else expected_date
                 tgl1, tgl2, tgl3 = d_obj.strftime("%d/%m"), d_obj.strftime("%d-%m"), d_obj.strftime("%d")
+                
                 if tgl1 not in text and tgl2 not in text and tgl3 not in text:
                     valid_date = False
                     msg_tgl = f" (Tanggal {d_obj.strftime('%d/%m/%Y')} tidak terbaca AI pada Nota)"
             except: pass
             
+        # 3. Keputusan AI
         if not valid_nom and not valid_date:
             return False, f"Nominal Rp {expected_nominal:,.0f} & Tanggal tidak sesuai.{msg_tgl} Harap perbaiki nota!"
         elif not valid_nom:
@@ -574,41 +577,41 @@ def ai_nota_checker(uploaded_file, expected_nominal, expected_date=None):
             
         return True, "Valid"
     except Exception:
-        uploaded_file.seek(0)
         gc.collect()
         return True, "Bypass AI (Tesseract belum siap)"
 
 def ai_image_checker(uploaded_file, file_name_label):
     if uploaded_file is None:
         return True, "Tidak ada file"
-    try:
-        img = Image.open(uploaded_file)
-        exif = img.getexif()
-        img.close()
-        del img
-        uploaded_file.seek(0)
         
-        if exif:
-            suspicious_software = ['photoshop', 'canva', 'picsart', 'lightroom', 'snapseed', 'gimp', 'coreldraw', 'illustrator', 'capcut', 'pics', 'edit']
-            for tag_id, value in exif.items():
-                tag = ExifTags.TAGS.get(tag_id, tag_id)
-                if tag == 'Software':
-                    val_lower = str(value).lower()
-                    for sw in suspicious_software:
-                        if sw in val_lower:
-                            return False, f"🚨 FORENSIK DITOLAK: Gambar {file_name_label} terdeteksi sebagai hasil editan aplikasi ({value}). Sistem KUT mengharuskan foto murni dari kamera!"
+    try:
+        raw_bytes = uploaded_file.getvalue()
     except Exception:
-        uploaded_file.seek(0)
+        return True, "Aman"
+
+    # 1. Cek Forensik EXIF menggunakan salinan BytesIO (File asli tetap aman terbuka)
+    try:
+        with Image.open(io.BytesIO(raw_bytes)) as img:
+            exif = img.getexif()
+            if exif:
+                suspicious_software = ['photoshop', 'canva', 'picsart', 'lightroom', 'snapseed', 'gimp', 'coreldraw', 'illustrator', 'capcut', 'pics', 'edit']
+                for tag_id, value in exif.items():
+                    tag = ExifTags.TAGS.get(tag_id, tag_id)
+                    if tag == 'Software':
+                        val_lower = str(value).lower()
+                        for sw in suspicious_software:
+                            if sw in val_lower:
+                                return False, f"🚨 FORENSIK DITOLAK: Gambar {file_name_label} terdeteksi sebagai hasil editan aplikasi ({value}). Sistem KUT mengharuskan foto murni dari kamera!"
+    except Exception:
         pass
 
+    # 2. Cek Ketajaman / Blur Gambar dengan OpenCV
     try:
-        file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
+        file_bytes = np.frombuffer(raw_bytes, dtype=np.uint8)
         img_cv = cv2.imdecode(file_bytes, 1)
-        del file_bytes
-        uploaded_file.seek(0)
+        del file_bytes, raw_bytes
         
         if img_cv is not None:
-            # Perkecil ukuran array sebelum cek blur agar hemat RAM 80%
             h, w = img_cv.shape[:2]
             if max(h, w) > 1024:
                 scale = 1024.0 / max(h, w)
@@ -621,12 +624,10 @@ def ai_image_checker(uploaded_file, file_name_label):
             if blur_score < 40.0:  
                 return False, f"🌫️ KUALITAS DITOLAK: Gambar {file_name_label} terdeteksi SANGAT BLUR / BURAM oleh AI (Skor Ketajaman: {blur_score:.1f}). Mohon pastikan fokus kamera stabil dan tulisan terbaca jelas!"
     except Exception:
-        uploaded_file.seek(0)
         gc.collect()
         pass
         
     return True, "Aman"
-
 def ui_image_uploader(label, key=None):
     file = st.file_uploader(label, type=["jpg", "png", "jpeg"], key=key)
     if file:
@@ -888,23 +889,22 @@ def get_user_tickets_status(nama, req_rows, pjb_rows, app_rows):
     return outstanding_all, outstanding_lock, aging_tickets, sorted(history, key=lambda x: x["Status"], reverse=True)
 
 def upload_foto(file):
-    # Semua foto otomatis dikompresi ke ukuran optimal (maks 1280px) sebelum masuk RAM & Cloudinary
     return upload_foto_compressed(file)
 
 def upload_foto_compressed(file):
     if file is None: return ""
     try:
-        img = Image.open(file)
-        if img.mode != 'RGB': img = img.convert('RGB')
-        img.thumbnail((1280, 1280))
-        img_byte_arr = io.BytesIO()
-        img.save(img_byte_arr, format='JPEG', quality=65)
-        img.close()
-        del img
-        img_byte_arr.seek(0)
-        encoded = base64.b64encode(img_byte_arr.read()).decode('utf-8')
-        img_byte_arr.close()
-        del img_byte_arr
+        raw_bytes = file.getvalue()
+        with Image.open(io.BytesIO(raw_bytes)) as img:
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+            img.thumbnail((1280, 1280))
+            img_byte_arr = io.BytesIO()
+            img.save(img_byte_arr, format='JPEG', quality=65)
+            img_byte_arr.seek(0)
+            encoded = base64.b64encode(img_byte_arr.read()).decode('utf-8')
+            img_byte_arr.close()
+        del raw_bytes
         url = cloudinary.uploader.upload(f"data:image/jpeg;base64,{encoded}", resource_type="auto").get("secure_url")
         del encoded
         gc.collect()
