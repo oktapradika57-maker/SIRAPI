@@ -1,5 +1,4 @@
 import streamlit as st
-from streamlit_cookies_controller import CookieController
 import random
 import pandas as pd
 import gspread
@@ -662,60 +661,66 @@ def get_credentials():
 def get_gspread_client():
     return gspread.authorize(get_credentials())
 
-# Batasi max_entries=2 agar RAM Server Streamlit Cloud selalu lega
-@st.cache_data(ttl=300, max_entries=2, show_spinner=False)
+# Menggunakan @st.cache_resource (Zero-Copy di RAM) + Buang Baris Kosong Otomatis
+@st.cache_resource(ttl=300, show_spinner=False)
 def fetch_spreadsheet_data(spreadsheet_id):
     client = get_gspread_client().open_by_key(spreadsheet_id)
-    ws_names = [SHEET_REQUEST, SHEET_PJB, SHEET_UM, SHEET_DISTRIBUSI, SHEET_APP, "Rekap PJB", SHEET_TIKET_PM, SHEET_ABSENSI]
+    # Hanya tarik sheet yang benar-benar dipakai (SHEET_ABSENSI tidak perlu ditarik lagi)
+    ws_names = [SHEET_REQUEST, SHEET_PJB, SHEET_UM, SHEET_DISTRIBUSI, SHEET_APP, "Rekap PJB", SHEET_TIKET_PM]
     data = {}
     for name in ws_names:
-        try: data[name] = client.worksheet(name).get_all_values()
-        except: data[name] = []
+        try:
+            raw_rows = client.worksheet(name).get_all_values()
+            # FILTER PENTING: Buang ribuan baris kosong di bawah tabel agar RAM hemat 90%!
+            clean_rows = []
+            for r in raw_rows:
+                if any(str(cell).strip() != "" for cell in r):
+                    # Potong kolom kosong berlebih di sebelah kanan (maksimal 40 kolom)
+                    clean_rows.append(r[:40])
+            data[name] = clean_rows
+            del raw_rows
+        except Exception:
+            data[name] = []
     gc.collect()
     return data
 
-def update_pm_ticket_status(spreadsheet_id, tickets_to_update, new_status):
-    try:
-        client = get_gspread_client().open_by_key(spreadsheet_id)
-        ws = client.worksheet(SHEET_TIKET_PM)
-        rows = ws.get_all_values()
-        t_list = [str(t).strip().upper() for t in tickets_to_update]
-        for i, r in enumerate(rows):
-            if len(r) > 3 and str(r[3]).strip().upper() in t_list:
-                ws.update_cell(i + 1, 6, new_status)
-        fetch_spreadsheet_data.clear()
-    except Exception: pass
-
-@st.cache_data(ttl=1800, max_entries=1, show_spinner=False)
+# Gunakan @st.cache_resource untuk Excel Site ID & Nopol agar hanya dimuat 1x di RAM untuk semua user
+@st.cache_resource(ttl=3600, show_spinner=False)
 def load_excel_data():
     site_dict, site_list = {}, []
     try:
-        df_site_pky = pd.read_excel("Hasil_910_Site.xlsx").fillna(0)
+        df_site_pky = pd.read_excel("Hasil_910_Site.xlsx", usecols=['Site ID', 'Latitude Tujuan', 'Longtitude Tujuan']).dropna(subset=['Site ID']).fillna(0)
         try:
-            df_site_pbun = pd.read_excel("Site ID Sidata Pangkalanbun.xlsx").fillna(0)
+            df_site_pbun = pd.read_excel("Site ID Sidata Pangkalanbun.xlsx", usecols=['Site ID', 'Latitude Tujuan', 'Longtitude Tujuan']).dropna(subset=['Site ID']).fillna(0)
             df_site = pd.concat([df_site_pky, df_site_pbun], ignore_index=True)
+            del df_site_pbun
         except Exception:
             df_site = df_site_pky
+        del df_site_pky
+        
+        df_site['Site ID'] = df_site['Site ID'].astype(str).str.strip()
+        df_site = df_site[df_site['Site ID'] != ""]
         site_dict = df_site.set_index('Site ID')[['Latitude Tujuan', 'Longtitude Tujuan']].to_dict('index')
-        site_list = df_site['Site ID'].astype(str).tolist()
+        site_list = df_site['Site ID'].tolist()
         del df_site
     except Exception: pass
     
     tim_dict, list_nopol_csv = {}, []
     try:
-        df_tim = pd.read_excel("lonlat tim.xlsx").fillna(0)
+        df_tim = pd.read_excel("lonlat tim.xlsx").dropna(how='all').fillna(0)
         col_nama = next((c for c in df_tim.columns if 'nama' in c.lower()), None)
         col_lat = next((c for c in df_tim.columns if 'lat' in c.lower()), None)
         col_lon = next((c for c in df_tim.columns if 'lon' in c.lower() or 'lng' in c.lower()), None)
         if col_nama and col_lat and col_lon:
             for _, row in df_tim.iterrows():
                 nama_key = str(row[col_nama]).strip().upper()
-                tim_dict[nama_key] = {'Latitude': row.get(col_lat, 0), 'Longtitude': row.get(col_lon, 0)}
+                if nama_key and nama_key != "0":
+                    tim_dict[nama_key] = {'Latitude': row.get(col_lat, 0), 'Longtitude': row.get(col_lon, 0)}
         del df_tim
     except Exception: pass
         
     try:
-        df_nopol = pd.read_csv("DATA NOPOL MOBIL DAN GENSET NOP PLK.csv", sep=None, engine='python')
+        df_nopol = pd.read_csv("DATA NOPOL MOBIL DAN GENSET NOP PLK.csv", sep=None, engine='python').dropna(how='all')
         if 'NOPOL' not in df_nopol.columns and 'PIC' not in df_nopol.columns:
             df_nopol.columns = df_nopol.iloc[0].astype(str).str.strip()
             df_nopol = df_nopol[1:].reset_index(drop=True)
@@ -734,7 +739,7 @@ def load_excel_data():
     except Exception: pass
 
     try:
-        df_tim_pbun = pd.read_excel("NAMA NOP PANGKALANBUN & NOPOL MBP.xlsx").fillna("")
+        df_tim_pbun = pd.read_excel("NAMA NOP PANGKALANBUN & NOPOL MBP.xlsx").dropna(how='all').fillna("")
         for _, row in df_tim_pbun.iterrows():
             nama = str(row['NAMA']).strip().upper()
             if nama and nama not in ["NAN", ""]:
@@ -754,7 +759,7 @@ def load_excel_data():
     try:
         for nik_file in ["NIK NOP PLK.xlsx", "Database_NIK.xlsx"]:
             if os.path.exists(nik_file):
-                df_nik = pd.read_excel(nik_file).fillna("")
+                df_nik = pd.read_excel(nik_file).dropna(how='all').fillna("")
                 col_nama = next((c for c in df_nik.columns if 'nama' in c.lower()), None)
                 col_nik = next((c for c in df_nik.columns if 'nik' in c.lower() or 'nip' in c.lower()), None)
                 if col_nama and col_nik:
