@@ -10,16 +10,16 @@ import requests
 import math
 import os
 import tempfile
+import gc
+from urllib.parse import quote
 from google.oauth2.service_account import Credentials
 from datetime import datetime, timedelta
 import time
 import re
 from collections import defaultdict
-from PIL import Image, ExifTags
+from PIL import Image
 import io
-import cv2
 import numpy as np
-import pytesseract
 
 # ==========================================
 # 0. KONFIGURASI HALAMAN (WAJIB BARIS PERTAMA!)
@@ -268,6 +268,46 @@ st.markdown("""
         color: #FFFFFF !important;
         -webkit-text-fill-color: #FFFFFF !important;
         font-weight: 700 !important;
+    }
+
+    /* Tombol Link Eksternal SiDATA */
+    .btn-sidata-blue {
+        display: block;
+        width: 100%;
+        text-align: center;
+        background: linear-gradient(135deg, #0EA5E9 0%, #0284C7 100%);
+        color: #FFFFFF !important;
+        padding: 13px 18px;
+        border-radius: 10px;
+        font-weight: 700;
+        font-size: 0.92rem;
+        text-decoration: none !important;
+        box-shadow: 0 6px 16px rgba(2, 132, 199, 0.22);
+        margin-top: 6px;
+        transition: all 0.2s ease;
+    }
+    .btn-sidata-blue:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 20px rgba(2, 132, 199, 0.32);
+    }
+    .btn-sidata-red {
+        display: block;
+        width: 100%;
+        text-align: center;
+        background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
+        color: #FFFFFF !important;
+        padding: 13px 18px;
+        border-radius: 10px;
+        font-weight: 700;
+        font-size: 0.92rem;
+        text-decoration: none !important;
+        box-shadow: 0 6px 16px rgba(239, 68, 68, 0.22);
+        margin-top: 6px;
+        transition: all 0.2s ease;
+    }
+    .btn-sidata-red:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 20px rgba(239, 68, 68, 0.32);
     }
 
     /* 7. FILE UPLOADER, EXPANDER & TABS */
@@ -536,81 +576,19 @@ MASTER_DATA = {
 LIST_KEPERLUAN = ["", "Tshoot", "Backup", "Support", "PM", "Program BCP", "Program Quikwin", "Program G348T", "Pengiriman Material SPMS", "Pembelian Material","Transportasi Air"]
 
 # ==========================================
-# 2. FUNGSI INTI & CACHING
+# 2. FUNGSI INTI & CACHING (HEMAT RAM & TANPA AI CHECKER BERAT)
 # ==========================================
 def ai_nota_checker(uploaded_file, expected_nominal, expected_date=None):
-    if uploaded_file is None: return True, "Tidak ada file"
-    try:
-        img = Image.open(uploaded_file)
-        text = pytesseract.image_to_string(img).lower()
-        uploaded_file.seek(0)
-        angka_ditemukan = re.findall(r'\d+', text.replace('.', '').replace(',', ''))
-        valid_nom = str(expected_nominal) in angka_ditemukan
-        msg_tgl = ""
-        valid_date = True
-        if expected_date:
-            try:
-                d_obj = datetime.strptime(str(expected_date), "%d/%m/%Y") if isinstance(expected_date, str) else expected_date
-                tgl1, tgl2, tgl3 = d_obj.strftime("%d/%m"), d_obj.strftime("%d-%m"), d_obj.strftime("%d")
-                if tgl1 not in text and tgl2 not in text and tgl3 not in text:
-                    valid_date = False
-                    msg_tgl = f" (Tanggal {d_obj.strftime('%d/%m/%Y')} tidak terbaca AI pada Nota)"
-            except: pass
-        if not valid_nom and not valid_date:
-            return False, f"Nominal Rp {expected_nominal:,.0f} & Tanggal tidak sesuai.{msg_tgl} Harap perbaiki nota!"
-        elif not valid_nom:
-            return False, f"Nominal Rp {expected_nominal:,.0f} tidak ditemukan pada foto Nota."
-        elif not valid_date:
-            return False, f"Peringatan AI:{msg_tgl}. Harap gunakan nota dengan tanggal yang valid & jelas."
-        return True, "Valid"
-    except Exception:
-        uploaded_file.seek(0)
-        return True, "Bypass AI (Tesseract belum siap)"
+    # Pengecekan AI OCR dinonaktifkan agar upload cepat & hemat RAM
+    return True, "Valid"
 
 def ai_image_checker(uploaded_file, file_name_label):
-    if uploaded_file is None:
-        return True, "Tidak ada file"
-    try:
-        img = Image.open(uploaded_file)
-        exif = img.getexif()
-        uploaded_file.seek(0)
-        if exif:
-            suspicious_software = ['photoshop', 'canva', 'picsart', 'lightroom', 'snapseed', 'gimp', 'coreldraw', 'illustrator', 'capcut', 'pics', 'edit']
-            for tag_id, value in exif.items():
-                tag = ExifTags.TAGS.get(tag_id, tag_id)
-                if tag == 'Software':
-                    val_lower = str(value).lower()
-                    for sw in suspicious_software:
-                        if sw in val_lower:
-                            return False, f"🚨 FORENSIK DITOLAK: Gambar {file_name_label} terdeteksi sebagai hasil editan aplikasi ({value}). Sistem KUT mengharuskan foto murni dari kamera!"
-    except Exception:
-        uploaded_file.seek(0)
-        pass
-    try:
-        file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
-        img_cv = cv2.imdecode(file_bytes, 1)
-        uploaded_file.seek(0)
-        if img_cv is not None:
-            gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
-            blur_score = cv2.Laplacian(gray, cv2.CV_64F).var()
-            if blur_score < 40.0:  
-                return False, f"🌫️ KUALITAS DITOLAK: Gambar {file_name_label} terdeteksi SANGAT BLUR / BURAM oleh AI (Skor Ketajaman: {blur_score:.1f}). Mohon pastikan fokus kamera stabil dan tulisan terbaca jelas!"
-    except Exception:
-        uploaded_file.seek(0)
-        pass
+    # Pengecekan AI Forensik/Blur dinonaktifkan agar upload cepat & hemat RAM
     return True, "Aman"
 
 def ui_image_uploader(label, key=None):
-    file = st.file_uploader(label, type=["jpg", "png", "jpeg"], key=key)
-    if file:
-        with st.status("🤖 AI Memindai Kualitas & Metadata Gambar...", expanded=True) as status:
-            is_valid, msg = ai_image_checker(file, label)
-            if is_valid:
-                status.update(label="✅ Lolos Uji AI: Gambar Asli & Jelas", state="complete")
-            else:
-                status.update(label="🚨 Peringatan AI: Gambar Bermasalah", state="error")
-                st.error(msg)
-    return file
+    # Langsung upload tanpa spinner pemindaian AI
+    return st.file_uploader(label, type=["jpg", "png", "jpeg"], key=key)
 
 def parse_date(date_str):
     try: return datetime.strptime(str(date_str).strip(), "%d/%m/%Y").date()
@@ -680,19 +658,25 @@ def get_credentials():
     with open("credentials.json", "w") as f: f.write(st.secrets["gcp_json"])
     return Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
 
-@st.cache_data(ttl=600)
+@st.cache_resource
+def get_gspread_client():
+    return gspread.authorize(get_credentials())
+
+# Batasi max_entries=2 agar RAM Server Streamlit Cloud selalu lega
+@st.cache_data(ttl=300, max_entries=2, show_spinner=False)
 def fetch_spreadsheet_data(spreadsheet_id):
-    client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
+    client = get_gspread_client().open_by_key(spreadsheet_id)
     ws_names = [SHEET_REQUEST, SHEET_PJB, SHEET_UM, SHEET_DISTRIBUSI, SHEET_APP, "Rekap PJB", SHEET_TIKET_PM, SHEET_ABSENSI]
     data = {}
     for name in ws_names:
         try: data[name] = client.worksheet(name).get_all_values()
         except: data[name] = []
+    gc.collect()
     return data
 
 def update_pm_ticket_status(spreadsheet_id, tickets_to_update, new_status):
     try:
-        client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
+        client = get_gspread_client().open_by_key(spreadsheet_id)
         ws = client.worksheet(SHEET_TIKET_PM)
         rows = ws.get_all_values()
         t_list = [str(t).strip().upper() for t in tickets_to_update]
@@ -702,7 +686,7 @@ def update_pm_ticket_status(spreadsheet_id, tickets_to_update, new_status):
         fetch_spreadsheet_data.clear()
     except Exception: pass
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=1800, max_entries=1, show_spinner=False)
 def load_excel_data():
     site_dict, site_list = {}, []
     try:
@@ -714,6 +698,7 @@ def load_excel_data():
             df_site = df_site_pky
         site_dict = df_site.set_index('Site ID')[['Latitude Tujuan', 'Longtitude Tujuan']].to_dict('index')
         site_list = df_site['Site ID'].astype(str).tolist()
+        del df_site
     except Exception: pass
     
     tim_dict, list_nopol_csv = {}, []
@@ -726,6 +711,7 @@ def load_excel_data():
             for _, row in df_tim.iterrows():
                 nama_key = str(row[col_nama]).strip().upper()
                 tim_dict[nama_key] = {'Latitude': row.get(col_lat, 0), 'Longtitude': row.get(col_lon, 0)}
+        del df_tim
     except Exception: pass
         
     try:
@@ -744,6 +730,7 @@ def load_excel_data():
                     if pic_name and pic_name not in tim_dict: tim_dict[pic_name] = {'Latitude': 0, 'Longtitude': 0}
                     if pic_name and nopol_val and nopol_val not in ["nan", "0", "None"]: 
                         tim_dict[pic_name]['NOPOL'] = nopol_val
+        del df_nopol
     except Exception: pass
 
     try:
@@ -760,6 +747,7 @@ def load_excel_data():
                     tim_dict[nama]['NOPOL'] = nopol
                     if nopol not in list_nopol_csv:
                         list_nopol_csv.append(nopol)
+        del df_tim_pbun
     except Exception: pass
     
     nik_dict = {}
@@ -775,8 +763,10 @@ def load_excel_data():
                         nik_val = str(row[col_nik]).strip()
                         if nm_key and nik_val and nik_val not in ["nan", "0", "None"]:
                             nik_dict[nm_key] = nik_val
+                del df_nik
     except Exception: pass
-        
+    
+    gc.collect()
     return site_dict, site_list, tim_dict, list_nopol_csv, nik_dict
 
 def get_last_indicator(plat_raw, jns, pjb_r):
@@ -848,26 +838,31 @@ def get_user_tickets_status(nama, req_rows, pjb_rows, app_rows):
     return outstanding_all, outstanding_lock, aging_tickets, sorted(history, key=lambda x: x["Status"], reverse=True)
 
 def upload_foto(file):
-    if file is None: return ""
-    try:
-        encoded = base64.b64encode(file.getvalue()).decode('utf-8')
-        return cloudinary.uploader.upload(f"data:{file.type};base64,{encoded}", resource_type="auto").get("secure_url") 
-    except Exception: return ""
+    return upload_foto_compressed(file)
 
 def upload_foto_compressed(file):
     if file is None: return ""
     try:
-        img = Image.open(file)
-        if img.mode != 'RGB': img = img.convert('RGB')
-        img.thumbnail((1024, 1024))
-        img_byte_arr = io.BytesIO()
-        img.save(img_byte_arr, format='JPEG', quality=60)
-        img_byte_arr.seek(0)
-        encoded = base64.b64encode(img_byte_arr.read()).decode('utf-8')
-        return cloudinary.uploader.upload(f"data:image/jpeg;base64,{encoded}", resource_type="auto").get("secure_url") 
+        raw_bytes = file.getvalue()
+        with Image.open(io.BytesIO(raw_bytes)) as img:
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+            img.thumbnail((1280, 1280))
+            img_byte_arr = io.BytesIO()
+            img.save(img_byte_arr, format='JPEG', quality=65)
+            img_byte_arr.seek(0)
+            encoded = base64.b64encode(img_byte_arr.read()).decode('utf-8')
+            img_byte_arr.close()
+        del raw_bytes
+        url = cloudinary.uploader.upload(f"data:image/jpeg;base64,{encoded}", resource_type="auto").get("secure_url")
+        del encoded
+        gc.collect()
+        return url
     except Exception:
+        gc.collect()
         return ""
 
+@st.cache_data(ttl=3600, max_entries=1, show_spinner=False)
 def get_local_img_base64(filepath):
     try:
         with open(filepath, "rb") as image_file:
@@ -878,7 +873,7 @@ def get_local_img_base64(filepath):
 
 def append_data(sheet_name, data, spreadsheet_id):
     try:
-        client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
+        client = get_gspread_client().open_by_key(spreadsheet_id)
         ws = client.worksheet(sheet_name)
         safe_data = [str(x) if x is not None else "" for x in data]
         ws.append_row(safe_data, value_input_option="USER_ENTERED", table_range="A1")
@@ -890,7 +885,7 @@ def append_data(sheet_name, data, spreadsheet_id):
 
 def update_approval_status(spreadsheet_id, row_index, new_status, remark="-"):
     try:
-        client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
+        client = get_gspread_client().open_by_key(spreadsheet_id)
         ws = client.worksheet(SHEET_APP)
         ws.update_cell(row_index + 1, 6, new_status)
         ws.update_cell(row_index + 1, 7, remark)
@@ -927,6 +922,7 @@ if 'admin_logged_in' not in st.session_state: st.session_state.admin_logged_in =
 if 'pdf_ready' not in st.session_state: st.session_state.pdf_ready = False
 if 'logged_in_user' not in st.session_state: st.session_state.logged_in_user = ""
 if 'selected_nop' not in st.session_state: st.session_state.selected_nop = ""
+if 'req_wa_ready' not in st.session_state: st.session_state.req_wa_ready = ""
 
 _orig_selectbox = st.selectbox
 def _smart_selectbox(label, options, index=0, *args, **kwargs):
@@ -944,6 +940,7 @@ if st.session_state.page != "🏠 Hub Menu Utama":
         if st.button("⬅️ KEMBALI KE BERANDA UTAMA", use_container_width=True):
             st.session_state.page = "🏠 Hub Menu Utama"
             st.session_state.pdf_ready = False
+            st.session_state.req_wa_ready = ""
             st.rerun()
     with c_nav2:
         if st.session_state.selected_nop:
@@ -954,7 +951,7 @@ if st.session_state.page != "🏠 Hub Menu Utama":
 # ==========================================
 # 4. SIDEBAR NAVIGATION & SHORTCUT SIDATA
 # ==========================================
-list_menu_sidebar = ["🏠 Hub Menu Utama", "📝 Form Request Dana", "✅ Form PJB Operasional", "📝 Report Lapangan"]
+list_menu_sidebar = ["🏠 Hub Menu Utama", "📝 Form Request Dana", "✅ Form PJB Operasional"]
 
 def ubah_menu():
     st.session_state.page = st.session_state.sb_menu
@@ -974,7 +971,7 @@ st.sidebar.markdown(
 )
 
 # ==========================================
-# PAGE 0: HUB MENU UTAMA (LANGSUNG AREA OPERASIONAL & LOGO PRESISI TENGAH)
+# PAGE 0: HUB MENU UTAMA (LANGSUNG AREA OPERASIONAL & ARAHAN SIDATA)
 # ==========================================
 if st.session_state.page == "🏠 Hub Menu Utama":
     
@@ -991,11 +988,11 @@ if st.session_state.page == "🏠 Hub Menu Utama":
                 {logo_html}
             </div>
             <div class="sidata-main-title">SiRAPI NOP PLK & PBU Dashboard</div>
-            <div class="sidata-main-sub">📍 Pilih Area Operasional untuk Membuka Menu Request Dana, Penyelesaian PJB & Report</div>
+            <div class="sidata-main-sub">📍 Pilih Area Operasional untuk Membuka Menu Request Dana, Penyelesaian PJB & Portal SiDATA</div>
         </div>
     """, unsafe_allow_html=True)
 
-    # 2. LANGSUNG 2 KARTU BESAR AREA OPERASIONAL (PALANGKARAYA vs PANGKALAN BUN) TANPA DUPLIKASI KARTU ATAS
+    # 2. LANGSUNG 2 KARTU BESAR AREA OPERASIONAL (PALANGKARAYA vs PANGKALAN BUN)
     col_area1, col_area2 = st.columns(2, gap="large")
 
     with col_area1:
@@ -1006,7 +1003,7 @@ if st.session_state.page == "🏠 Hub Menu Utama":
                     <div class="sidata-pill-blue">AREA OPERASIONAL 1</div>
                     <div class="sidata-card-heading">NOP PALANGKARAYA</div>
                     <div class="sidata-card-desc">
-                        Cluster Palangkaraya & Barito Raya — Pengajuan Dana Operasional (BBM, Akomodasi, Material), Penyelesaian Nota PJB, & Update Report WA.
+                        Cluster Palangkaraya & Barito Raya — Pengajuan Dana Operasional (BBM, Akomodasi, Material), Penyelesaian Nota PJB, & Pelaporan SiDATA.
                     </div>
                 </div>
                 <div class="sidata-stat-blue">📊 {len(MASTER_DATA['Palangkaraya']['names'])} Personel Terdaftar</div>
@@ -1016,6 +1013,7 @@ if st.session_state.page == "🏠 Hub Menu Utama":
         with b_plk1:
             if st.button("🔵 REQUEST DANA PLK", type="secondary", use_container_width=True, key="req_plk_card"):
                 st.session_state.selected_nop = "Palangkaraya"
+                st.session_state.req_wa_ready = ""
                 st.session_state.page = "📝 Form Request Dana"
                 st.rerun()
         with b_plk2:
@@ -1023,10 +1021,10 @@ if st.session_state.page == "🏠 Hub Menu Utama":
                 st.session_state.selected_nop = "Palangkaraya"
                 st.session_state.page = "✅ Form PJB Operasional"
                 st.rerun()
-        if st.button("📝 REPORT LAPANGAN (UPDATE WA) - PALANGKARAYA", type="secondary", use_container_width=True, key="wa_plk_card"):
-            st.session_state.selected_nop = "Palangkaraya"
-            st.session_state.page = "📝 Report Lapangan"
-            st.rerun()
+        st.markdown(
+            '<a href="https://sidata.streamlit.app/" target="_blank" class="btn-sidata-blue">📊 ISI LAPORAN KE SIDATA (PALANGKARAYA)</a>',
+            unsafe_allow_html=True
+        )
 
     with col_area2:
         st.markdown(f"""
@@ -1036,7 +1034,7 @@ if st.session_state.page == "🏠 Hub Menu Utama":
                     <div class="sidata-pill-red">AREA OPERASIONAL 2</div>
                     <div class="sidata-card-heading">NOP PANGKALAN BUN</div>
                     <div class="sidata-card-desc">
-                        Cluster Pangkalanbun, Sampit & Ketapang — Pengajuan Dana Operasional (BBM, Akomodasi, Material), Penyelesaian Nota PJB, & Update Report WA.
+                        Cluster Pangkalanbun, Sampit & Ketapang — Pengajuan Dana Operasional (BBM, Akomodasi, Material), Penyelesaian Nota PJB, & Pelaporan SiDATA.
                     </div>
                 </div>
                 <div class="sidata-stat-red">📊 {len(MASTER_DATA['Pangkalanbun']['names'])} Personel Terdaftar</div>
@@ -1046,6 +1044,7 @@ if st.session_state.page == "🏠 Hub Menu Utama":
         with b_pbu1:
             if st.button("🔴 REQUEST DANA PBU", type="primary", use_container_width=True, key="req_pbu_card"):
                 st.session_state.selected_nop = "Pangkalanbun"
+                st.session_state.req_wa_ready = ""
                 st.session_state.page = "📝 Form Request Dana"
                 st.rerun()
         with b_pbu2:
@@ -1053,12 +1052,12 @@ if st.session_state.page == "🏠 Hub Menu Utama":
                 st.session_state.selected_nop = "Pangkalanbun"
                 st.session_state.page = "✅ Form PJB Operasional"
                 st.rerun()
-        if st.button("📝 REPORT LAPANGAN (UPDATE WA) - PANGKALAN BUN", type="primary", use_container_width=True, key="wa_pbu_card"):
-            st.session_state.selected_nop = "Pangkalanbun"
-            st.session_state.page = "📝 Report Lapangan"
-            st.rerun()
+        st.markdown(
+            '<a href="https://sidata.streamlit.app/" target="_blank" class="btn-sidata-red">📊 ISI LAPORAN KE SIDATA (PANGKALAN BUN)</a>',
+            unsafe_allow_html=True
+        )
 
-    # 3. BARIS BAWAH: CEK STATUS TIKET & MODE ADMIN (RAPI & RINGKAS)
+    # 3. BARIS BAWAH: CEK STATUS TIKET & MODE ADMIN
     st.markdown("<hr style='margin: 35px 0 25px 0; border-color: #E2E8F0;'>", unsafe_allow_html=True)
     col_bot1, col_bot2 = st.columns([1.6, 1], gap="large")
 
@@ -1137,8 +1136,7 @@ if st.session_state.page == "🏠 Hub Menu Utama":
             if st.button("🎫 MASTER TIKET PM BULANAN", type="secondary", use_container_width=True): st.session_state.page = "🎫 Master Tiket PM"; st.rerun()
             if st.button("🖨️ REPORT & AUTO PJB (Export PDF)", type="secondary", use_container_width=True): st.session_state.page = "🖨️ Auto PJB Report"; st.rerun()
 
-    st.markdown("<div style='text-align: center; color: #64748B !important; font-size: 0.85rem; margin-top:45px; font-weight:600;'>Created by Okta Pradika<br>KUT SYSTEM - SiRAPI Enterprise Edition</div>", unsafe_allow_html=True)
-# ==========================================
+    st.markdown("<div style='text-align: center; color: #64748B !important; font-size: 0.85rem; margin-top:45px; font-weight:600;'>Created by Okta Pradika<br>KUT SYSTEM - SiRAPI Enterprise Edition</div>", unsafe_allow_html=True)# ==========================================
 # PAGE ADMIN: MASTER TIKET PM
 # ==========================================
 elif st.session_state.page == "🎫 Master Tiket PM":
@@ -1745,9 +1743,6 @@ elif st.session_state.page == "📝 Form Request Dana":
                         st.error("❌ PENGIRIMAN DITOLAK: Anda mencentang Pengiriman Material, WAJIB mengisi Nama Module dan Site ID Tujuan di bagian atas!")
                         st.stop()
                     
-                
-                    # ---------------------------------------------
-                    
                     if form_invalid or not sub_requests or nominal_tf <= 0:
                         st.error("❌ Mohon lengkapi formulir (Rincian Dana, Nominal, dan Tiket wajib diisi)!")
                         st.stop()
@@ -1771,40 +1766,79 @@ elif st.session_state.page == "📝 Form Request Dana":
                         ts_now = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
                         tgl_str = tanggal.strftime("%d/%m/%Y")
                         
-                        try:
-                            for req in sub_requests:
-                                desc_final = deskripsi
-                                if tim_bareng: desc_final += f"\n\n[Tim: {', '.join(tim_bareng)}]"
-                                if req['tipe'] == 'UM': desc_final += f"\n\n[REQ AKOMODASI: {req['kategori']} | {req['hari']} Hari @ Rp {req['nom_um']:,.0f}/hari = Rp {req['kebutuhan']:,.0f} | Jarak Peta: {jarak_km_pp:.1f} KM]"
-                                elif req['tipe'] == 'Inap': desc_final += f"\n\n[REQ PENGINAPAN: {req['hari']} Malam @ Rp {req['nom_inap']:,.0f}/malam = Rp {req['kebutuhan']:,.0f} | Jarak Peta: {jarak_km_pp:.1f} KM]"
-                                
-                                data_req = [
-                                    ts_now, tgl_str, nop, req['tiket'], cluster, nama, role, site_id, keperluan, 
-                                    req['kebutuhan'], req['kategori'], desc_final, str(req['indikator']), 
-                                    jarak_final_text, lat_berangkat, long_berangkat, req['plat'], 
-                                    rek_penerima, no_rek, nominal_tf, url_km, url_evidance, lat_tujuan, long_tujuan
-                                ]
-                                append_data(SHEET_REQUEST, data_req, target_ss)
-                                if req['plat'] and req['plat'] not in list_nopol_bersih: save_new_nopol_to_csv(req['plat'])
-                                    
-                            if pm_selected_list: update_pm_ticket_status(target_ss, pm_selected_list, "REQUESTED")
-                                
-                            import random
-                            kata_motivasi = [
-                                "Kejujuran adalah kunci keberhasilan. Terima kasih atas kerja kerasmu hari ini! 💪",
-                                "Jujur dalam bekerja demi senyum keluarga di rumah. Keringatmu adalah ibadah! 🏡✨",
-                                "Satu kejujuran bernilai lebih dari seribu kebohongan. Lanjutkan dedikasimu! 🌟",
-                                "Tetap semangat! Hasil yang berkah berasal dari proses yang jujur dan transparan. 🤝"
+                        rincian_wa_items = []
+                        for idx_r, req in enumerate(sub_requests, 1):
+                            desc_final = deskripsi
+                            if tim_bareng: desc_final += f"\n\n[Tim: {', '.join(tim_bareng)}]"
+                            if req['tipe'] == 'UM': desc_final += f"\n\n[REQ AKOMODASI: {req['hari']} Hari @ Rp {req['nom_um']:,.0f}/hari = Rp {req['kebutuhan']:,.0f}]"
+                            elif req['tipe'] == 'Inap': desc_final += f"\n\n[REQ PENGINAPAN: {req['hari']} Malam @ Rp {req['nom_inap']:,.0f}/malam = Rp {req['kebutuhan']:,.0f}]"
+                            
+                            data_req = [
+                                ts_now, tgl_str, nop, req['tiket'], cluster, nama, role, site_id, keperluan, 
+                                req['kebutuhan'], req['kategori'], desc_final, str(req['indikator']), 
+                                jarak_final_text, lat_berangkat, long_berangkat, req['plat'], 
+                                rek_penerima, no_rek, nominal_tf, url_km, url_evidance, lat_tujuan, long_tujuan
                             ]
-                            st.toast(f"💡 {random.choice(kata_motivasi)}", icon="✨")
-                            st.success(f"🎉 Berhasil memecah {len(sub_requests)} tiket terpisah!")
-                            time.sleep(3)
-                            st.session_state.page = "🏠 Hub Menu Utama"
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"⚠️ Gagal menyimpan ke Spreadsheet. Error: {e}")
-                            st.stop()
+                            append_data(SHEET_REQUEST, data_req, target_ss)
+                            if req['plat'] and req['plat'] not in list_nopol_bersih: save_new_nopol_to_csv(req['plat'])
 
+                            # Rangkum rincian item untuk WA TANPA NOMINAL UANG
+                            detail_item = f"{idx_r}. *{req['tiket']}* — {req['kategori']}"
+                            if req['plat']:
+                                detail_item += f" | Nopol/ID: {req['plat']}"
+                            if req['tipe'] in ['Mobil', 'Motor', 'Genset']:
+                                label_ind = "RH Awal" if req['tipe'] == 'Genset' else "KM Awal"
+                                detail_item += f" | {label_ind}: {req['indikator']}"
+                            elif req['tipe'] == 'UM':
+                                detail_item += f" | Durasi: {req['hari']} Hari"
+                            elif req['tipe'] == 'Inap':
+                                detail_item += f" | Durasi: {req['hari']} Malam"
+                            rincian_wa_items.append(detail_item)
+                                
+                        if pm_selected_list: update_pm_ticket_status(target_ss, pm_selected_list, "REQUESTED")
+                            
+                        # GENERATE TEKS WA PENGAJUAN REQUEST (DETAIL LENGKAP KECUALI NOMINAL UANG)
+                        tim_str = ", ".join(tim_bareng) if tim_bareng else "-"
+                        rincian_str = "\n".join(rincian_wa_items)
+                        wa_req_text = (
+                            f"*PENGAJUAN REQUEST DANA OPERASIONAL (SiRAPI)*\n"
+                            f"📅 Tanggal : {tgl_str} ({ts_now.split(' ')[1]})\n"
+                            f"🌐 Wilayah : NOP {nop} ({cluster})\n"
+                            f"👤 Nama PIC : {nama} ({role})\n"
+                            f"👥 Rekan Tim : {tim_str}\n"
+                            f"🎫 Tiket Pokok : {base_tiket_clean}\n"
+                            f"📍 Site ID : {site_id if site_id else '-'}\n"
+                            f"🛠️ Keperluan : {keperluan}\n"
+                            f"🛣️ Estimasi Rute : {jarak_final_text if jarak_final_text else '-'}\n\n"
+                            f"*📋 Detail Pekerjaan:*\n{deskripsi if deskripsi else '-'}\n\n"
+                            f"*🛒 Rincian Kebutuhan (Sub-Tiket):*\n{rincian_str}\n\n"
+                            f"*🏦 Rekening Penerima:*\n{rek_penerima} - {no_rek}\n\n"
+                            f"*📸 Lampiran Foto Evidance:*\n"
+                            f"• Foto KM/RH Awal : {url_km if url_km else '-'}\n"
+                            f"• Foto Evidance : {url_evidance if url_evidance else '-'}"
+                        )
+                        st.session_state.req_wa_ready = wa_req_text
+                        st.success(f"🎉 Berhasil menyimpan & memecah {len(sub_requests)} sub-tiket! Silakan salin laporan WhatsApp di bawah ini.")
+
+        # TAMPILKAN GENERATOR WA SETELAH REQUEST DISUBMIT
+        if st.session_state.get("req_wa_ready"):
+            st.markdown("<hr style='margin: 25px 0;'>", unsafe_allow_html=True)
+            st.markdown("<div class='section-title'>📲 Laporan WhatsApp Pengajuan Request (Tanpa Nominal)</div>", unsafe_allow_html=True)
+            st.info("💡 Klik ikon **Copy** di pojok kanan atas kotak teks di bawah ini, atau klik tombol **Kirim ke WhatsApp**.")
+            st.code(st.session_state.req_wa_ready, language="markdown")
+            
+            wa_encoded = quote(st.session_state.req_wa_ready)
+            c_wa1, c_wa2 = st.columns(2)
+            with c_wa1:
+                st.markdown(
+                    f'<a href="https://wa.me/?text={wa_encoded}" target="_blank" class="btn-sidata-blue" style="background: linear-gradient(135deg, #22C55E 0%, #16A34A 100%) !important;">📲 BUKA & KIRIM KE WHATSAPP</a>',
+                    unsafe_allow_html=True
+                )
+            with c_wa2:
+                if st.button("✅ Selesai & Kembali ke Beranda Utama", type="primary", use_container_width=True):
+                    st.session_state.req_wa_ready = ""
+                    st.session_state.page = "🏠 Hub Menu Utama"
+                    st.rerun()
 
 # ==========================================
 # PAGE 2: FORM PJB OPERASIONAL 
@@ -3548,123 +3582,26 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
 
 
 # ==========================================
-# PAGE 9: REPORT LAPANGAN (WA GENERATOR)
+# PAGE 8: ARAHAN PENGISIAN SIDATA
 # ==========================================
 elif st.session_state.page == "📝 Report Lapangan":
-    st.markdown("<div class='header-card'><h2>📝 REPORT LAPANGAN (PROGRESS)</h2><p>Auto-Generate Laporan Teks WA & Kompresi Foto (Bebas Beban)</p></div>", unsafe_allow_html=True)
-    st.info("💡 **INFO:** Fitur ini 100% aman. Mengisi report ini tidak akan mengubah status tiket PJB Anda. Hasil akhirnya adalah teks yang siap Anda Copy-Paste ke WhatsApp.")
-    
-    nop_rep = st.selectbox("📂 1. Pilih Database (NOP):", ["-- Pilih NOP --"] + list(MASTER_DATA.keys()))
-    
-    if nop_rep != "-- Pilih NOP --":
-        target_ss = MASTER_DATA[nop_rep]["spreadsheet_id"]
-        with st.spinner("Memuat data tiket..."):
-            data_all = fetch_spreadsheet_data(target_ss)
-            req_r = data_all[SHEET_REQUEST]
-
-        c_rep1, c_rep2 = st.columns(2)
-        with c_rep1: 
-            idx_nama_rep = MASTER_DATA[nop_rep]["names"].index(st.session_state.logged_in_user) if st.session_state.logged_in_user in MASTER_DATA[nop_rep]["names"] else 0
-            nama_rep = st.selectbox("👤 Pilih Nama Anda:", ["-- Pilih Nama --"] + MASTER_DATA[nop_rep]["names"], index=idx_nama_rep+1 if idx_nama_rep != 0 else 0)
-        
-        pending_options = []
-        if nama_rep != "-- Pilih Nama --":
-            for r in reversed(req_r[1:]):
-                if len(r)>5 and str(r[3]).strip() != "" and str(r[5]).strip().upper() == nama_rep.strip().upper():
-                    req_tk_raw = str(r[3]).strip().upper()
-                    
-                    site_id_val = str(r[7]).strip() if len(r)>7 and str(r[7]).strip() else "Tanpa Site"
-                    
-                    display_text = f"{req_tk_raw} | {site_id_val}"
-                    
-                    if display_text not in pending_options:
-                        pending_options.append(display_text)
-                        
-            with c_rep2: 
-                if pending_options:
-                    tiket_rep = st.selectbox("🎫 Pilih Tiket Pekerjaan (Terbaru di atas):", ["-- Pilih Tiket --"] + pending_options)
-                else:
-                    st.success("Belum ada riwayat tiket untuk nama ini!")
-                    tiket_rep = "-- Pilih Tiket --"
-                    
-            if tiket_rep != "-- Pilih Tiket --":
-                tiket_clean = tiket_rep.split(" | ")[0].strip()
-                
-                st.markdown("<div class='section-title'>🔍 Rincian Laporan Lapangan</div>", unsafe_allow_html=True)
-                site_name = ""
-                for r in reversed(req_r[1:]):
-                    if len(r) > 7 and str(r[3]).strip().upper() == tiket_clean:
-                        site_name = str(r[7]).strip()
-                        break
-                        
-                site_rep = st.text_input("Nama Site / Lokasi", value=site_name)
-                analisa_rep = st.text_area("📝 Analisa Pekerjaan (Apa saja yang dilakukan?)", height=100)
-                
-                c_k1, c_k2 = st.columns(2)
-                with c_k1:
-                    kond_bts = st.text_input("📡 Status / Problem BTS & Rectifier")
-                    kond_genset = st.text_input("⚡ Status / Kondisi Genset")
-                with c_k2:
-                    kond_enpas = st.text_input("❄️ Status / Kondisi Enpas (AC/Kipas)")
-                    kond_power = st.text_input("🔋 Status Backup Power (Baterai)")
-                    
-                st.markdown("<div class='section-title'>📸 Upload Dokumentasi (Maks 5 Foto)</div>", unsafe_allow_html=True)
-                st.info("⚠️ Semua foto yang diupload di sini akan **DIKOMPRESI OTOMATIS (Size menjadi Kecil)** sebelum diupload ke server. Aman untuk kuota dan storage!")
-                
-                cf1, cf2, cf3, cf4, cf5 = st.columns(5)
-                with cf1: f1 = st.file_uploader("Foto 1", type=["jpg", "png", "jpeg"])
-                with cf2: f2 = st.file_uploader("Foto 2", type=["jpg", "png", "jpeg"])
-                with cf3: f3 = st.file_uploader("Foto 3", type=["jpg", "png", "jpeg"])
-                with cf4: f4 = st.file_uploader("Foto 4", type=["jpg", "png", "jpeg"])
-                with cf5: f5 = st.file_uploader("Foto 5", type=["jpg", "png", "jpeg"])
-                
-                if st.button("🚀 GENERATE LAPORAN WA SEKARANG", type="primary", use_container_width=True):
-                    with st.spinner("🔄 Mengkompresi Foto & Mengupload ke Cloudinary (Mohon tunggu)..."):
-                        l_f1 = upload_foto_compressed(f1) if f1 else ""
-                        l_f2 = upload_foto_compressed(f2) if f2 else ""
-                        l_f3 = upload_foto_compressed(f3) if f3 else ""
-                        l_f4 = upload_foto_compressed(f4) if f4 else ""
-                        l_f5 = upload_foto_compressed(f5) if f5 else ""
-                        
-                        ts_now = datetime.now().strftime("%d %B %Y - %H:%M")
-                        
-                        wa_text = f"""*UPDATE PROGRESS PEKERJAAN*
-📅 Tanggal: {ts_now}
-👤 Pelapor: {nama_rep}
-🎫 No Tiket: {tiket_clean}
-📍 Site: {site_rep}
-
-*📝 Analisa Pekerjaan:*
-{analisa_rep if analisa_rep else '-'}
-
-*🛠️ Status Perangkat:*
-• BTS & Recti : {kond_bts if kond_bts else '-'}
-• Genset      : {kond_genset if kond_genset else '-'}
-• Enpas/AC    : {kond_enpas if kond_enpas else '-'}
-• Baterai/BUP : {kond_power if kond_power else '-'}
-
-*📸 Link Dokumentasi:*
-"""
-                        counter = 1
-                        for link in [l_f1, l_f2, l_f3, l_f4, l_f5]:
-                            if link:
-                                wa_text += f"{counter}. {link}\n"
-                                counter += 1
-                        
-                        if counter == 1:
-                            wa_text += "- Tidak ada dokumentasi terlampir.\n"
-                            
-                        st.session_state.wa_text_ready = wa_text
-                        st.success("✅ Berhasil! Foto telah dikompres dan Laporan siap disalin.")
-                        
-            if st.session_state.get("wa_text_ready"):
-                st.markdown("<div class='section-title'>📱 Hasil Text Siap Copy-Paste / Download</div>", unsafe_allow_html=True)
-                st.code(st.session_state.wa_text_ready, language="markdown")
-                
-                st.download_button(
-                    label="📥 Download File (.txt) untuk WA", 
-                    data=st.session_state.wa_text_ready, 
-                    file_name=f"Report_WA_{tiket_clean}.txt", 
-                    mime="text/plain", 
-                    use_container_width=True
-                )
+    st.markdown("""
+        <div class='header-card'>
+            <h2>📊 PELAPORAN KEGIATAN LAPANGAN (SiDATA)</h2>
+            <p>Seluruh pelaporan progress lapangan, dokumentasi kegiatan, dan update pekerjaan kini terpusat di Portal SiDATA.</p>
+        </div>
+    """, unsafe_allow_html=True)
+    st.markdown("""
+        <div class="sidata-area-card" style="max-width: 650px; margin: 0 auto 25px auto; min-height: 220px;">
+            <div>
+                <div style="font-size: 3.2rem; line-height:1; margin-bottom:12px;">🚀</div>
+                <div class="sidata-card-heading">Portal Resmi SiDATA KUT</div>
+                <div class="sidata-card-desc" style="margin-bottom: 20px !important;">
+                    Khusus Role TE, MBP, & CME: Silakan klik tombol di bawah ini untuk mengisi laporan kegiatan lapangan (Troubleshooting / PM / Site Visit) langsung di aplikasi SiDATA.
+                </div>
+            </div>
+            <a href="https://sidata.streamlit.app/" target="_blank" class="btn-sidata-red" style="max-width: 400px;">
+                👉 BUKA PORTAL SIDATA SEKARANG (https://sidata.streamlit.app/)
+            </a>
+        </div>
+    """, unsafe_allow_html=True)
