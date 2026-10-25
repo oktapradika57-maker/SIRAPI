@@ -1,12 +1,8 @@
-streamlit
-streamlit-cookies-controller
+streamlit>=1.38.0
 pandas
 gspread
+google-auth
 cloudinary
 requests
-google-auth
 Pillow
-opencv-python-headless
-numpy
-pytesseract
 openpyxl
