@@ -1908,7 +1908,6 @@ elif st.session_state.page == "✅ Form PJB Operasional":
         
         site_dict, site_list, tim_dict, list_nopol_csv, nik_dict = load_excel_data()
         
-        # --- ALGORITMA FILTER PJB SUPER CERDAS (BERSIH) ---
         status_verif_dict = {}
         for r in app_r[1:]:
             if len(r) > 5 and r[3] == "Verifikasi PJB":
@@ -1917,15 +1916,18 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                     status_verif_dict[tiket_app] = str(r[5]).strip()
 
         pjb_counts = {}
-        pjb_tickets_all_set = set() # Menghindari NameError
+        pjb_cat_counts = {}
+        pjb_tickets_all_set = set()
         for r in pjb_r[1:]:
             if len(r) > 21 and r[21].strip() != "":
                 tk_str = r[36].strip() if (len(r) > 36 and r[36].strip()) else r[21].strip()
+                kat_pjb = str(r[8]).strip().upper() if len(r) > 8 else ""
                 tk_list = [t.strip().upper() for t in tk_str.split(",")]
                 pjb_tickets_all_set.update(tk_list)
                 for t_clean in tk_list:
                     if t_clean and status_verif_dict.get(t_clean) != "REJECTED":
                         pjb_counts[t_clean] = pjb_counts.get(t_clean, 0) + 1
+                        pjb_cat_counts[(t_clean, kat_pjb)] = pjb_cat_counts.get((t_clean, kat_pjb), 0) + 1
         
         req_app_status = {}
         for r in app_r[1:]:
@@ -1949,53 +1951,106 @@ elif st.session_state.page == "✅ Form PJB Operasional":
             pass_nominal = st.text_input("🔑 Akses Nominal (Admin):", type="password")
             
         req_counts = {}
+        req_cat_counts = {}
         pending_list, pending_options = [], []
+        pbu_row_lookup = {}
         
-        for r in req_r[1:]:
+        for row_idx, r in enumerate(req_r[1:], start=1):
             if len(r) > 5 and str(r[3]).strip() != "":
                 req_tk_raw = str(r[3]).strip().upper()
                 nm = str(r[5]).strip().upper()
+                kat_req = str(r[10]).strip() if len(r) > 10 else ""
+                kat_req_up = kat_req.upper()
                 
-                req_counts[req_tk_raw] = req_counts.get(req_tk_raw, 0) + 1
                 base_tiket = req_tk_raw.split(" [")[0].strip()
-                
-                # Abaikan tiket yang direject di awal
                 if req_app_status.get(req_tk_raw) == "REJECTED" or req_app_status.get(base_tiket) == "REJECTED":
                     continue 
-                
-                # Logika pending (request > PJB selesai)
-                if req_counts[req_tk_raw] > pjb_counts.get(req_tk_raw, 0):
-                    is_ready_to_pjb = True
-                    
-                    # Tahan tiket tahap 2 jika tahap 1 belum selesai
-                    if "[MOTOR-2]" in req_tk_raw or "[MOBIL-2]" in req_tk_raw:
-                        tiket_tahap_1 = req_tk_raw.replace("-2]", "-1]")
-                        if pjb_counts.get(tiket_tahap_1, 0) == 0:
-                            is_ready_to_pjb = False
+
+                # =========================================================================
+                # LOGIKA PALANGKARAYA (TETAP ASLI, TIDAK DIUBAH SAMA SEKALI)
+                # =========================================================================
+                if nop_cari != "Pangkalanbun":
+                    req_counts[req_tk_raw] = req_counts.get(req_tk_raw, 0) + 1
+                    if req_counts[req_tk_raw] > pjb_counts.get(req_tk_raw, 0):
+                        is_ready_to_pjb = True
+                        if "[MOTOR-2]" in req_tk_raw or "[MOBIL-2]" in req_tk_raw:
+                            tiket_tahap_1 = req_tk_raw.replace("-2]", "-1]")
+                            if pjb_counts.get(tiket_tahap_1, 0) == 0:
+                                is_ready_to_pjb = False
+                                
+                        if is_ready_to_pjb:
+                            item = {
+                                "Tanggal": r[1], 
+                                "Nama": r[5], 
+                                "No Request": req_tk_raw, 
+                                "Kategori Item": kat_req, 
+                                "Keperluan": r[8] if len(r)>8 else ""
+                            }
+                            if pass_nominal == "B0924649": 
+                                item["Nominal Request"] = f"Rp {clean_nominal(r[9]):,.0f}" if len(r)>9 else "Rp 0"
+                            if "PM" in (r[8] if len(r)>8 else ""):
+                                pm_list = [t.strip() for t in req_tk_raw.split(",") if t.strip()]
+                                rem = [t for t in pm_list if pjb_counts.get(t, 0) == 0]
+                                item["Sisa Tiket PM"] = ", ".join(rem) if rem else "Menunggu Verifikasi"
                             
-                    if is_ready_to_pjb:
-                        item = {
-                            "Tanggal": r[1], 
-                            "Nama": r[5], 
-                            "No Request": req_tk_raw, 
-                            "Kategori Item": r[10] if len(r)>10 else "", 
-                            "Keperluan": r[8] if len(r)>8 else ""
-                        }
-                        if pass_nominal == "B0924649": 
-                            item["Nominal Request"] = f"Rp {clean_nominal(r[9]):,.0f}" if len(r)>9 else "Rp 0"
-                        
-                        if "PM" in (r[8] if len(r)>8 else ""):
-                            pm_list = [t.strip() for t in req_tk_raw.split(",") if t.strip()]
-                            rem = [t for t in pm_list if pjb_counts.get(t, 0) == 0]
-                            item["Sisa Tiket PM"] = ", ".join(rem) if rem else "Menunggu Verifikasi"
-                        
-                        if nama_pjb != "-- Pilih Nama --":
-                            nama_bersih = nama_pjb.strip().upper()
-                            if nama_bersih in nm or nm in nama_bersih:
+                            if nama_pjb != "-- Pilih Nama --":
+                                nama_bersih = nama_pjb.strip().upper()
+                                if nama_bersih in nm or nm in nama_bersih:
+                                    pending_list.append(item)
+                                    pending_options.append(req_tk_raw)
+                            else: 
                                 pending_list.append(item)
-                                pending_options.append(req_tk_raw)
-                        else: 
-                            pending_list.append(item)
+
+                # =========================================================================
+                # LOGIKA KHUSUS PANGKALANBUN (PISAHKAN SUPPORT, BBM, MATERIAL MESKI TIKET SAMA)
+                # =========================================================================
+                else:
+                    req_cat_counts[(req_tk_raw, kat_req_up)] = req_cat_counts.get((req_tk_raw, kat_req_up), 0) + 1
+                    sudah_pjb_kat = pjb_cat_counts.get((req_tk_raw, kat_req_up), 0)
+                    
+                    # Jika di sheet Pangkalanbun belum ada tag [...], pisahkan per (Tiket, Kategori)
+                    is_pending_pbu = req_cat_counts[(req_tk_raw, kat_req_up)] > sudah_pjb_kat
+                    if "[" in req_tk_raw and "]" in req_tk_raw:
+                        req_counts[req_tk_raw] = req_counts.get(req_tk_raw, 0) + 1
+                        is_pending_pbu = req_counts[req_tk_raw] > pjb_counts.get(req_tk_raw, 0)
+
+                    if is_pending_pbu:
+                        is_ready_to_pjb = True
+                        if "[MOTOR-2]" in req_tk_raw or "[MOBIL-2]" in req_tk_raw:
+                            tiket_tahap_1 = req_tk_raw.replace("-2]", "-1]")
+                            if pjb_counts.get(tiket_tahap_1, 0) == 0:
+                                is_ready_to_pjb = False
+
+                        if is_ready_to_pjb:
+                            # Buat label unik agar Support, BBM, Material muncul semua di dropdown Pangkalanbun
+                            if "[" in req_tk_raw and "]" in req_tk_raw:
+                                label_opt = f"{req_tk_raw} | {kat_req} (#{row_idx})" if req_tk_raw in pbu_row_lookup else req_tk_raw
+                            else:
+                                label_opt = f"{req_tk_raw} [{kat_req_up if kat_req_up else 'ITEM'}] (#{row_idx})"
+                            pbu_row_lookup[label_opt.upper()] = (req_tk_raw, r)
+
+                            item = {
+                                "Tanggal": r[1], 
+                                "Nama": r[5], 
+                                "No Request": label_opt, 
+                                "Kategori Item": kat_req, 
+                                "Keperluan": r[8] if len(r)>8 else ""
+                            }
+                            if pass_nominal == "B0924649": 
+                                item["Nominal Request"] = f"Rp {clean_nominal(r[9]):,.0f}" if len(r)>9 else "Rp 0"
+                            if "PM" in (r[8] if len(r)>8 else ""):
+                                pm_list = [t.strip() for t in req_tk_raw.split(",") if t.strip()]
+                                rem = [t for t in pm_list if pjb_counts.get(t, 0) == 0]
+                                item["Sisa Tiket PM"] = ", ".join(rem) if rem else "Menunggu Verifikasi"
+
+                            if nama_pjb != "-- Pilih Nama --":
+                                nama_bersih = nama_pjb.strip().upper()
+                                if nama_bersih in nm or nm in nama_bersih:
+                                    pending_list.append(item)
+                                    pending_options.append(label_opt)
+                            else:
+                                pending_list.append(item)
+                                pending_options.append(label_opt)
         
         if pending_list: 
             st.dataframe(pd.DataFrame(pending_list), hide_index=True, use_container_width=True)
@@ -2007,26 +2062,44 @@ elif st.session_state.page == "✅ Form PJB Operasional":
             pilihan_tiket = st.selectbox("🎫 Pilih Sub-Tiket Pending yang ingin di-PJB-kan:", ["-- Pilih Tiket --"] + pending_options + ["-- Ketik Manual --"]) if pending_options else "-- Ketik Manual --"
             cari_tiket = st.text_input("Ketik Manual (Termasuk Request Baru Hasil Izin Revisi):") if pilihan_tiket == "-- Ketik Manual --" else ("" if pilihan_tiket == "-- Pilih Tiket --" else pilihan_tiket)
         
-        valid_cari_tiket = str(cari_tiket).strip().upper()
+        raw_selected_key = str(cari_tiket).strip().upper()
+        # Jika Pangkalanbun menggunakan label terpisah (#row), kembalikan valid_cari_tiket ke tiket asli saat disimpan
+        if nop_cari == "Pangkalanbun" and raw_selected_key in pbu_row_lookup:
+            valid_cari_tiket = pbu_row_lookup[raw_selected_key][0]
+        else:
+            valid_cari_tiket = raw_selected_key
 
         with col_s3: 
             st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
-            if st.button("Tarik Data PJB", type="primary", use_container_width=True) and valid_cari_tiket:
+            if st.button("Tarik Data PJB", type="primary", use_container_width=True) and raw_selected_key:
                 ditemukan_req = None
                 ditemukan_pjb = None
                 
-                for r in reversed(req_r[1:]):
-                    if len(r) > 3 and str(r[3]).strip().upper() == valid_cari_tiket:
-                        ditemukan_req = {
-                            "NOP": r[2], "Cluster": r[4], "Nama": r[5], "Role": r[6], "Site": r[7], "Keperluan": r[8], 
-                            "BBM": r[10] if len(r)>10 else "", "Desc": r[11] if len(r)>11 else "", 
-                            "KMAwal": clean_indicator(r[12]) if len(r)>12 else 0.0, 
-                            "NominalReq": clean_nominal(r[9]) if len(r)>9 else 0, 
-                            "Jarak": r[13] if len(r)>13 else "", "Plat": r[16] if len(r)>16 else "",
-                            "LatBerangkat": r[14] if len(r)>14 else "0", "LongBerangkat": r[15] if len(r)>15 else "0",
-                            "LatTujuan": r[22] if len(r)>22 else "0", "LongTujuan": r[23] if len(r)>23 else "0",
-                        }
-                        break
+                # Jika Pangkalanbun & dipilih dari dropdown, tarik baris spesifik item tersebut (Support / BBM / Material)
+                if nop_cari == "Pangkalanbun" and raw_selected_key in pbu_row_lookup:
+                    r_match = pbu_row_lookup[raw_selected_key][1]
+                    ditemukan_req = {
+                        "NOP": r_match[2], "Cluster": r_match[4], "Nama": r_match[5], "Role": r_match[6], "Site": r_match[7], "Keperluan": r_match[8], 
+                        "BBM": r_match[10] if len(r_match)>10 else "", "Desc": r_match[11] if len(r_match)>11 else "", 
+                        "KMAwal": clean_indicator(r_match[12]) if len(r_match)>12 else 0.0, 
+                        "NominalReq": clean_nominal(r_match[9]) if len(r_match)>9 else 0, 
+                        "Jarak": r_match[13] if len(r_match)>13 else "", "Plat": r_match[16] if len(r_match)>16 else "",
+                        "LatBerangkat": r_match[14] if len(r_match)>14 else "0", "LongBerangkat": r_match[15] if len(r_match)>15 else "0",
+                        "LatTujuan": r_match[22] if len(r_match)>22 else "0", "LongTujuan": r_match[23] if len(r_match)>23 else "0",
+                    }
+                else:
+                    for r in reversed(req_r[1:]):
+                        if len(r) > 3 and str(r[3]).strip().upper() == valid_cari_tiket:
+                            ditemukan_req = {
+                                "NOP": r[2], "Cluster": r[4], "Nama": r[5], "Role": r[6], "Site": r[7], "Keperluan": r[8], 
+                                "BBM": r[10] if len(r)>10 else "", "Desc": r[11] if len(r)>11 else "", 
+                                "KMAwal": clean_indicator(r[12]) if len(r)>12 else 0.0, 
+                                "NominalReq": clean_nominal(r[9]) if len(r)>9 else 0, 
+                                "Jarak": r[13] if len(r)>13 else "", "Plat": r[16] if len(r)>16 else "",
+                                "LatBerangkat": r[14] if len(r)>14 else "0", "LongBerangkat": r[15] if len(r)>15 else "0",
+                                "LatTujuan": r[22] if len(r)>22 else "0", "LongTujuan": r[23] if len(r)>23 else "0",
+                            }
+                            break
                         
                 for r in reversed(pjb_r[1:]):
                     if len(r) > 21 and str(r[21]).strip().upper() == valid_cari_tiket:
@@ -2040,11 +2113,10 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                         ditemukan_req["nota_lama"] = int(clean_nominal(ditemukan_pjb[20])) if len(ditemukan_pjb)>20 else 0
                         
                     st.session_state.pjb_data = ditemukan_req
-                    st.success("🎉 Data Ditarik!")
+                    st.success(f"🎉 Data Ditarik: {ditemukan_req.get('BBM', '')}!")
                 else:
                     st.session_state.pjb_data = None
                     st.error("❌ Data Pengajuan (Request) Tidak ditemukan di Database.")
-
         if st.session_state.get("pjb_data"):
             d = st.session_state.pjb_data
             
@@ -2981,136 +3053,375 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
         tab_report1, tab_report2, tab_report3 = st.tabs(["📑 1. Auto PJB Biasa (List Foto)", "📊 2. Rekap Request vs PJB", "🖨️ 3. Cetak Surat Tugas & UM"])
         
         with tab_report1:
-            if len(rekap_r) > 1 and len(pjb_r) > 1:
-                dict_photos = defaultdict(list)
+            if len(pjb_r) > 1 or len(rekap_r) > 1:
+                # 1. KUMPULKAN OTOMATIS SEMUA FOTO YANG BENAR-BENAR DIUPLOAD TIM DARI FORM PJB
+                PHOTO_COLS_SPEC = [
+                    (13, "Evidance Pengisian BBM"),
+                    (14, "Kwitansi Support / Non-BBM"),
+                    (15, "Foto Nota & KM/RH"),
+                    (16, "Foto Material"),
+                    (17, "Foto Nota Material"),
+                    (18, "Foto Penginapan / Hotel"),
+                    (19, "Evidance Pekerjaan"),
+                    (28, "Foto Aktivitas UM 1"),
+                    (29, "Foto Aktivitas UM 2"),
+                    (30, "Foto Aktivitas UM 3"),
+                    (31, "Foto Aktivitas UM 4"),
+                    (39, "Screenshot Tiket Genset"),
+                    (27, "Bukti Transfer Dana"),
+                ]
+
+                inc_bukti_tf = st.checkbox("Sertakan Foto Bukti Transfer Dana (Jika Ada)", value=False, key="chk_inc_tf_pjb")
+
+                def extract_uploaded_photos(pjb_row):
+                    """Hanya mengambil foto yang benar-benar diupload oleh tim (valid URL http)"""
+                    photos = []
+                    seen_urls = set()
+                    for col_idx, col_label in PHOTO_COLS_SPEC:
+                        if col_idx == 27 and not inc_bukti_tf:
+                            continue
+                        if len(pjb_row) > col_idx:
+                            u = str(pjb_row[col_idx]).strip()
+                            if u.startswith("http") and u not in seen_urls:
+                                photos.append((col_label, u))
+                                seen_urls.add(u)
+                    pdf_url = str(pjb_row[35]).strip() if len(pjb_row) > 35 and str(pjb_row[35]).strip().startswith("http") else ""
+                    return photos, pdf_url
+
+                # Simpan daftar PJB berdasarkan Tiket Utuh & Tiket Dasar (Base Ticket)
+                dict_pjb_exact = defaultdict(list)
+                dict_pjb_base = defaultdict(list)
+                all_pjb_records = []
+
                 for r in pjb_r[1:]:
                     if len(r) > 21:
                         tk = str(r[21]).strip().upper()
                         if tk:
-                            photo_data = {
-                                "N (Evidance Pengisian)": r[13] if len(r)>13 else "",
-                                "O (Kwitansi Support / Non-BBM)": r[14] if len(r)>14 else "",
-                                "P (Foto Nota Disanding KM/RH)": r[15] if len(r)>15 else "",
-                                "R (Foto Nota Material Disanding)": r[17] if len(r)>17 else "",
-                                "T (Evidance Pekerjaan)": r[19] if len(r)>19 else "",
-                                "U (Foto Aktivitas UM 1)": r[28] if len(r)>28 else "",
-                                "V (Foto Aktivitas UM 2)": r[29] if len(r)>29 else "",
-                                "W (Foto Aktivitas UM 3)": r[30] if len(r)>30 else "",
-                                "X (Foto Aktivitas UM 4)": r[31] if len(r)>31 else "",
-                                "Y (Link PDF Akomodasi)": r[35] if len(r)>35 else ""
+                            base_tk = tk.split(" [")[0].strip().upper()
+                            photos_uploaded, pdf_link = extract_uploaded_photos(r)
+                            rec = {
+                                "tiket": tk,
+                                "base_tiket": base_tk,
+                                "tanggal": r[1] if len(r) > 1 else "-",
+                                "nama": r[4] if len(r) > 4 else "-",
+                                "role": r[5] if len(r) > 5 else "-",
+                                "site": r[6] if len(r) > 6 else "-",
+                                "keperluan": r[7] if len(r) > 7 else "-",
+                                "kategori": r[8] if len(r) > 8 else "-",
+                                "deskripsi": r[9] if len(r) > 9 else "-",
+                                "nominal": clean_nominal(r[11]) if len(r) > 11 else 0,
+                                "photos": photos_uploaded,
+                                "pdf_link": pdf_link
                             }
-                            dict_photos[tk].append(photo_data)
-                
-                list_periode = sorted(list(set([r[16].strip() for r in rekap_r[1:] if len(r) > 16 and r[16].strip() != ""])))
-                list_role = sorted(list(set([r[6].strip() for r in rekap_r[1:] if len(r) > 6 and r[6].strip() != ""])))
-                
-                st.markdown("<div class='section-title'>🔍 Parameter Filter Laporan</div>", unsafe_allow_html=True)
-                col_f1, col_f2 = st.columns(2)
-                with col_f1: filter_periode = st.selectbox("📅 Periode Dana Ops (Dari Kolom Q Rekap):", ["Semua Periode"] + list_periode)
-                with col_f2: filter_role = st.multiselect("💼 Role Pekerjaan (Pilih Banyak):", list_role, default=list_role)
+                            dict_pjb_exact[tk].append(rec)
+                            dict_pjb_base[base_tk].append(rec)
+                            all_pjb_records.append(rec)
 
-                st.markdown("<div class='section-title'>📸 Pilih Lampiran Foto (Multi-Select)</div>", unsafe_allow_html=True)
-                pilihan_foto = st.multiselect(
-                    "Pilih kolom foto yang ingin ditarik dari Form PJB:",
-                    [
-                        "N (Evidance Pengisian)", "O (Kwitansi Support / Non-BBM)", "P (Foto Nota Disanding KM/RH)", 
-                        "R (Foto Nota Material Disanding)", "T (Evidance Pekerjaan)", "U (Foto Aktivitas UM 1)", 
-                        "V (Foto Aktivitas UM 2)", "W (Foto Aktivitas UM 3)", "X (Foto Aktivitas UM 4)", "Y (Link PDF Akomodasi)"
-                    ],
-                    default=[
-                        "N (Evidance Pengisian)", "O (Kwitansi Support / Non-BBM)", "P (Foto Nota Disanding KM/RH)",
-                        "R (Foto Nota Material Disanding)", "T (Evidance Pekerjaan)", "Y (Link PDF Akomodasi)"
-                    ]
-                )
-                
-                if st.button("🚀 Generate Laporan Lumpsum", type="primary", use_container_width=True):
-                    html_content = ""
-                    count_match = 0
+                list_periode = sorted(list(set([r[16].strip() for r in rekap_r[1:] if len(r) > 16 and r[16].strip() != ""])))
+                list_role_rekap = [r[6].strip() for r in rekap_r[1:] if len(r) > 6 and r[6].strip() != ""]
+                list_role_pjb = [r["role"].strip() for r in all_pjb_records if r["role"].strip() != ""]
+                list_role = sorted(list(set(list_role_rekap + list_role_pjb)))
+
+                st.markdown("<div class='section-title'>🔍 1. Parameter Filter Laporan</div>", unsafe_allow_html=True)
+                col_f1, col_f2 = st.columns(2)
+                with col_f1:
+                    filter_periode = st.selectbox("📅 Periode Dana Ops (Dari Kolom Q Rekap):", ["Semua Periode"] + list_periode)
+                with col_f2:
+                    filter_role = st.multiselect("💼 Role Pekerjaan (Pilih Banyak):", list_role, default=list_role)
+
+                # Khusus Pangkalanbun: opsi agar seluruh item (Support, BBM, Material) keluar semua walaupun di Rekap PJB hanya tertulis 1 tiket dasar
+                if nop_report == "Pangkalanbun":
+                    mode_sumber_pbu = st.radio(
+                        "📌 Mode Penarikan Tiket Pangkalanbun:",
+                        [
+                            "Tampilkan Semua Item Sub-Tiket (Support, BBM, Material, dll.) dari Rekap PJB + Form PJB",
+                            "Tarik Langsung Semua Data dari Sheet Form PJB"
+                        ],
+                        index=0
+                    )
+                else:
+                    mode_sumber_pbu = "Palangkaraya_Default"
+
+                # 2. SUSUN LIST DATA UNTUK TABEL AUTO-EDIT ADMIN
+                draft_rows = []
+                if nop_report != "Pangkalanbun":
+                    # LOGIKA PALANGKARAYA TETAP COCOK SEPERTI SEMULA
                     ticket_counts = defaultdict(int)
-                    
-                    for idx, row in enumerate(rekap_r[1:]):
+                    for row in rekap_r[1:]:
                         row_periode = row[16].strip() if len(row) > 16 else ""
                         row_role = row[6].strip() if len(row) > 6 else ""
                         pass_periode = (filter_periode == "Semua Periode") or (row_periode == filter_periode)
                         pass_role = (len(filter_role) == 0) or (row_role in filter_role)
-                        
+
                         if pass_periode and pass_role:
                             found_tiket = None
                             for cell in row:
-                                if str(cell).strip().upper() in dict_photos:
-                                    found_tiket = str(cell).strip().upper()
+                                c_up = str(cell).strip().upper()
+                                if c_up in dict_pjb_exact:
+                                    found_tiket = c_up
                                     break
-                            
                             if found_tiket:
-                                count_match += 1
                                 idx_for_tk = ticket_counts[found_tiket]
-                                if idx_for_tk < len(dict_photos[found_tiket]): current_photo_data = dict_photos[found_tiket][idx_for_tk]
-                                else: current_photo_data = dict_photos[found_tiket][-1]
+                                rec_list = dict_pjb_exact[found_tiket]
+                                rec_pjb = rec_list[idx_for_tk] if idx_for_tk < len(rec_list) else rec_list[-1]
                                 ticket_counts[found_tiket] += 1
-                                
+
+                                photo_links_str = " | ".join([f"{lbl}::{url}" for lbl, url in rec_pjb["photos"]])
+                                draft_rows.append({
+                                    "Cetak": True,
+                                    "No Tiket": found_tiket,
+                                    "Tanggal": row[0] if len(row) > 0 and str(row[0]).strip() else rec_pjb["tanggal"],
+                                    "Periode": row_periode,
+                                    "Nama": row[4] if len(row) > 4 and str(row[4]).strip() else rec_pjb["nama"],
+                                    "Role": row_role if row_role else rec_pjb["role"],
+                                    "Kategori": rec_pjb["kategori"],
+                                    "Keperluan": row[8] if len(row) > 8 and str(row[8]).strip() else rec_pjb["keperluan"],
+                                    "Deskripsi": row[9] if len(row) > 9 and str(row[9]).strip() else rec_pjb["deskripsi"],
+                                    "Nominal": clean_nominal(row[15]) if len(row) > 15 and str(row[15]).strip() else rec_pjb["nominal"],
+                                    "Jml Foto": len(rec_pjb["photos"]),
+                                    "Data Foto (Label::URL)": photo_links_str,
+                                    "Link PDF UM": rec_pjb["pdf_link"]
+                                })
+                else:
+                    # LOGIKA KHUSUS PANGKALANBUN: PECAH & KELUARKAN SEMUA ITEM (SUPPORT, BBM, MATERIAL, DLL.)
+                    if "Langsung" in mode_sumber_pbu or len(rekap_r) <= 1:
+                        for rec_pjb in all_pjb_records:
+                            if len(filter_role) == 0 or rec_pjb["role"] in filter_role:
+                                photo_links_str = " | ".join([f"{lbl}::{url}" for lbl, url in rec_pjb["photos"]])
+                                draft_rows.append({
+                                    "Cetak": True,
+                                    "No Tiket": f"{rec_pjb['tiket']} ({rec_pjb['kategori']})" if "[" not in rec_pjb['tiket'] and rec_pjb['kategori'] else rec_pjb['tiket'],
+                                    "Tanggal": rec_pjb["tanggal"],
+                                    "Periode": filter_periode if filter_periode != "Semua Periode" else "Periode Aktif",
+                                    "Nama": rec_pjb["nama"],
+                                    "Role": rec_pjb["role"],
+                                    "Kategori": rec_pjb["kategori"],
+                                    "Keperluan": rec_pjb["keperluan"],
+                                    "Deskripsi": rec_pjb["deskripsi"],
+                                    "Nominal": rec_pjb["nominal"],
+                                    "Jml Foto": len(rec_pjb["photos"]),
+                                    "Data Foto (Label::URL)": photo_links_str,
+                                    "Link PDF UM": rec_pjb["pdf_link"]
+                                })
+                    else:
+                        used_pjb_indices = defaultdict(int)
+                        expanded_base_tickets = set()
+                        for row in rekap_r[1:]:
+                            row_periode = row[16].strip() if len(row) > 16 else ""
+                            row_role = row[6].strip() if len(row) > 6 else ""
+                            pass_periode = (filter_periode == "Semua Periode") or (row_periode == filter_periode)
+                            pass_role = (len(filter_role) == 0) or (row_role in filter_role)
+
+                            if pass_periode and pass_role:
+                                found_exact = None
+                                found_base = None
+                                for cell in row:
+                                    c_up = str(cell).strip().upper()
+                                    if not c_up:
+                                        continue
+                                    if c_up in dict_pjb_exact:
+                                        found_exact = c_up
+                                        break
+                                    c_base = c_up.split(" [")[0].strip()
+                                    if c_base in dict_pjb_base:
+                                        found_base = c_base
+                                        break
+
+                                # Jika di Rekap PJB tertulis tiket dasar sementara di Form PJB ada banyak item (Support, BBM, Material)
+                                target_base = (found_exact.split(" [")[0].strip() if found_exact else found_base)
+                                if target_base and target_base in dict_pjb_base:
+                                    all_sub_recs = dict_pjb_base[target_base]
+                                    # Jika hanya 1 baris di Rekap PJB tapi di Form PJB ada beberapa item (misal Support, BBM, Material), keluarkan semuanya!
+                                    if len(all_sub_recs) > 1 and target_base not in expanded_base_tickets:
+                                        expanded_base_tickets.add(target_base)
+                                        for rec_pjb in all_sub_recs:
+                                            photo_links_str = " | ".join([f"{lbl}::{url}" for lbl, url in rec_pjb["photos"]])
+                                            tampil_tk = f"{rec_pjb['tiket']} [{rec_pjb['kategori']}]" if "[" not in rec_pjb['tiket'] and rec_pjb['kategori'] else rec_pjb['tiket']
+                                            draft_rows.append({
+                                                "Cetak": True,
+                                                "No Tiket": tampil_tk,
+                                                "Tanggal": rec_pjb["tanggal"] if rec_pjb["tanggal"] != "-" else (row[0] if len(row) > 0 else "-"),
+                                                "Periode": row_periode,
+                                                "Nama": rec_pjb["nama"] if rec_pjb["nama"] != "-" else (row[4] if len(row) > 4 else "-"),
+                                                "Role": rec_pjb["role"] if rec_pjb["role"] != "-" else row_role,
+                                                "Kategori": rec_pjb["kategori"],
+                                                "Keperluan": rec_pjb["keperluan"] if rec_pjb["keperluan"] != "-" else (row[8] if len(row) > 8 else "-"),
+                                                "Deskripsi": rec_pjb["deskripsi"] if rec_pjb["deskripsi"] != "-" else (row[9] if len(row) > 9 else "-"),
+                                                "Nominal": rec_pjb["nominal"] if rec_pjb["nominal"] > 0 else (clean_nominal(row[15]) if len(row) > 15 else 0),
+                                                "Jml Foto": len(rec_pjb["photos"]),
+                                                "Data Foto (Label::URL)": photo_links_str,
+                                                "Link PDF UM": rec_pjb["pdf_link"]
+                                            })
+                                    elif target_base not in expanded_base_tickets:
+                                        idx_b = used_pjb_indices[target_base]
+                                        rec_pjb = all_sub_recs[idx_b] if idx_b < len(all_sub_recs) else all_sub_recs[-1]
+                                        used_pjb_indices[target_base] += 1
+                                        photo_links_str = " | ".join([f"{lbl}::{url}" for lbl, url in rec_pjb["photos"]])
+                                        draft_rows.append({
+                                            "Cetak": True,
+                                            "No Tiket": found_exact if found_exact else rec_pjb["tiket"],
+                                            "Tanggal": row[0] if len(row) > 0 and str(row[0]).strip() else rec_pjb["tanggal"],
+                                            "Periode": row_periode,
+                                            "Nama": row[4] if len(row) > 4 and str(row[4]).strip() else rec_pjb["nama"],
+                                            "Role": row_role if row_role else rec_pjb["role"],
+                                            "Kategori": rec_pjb["kategori"],
+                                            "Keperluan": row[8] if len(row) > 8 and str(row[8]).strip() else rec_pjb["keperluan"],
+                                            "Deskripsi": row[9] if len(row) > 9 and str(row[9]).strip() else rec_pjb["deskripsi"],
+                                            "Nominal": clean_nominal(row[15]) if len(row) > 15 and str(row[15]).strip() else rec_pjb["nominal"],
+                                            "Jml Foto": len(rec_pjb["photos"]),
+                                            "Data Foto (Label::URL)": photo_links_str,
+                                            "Link PDF UM": rec_pjb["pdf_link"]
+                                        })
+
+                # 3. FITUR AUTO-EDIT LIST & DATA OLEH ADMIN SEBELUM CETAK PDF
+                st.markdown("<div class='section-title'>✏️ 2. Tabel Auto-Edit List PJB & Foto (Khusus Admin)</div>", unsafe_allow_html=True)
+                st.info("💡 **AUTO-EDIT ADMIN:** Anda dapat mengedit langsung **No Tiket, Tanggal, Nama, Role, Kategori, Deskripsi, Nominal, memilih/menghapus baris (`Cetak`)**, atau mengedit **Data Foto** di tabel bawah ini sebelum men-generate laporan PDF.")
+
+                if draft_rows:
+                    df_draft = pd.DataFrame(draft_rows)
+                    edited_df = st.data_editor(
+                        df_draft,
+                        use_container_width=True,
+                        hide_index=True,
+                        num_rows="dynamic",
+                        column_config={
+                            "Cetak": st.column_config.CheckboxColumn("✅ Cetak?", default=True),
+                            "Nominal": st.column_config.NumberColumn("Nominal (Rp)", format="Rp %d"),
+                            "Jml Foto": st.column_config.NumberColumn("📸 Foto Terlampir", disabled=True),
+                        },
+                        key=f"editor_autopjb_{nop_report}_{filter_periode}"
+                    )
+
+                    df_selected = edited_df[edited_df["Cetak"] == True].copy()
+                    tot_nom_edited = df_selected["Nominal"].apply(clean_nominal).sum() if not df_selected.empty else 0
+
+                    c_stat1, c_stat2 = st.columns(2)
+                    with c_stat1:
+                        st.markdown(f"<div class='metric-3d'><div class='metric-title'>Total Sub-Tiket Dipilih</div><div class='metric-value'>{len(df_selected)} Tiket</div></div>", unsafe_allow_html=True)
+                    with c_stat2:
+                        st.markdown(f"<div class='metric-3d'><div class='metric-title'>Total Nominal (Hasil Edit Admin)</div><div class='metric-value'>Rp {tot_nom_edited:,.0f}</div></div>", unsafe_allow_html=True)
+
+                    c_btn_exp, c_btn_gen = st.columns(2)
+                    with c_btn_exp:
+                        csv_edited = df_selected.drop(columns=["Cetak"], errors="ignore").to_csv(index=False).encode("utf-8")
+                        st.download_button(
+                            "📥 Download List Tabel PJB (CSV/Excel)",
+                            data=csv_edited,
+                            file_name=f"List_Edited_PJB_{nop_report}_{filter_periode}.csv",
+                            mime="text/csv",
+                            use_container_width=True
+                        )
+                    with c_btn_gen:
+                        btn_gen_html = st.button("🚀 Generate Laporan Lumpsum & Foto (Sesuai Editan Admin)", type="primary", use_container_width=True)
+
+                    if btn_gen_html:
+                        html_content = ""
+                        count_match = 0
+
+                        for _, erow in df_selected.iterrows():
+                            count_match += 1
+                            tk_val = str(erow.get("No Tiket", "-"))
+                            tgl_val = str(erow.get("Tanggal", "-"))
+                            per_val = str(erow.get("Periode", "-"))
+                            nm_val = str(erow.get("Nama", "-"))
+                            rl_val = str(erow.get("Role", "-"))
+                            kat_val = str(erow.get("Kategori", "-"))
+                            kep_val = str(erow.get("Keperluan", "-"))
+                            desc_val = str(erow.get("Deskripsi", "-"))
+                            nom_val = clean_nominal(erow.get("Nominal", 0))
+                            raw_photos_str = str(erow.get("Data Foto (Label::URL)", "")).strip()
+                            pdf_um_url = str(erow.get("Link PDF UM", "")).strip()
+
+                            # Parse hanya foto yang benar-benar ada link-nya (Tanpa Kotak Tidak Ada!)
+                            valid_photos = []
+                            if raw_photos_str and raw_photos_str != "nan":
+                                for part in raw_photos_str.split("|"):
+                                    part = part.strip()
+                                    if "::" in part:
+                                        lbl, u = part.split("::", 1)
+                                        if u.strip().startswith("http"):
+                                            valid_photos.append((lbl.strip(), u.strip()))
+                                    elif part.startswith("http"):
+                                        valid_photos.append(("Lampiran Foto PJB", part))
+
+                            # Tentukan lebar grid otomatis: jika 1 foto (100%), jika 2-3 foto atau lebih tampil full proporsional
+                            box_width = "100%" if len(valid_photos) == 1 else "48%"
+
+                            html_content += f"""
+                            <div class='ticket-card'>
+                                <div class='ticket-header'>🎫 SUB-TIKET: {tk_val} &nbsp;|&nbsp; 📦 KATEGORI: {kat_val}</div>
+                                <table>
+                                    <tr><td width='15%'><b>Tanggal</b></td><td width='35%'>: {tgl_val}</td><td width='15%'><b>Periode</b></td><td>: {per_val}</td></tr>
+                                    <tr><td><b>Nama</b></td><td>: {nm_val}</td><td><b>Nominal</b></td><td>: <span style='color:#059669; font-weight:bold;'>Rp {nom_val:,.0f}</span></td></tr>
+                                    <tr><td><b>Role/Jabatan</b></td><td>: {rl_val}</td><td><b>Keperluan</b></td><td>: {kep_val}</td></tr>
+                                    <tr><td valign='top'><b>Deskripsi</b></td><td colspan='3'>: {desc_val}</td></tr>
+                                </table>
+                                <div class='photo-container'>
+                            """
+
+                            for lbl_foto, url_foto in valid_photos:
                                 html_content += f"""
-                                <div class='ticket-card'>
-                                    <div class='ticket-header'>🎫 SUB-TIKET: {found_tiket}</div>
-                                    <table>
-                                        <tr><td width='15%'><b>Tanggal</b></td><td width='35%'>: {row[0] if len(row)>0 else '-'}</td><td width='15%'><b>Periode</b></td><td>: {row_periode}</td></tr>
-                                        <tr><td><b>Nama</b></td><td>: {row[4] if len(row)>4 else '-'}</td><td><b>Nominal</b></td><td>: <span style='color:green; font-weight:bold;'>Rp {row[15] if len(row)>15 else '0'}</span></td></tr>
-                                        <tr><td><b>Role/Jabatan</b></td><td>: {row_role}</td><td><b>Keperluan</b></td><td>: {row[8] if len(row)>8 else '-'}</td></tr>
-                                        <tr><td valign='top'><b>Deskripsi</b></td><td colspan='3'>: {row[9] if len(row)>9 else '-'}</td></tr>
-                                    </table>
-                                    <div class='photo-container'>
+                                <div class='photo-box' style='width: {box_width};'>
+                                    <img src='{url_foto}' alt='{lbl_foto}'>
+                                    <div class='photo-caption'>📸 {lbl_foto}</div>
+                                </div>
                                 """
-                                if pilihan_foto:
-                                    for p_name in pilihan_foto:
-                                        url_foto = current_photo_data.get(p_name, "")
-                                        if p_name == "Y (Link PDF Akomodasi)":
-                                            if url_foto and url_foto.startswith("http"):
-                                                html_content += f"<div class='photo-box' style='padding:20px;'><br><a href='{url_foto}' target='_blank' style='background:#0ea5e9; color:white; padding:8px 15px; text-decoration:none; border-radius:5px;'>📥 Download PDF Surat Tugas</a><br><br></div>"
-                                        else:
-                                            if url_foto and url_foto.startswith("http"): html_content += f"<div class='photo-box'><img src='{url_foto}'><br>{p_name}</div>"
-                                            else: html_content += f"<div class='photo-box'><br><br>🚫 Tidak Ada<br>{p_name}</div>"
-                                html_content += "</div></div>"
-                    
-                    if count_match > 0:
-                        full_html = f"""
-                        <!DOCTYPE html>
-                        <html>
-                        <head>
-                            <meta charset="UTF-8">
-                            <title>Laporan Auto PJB - {nop_report}</title>
-                            <style>
-                                @page {{ size: A4 portrait; margin: 15mm; }}
-                                body {{ font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #333; margin: 0; padding: 0; background: #fff; }}
-                                h1 {{ text-align: center; color: #0F2027; border-bottom: 2px solid #00F2FE; padding-bottom: 10px; margin-top: 10px; }}
-                                .ticket-card {{ width: 100%; border: 2px solid #000; padding: 15mm; box-sizing: border-box; margin-bottom: 20px; border-radius: 8px; page-break-inside: avoid; }}
-                                .ticket-header {{ background-color: #f1f5f9; padding: 10px; font-weight: bold; font-size: 1.2em; border-bottom: 2px solid #0ea5e9; margin-bottom: 15px; }}
-                                table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 1em; }}
-                                td {{ padding: 8px; border-bottom: 1px solid #e2e8f0; }}
-                                .photo-container {{ display: flex; flex-wrap: wrap; gap: 2%; justify-content: flex-start; }}
-                                .photo-box {{ width: 49%; text-align: center; font-size: 0.9em; font-weight: bold; border: 1px solid #ccc; margin-bottom: 15px; padding: 10px; box-sizing: border-box; background: #fafafa;}}
-                                .photo-box img {{ width: 100%; height: auto; max-height: 400px; object-fit: contain; border-radius: 4px; margin-bottom: 10px; display:block; margin-left:auto; margin-right:auto; }}
-                                @media print {{ body {{ padding: 0; }} .ticket-card {{ margin-bottom: 20mm; box-shadow: none; }} }}
-                            </style>
-                        </head>
-                        <body>
-                            <h1>Laporan Lumpsum & PJB - {nop_report}</h1>
-                            <p style="text-align:center; color:#64748b; font-size:0.9em; margin-bottom:30px;">Filter Periode: {filter_periode} | Total: {count_match} Sub-Tiket</p>
-                            {html_content}
-                        </body>
-                        </html>
-                        """
-                        
-                        st.success(f"✅ Berhasil merangkum **{count_match}** sub-tiket (Mengakomodir duplikat tiket di baris berbeda secara urut).")
-                        b64_html = base64.b64encode(full_html.encode("utf-8")).decode()
-                        st.markdown(f"""
-                            <a href="data:text/html;base64,{b64_html}" download="Laporan_PJB_{nop_report}.html" 
-                            style="display: block; text-align: center; background-color: #0ea5e9; color: white; padding: 15px 20px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 1.1em;">
-                            📥 Download Laporan (Buka file lalu CTRL+P dan Save as PDF)
-                            </a>
-                        """, unsafe_allow_html=True)
-                        st.markdown("<hr>", unsafe_allow_html=True)
-                        st.components.v1.html(full_html, height=800, scrolling=True)
-                    else: st.warning("⚠️ Tidak ada data yang cocok dengan filter yang dipilih.")
-            else: st.info("⚠️ Data Sheet 'Rekap PJB' atau 'Form PJB' belum tersedia/masih kosong.")
+
+                            if pdf_um_url.startswith("http"):
+                                html_content += f"""
+                                <div class='photo-box' style='width: 100%; padding:15px;'>
+                                    <a href='{pdf_um_url}' target='_blank' style='background:#0ea5e9; color:white; padding:10px 18px; text-decoration:none; border-radius:6px; display:inline-block;'>📥 Download PDF Surat Tugas & UM</a>
+                                </div>
+                                """
+
+                            html_content += "</div></div>"
+
+                        if count_match > 0:
+                            full_html = f"""
+                            <!DOCTYPE html>
+                            <html>
+                            <head>
+                                <meta charset="UTF-8">
+                                <title>Laporan Auto PJB - {nop_report}</title>
+                                <style>
+                                    @page {{ size: A4 portrait; margin: 12mm; }}
+                                    body {{ font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #1E293B; margin: 0; padding: 0; background: #fff; }}
+                                    h1 {{ text-align: center; color: #0F172A; border-bottom: 3px solid #007BFF; padding-bottom: 10px; margin-top: 10px; }}
+                                    .ticket-card {{ width: 100%; border: 2px solid #0F172A; padding: 12mm; box-sizing: border-box; margin-bottom: 20px; border-radius: 10px; page-break-inside: avoid; }}
+                                    .ticket-header {{ background-color: #F1F5F9; padding: 10px 14px; font-weight: bold; font-size: 1.1em; border-bottom: 2px solid #007BFF; margin-bottom: 15px; border-radius: 6px; }}
+                                    table {{ width: 100%; border-collapse: collapse; margin-bottom: 18px; font-size: 0.95em; }}
+                                    td {{ padding: 7px 8px; border-bottom: 1px solid #E2E8F0; }}
+                                    .photo-container {{ display: flex; flex-wrap: wrap; gap: 2%; justify-content: center; align-items: stretch; }}
+                                    .photo-box {{ text-align: center; font-size: 0.9em; font-weight: bold; border: 1.5px solid #CBD5E1; border-radius: 8px; margin-bottom: 15px; padding: 10px; box-sizing: border-box; background: #F8FAFC; page-break-inside: avoid; }}
+                                    .photo-box img {{ width: 100%; height: auto; max-height: 460px; object-fit: contain; border-radius: 6px; margin-bottom: 8px; display: block; margin-left: auto; margin-right: auto; background: #FFFFFF; }}
+                                    .photo-caption {{ color: #0F172A; padding-top: 4px; font-size: 0.92em; }}
+                                    @media print {{ body {{ padding: 0; }} .ticket-card {{ margin-bottom: 15mm; box-shadow: none; }} }}
+                                </style>
+                            </head>
+                            <body>
+                                <h1>Laporan Lumpsum & PJB - NOP {nop_report}</h1>
+                                <p style="text-align:center; color:#475569; font-size:0.95em; margin-bottom:25px;">
+                                    Filter Periode: <b>{filter_periode}</b> &nbsp;|&nbsp; Total Tiket: <b>{count_match} Sub-Tiket</b> &nbsp;|&nbsp; Total Nominal: <b>Rp {tot_nom_edited:,.0f}</b>
+                                </p>
+                                {html_content}
+                            </body>
+                            </html>
+                            """
+
+                            st.success(f"✅ Berhasil men-generate **{count_match}** sub-tiket beserta foto-foto yang diupload tim secara full!")
+                            b64_html = base64.b64encode(full_html.encode("utf-8")).decode()
+                            st.markdown(f"""
+                                <a href="data:text/html;base64,{b64_html}" download="Laporan_PJB_{nop_report}.html" 
+                                style="display: block; text-align: center; background-color: #007BFF; color: white !important; padding: 15px 20px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 1.05em;">
+                                📥 Download Laporan HTML Siap Cetak PDF (Buka File lalu Tekan CTRL+P -> Save as PDF)
+                                </a>
+                            """, unsafe_allow_html=True)
+                            st.markdown("<hr>", unsafe_allow_html=True)
+                            st.components.v1.html(full_html, height=800, scrolling=True)
+                else:
+                    st.warning("⚠️ Tidak ada data yang cocok dengan filter yang dipilih.")
+            else:
+                st.info("⚠️ Data Sheet 'Rekap PJB' atau 'Form PJB' belum tersedia/masih kosong.")
         
         with tab_report2:
             st.markdown("### 📊 Status Tracking All Data (Request Dana vs Penyelesaian PJB)")
