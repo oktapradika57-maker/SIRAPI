@@ -904,7 +904,7 @@ def get_local_img_base64(filepath):
 
 def append_data(sheet_name, data, spreadsheet_id):
     try:
-        client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
+        client = get_gspread_client().open_by_key(spreadsheet_id)
         ws = client.worksheet(sheet_name)
         safe_data = [str(x) if x is not None else "" for x in data]
         ws.append_row(safe_data, value_input_option="USER_ENTERED", table_range="A1")
@@ -912,6 +912,21 @@ def append_data(sheet_name, data, spreadsheet_id):
         return True
     except Exception as e:
         st.error(f"⚠️ Gagal menyimpan ke Spreadsheet ({sheet_name}). Error: {e}")
+        return False
+
+def append_data_multiple(sheet_name, list_of_data, spreadsheet_id):
+    # FUNGSI INI AKAN MENGIRIM 2, 3, ATAU 10 TIKET SEKALIGUS DALAM 1X KLIK TANPA TUMPANG TINDIH
+    try:
+        client = get_gspread_client().open_by_key(spreadsheet_id)
+        ws = client.worksheet(sheet_name)
+        safe_list = []
+        for data in list_of_data:
+            safe_list.append([str(x) if x is not None else "" for x in data])
+        ws.append_rows(safe_list, value_input_option="USER_ENTERED")
+        fetch_spreadsheet_data.clear()
+        return True
+    except Exception as e:
+        st.error(f"⚠️ Gagal menyimpan Data Batch ke Spreadsheet. Error: {e}")
         return False
 
 def update_approval_status(spreadsheet_id, row_index, new_status, remark="-"):
@@ -1813,13 +1828,15 @@ elif st.session_state.page == "📝 Form Request Dana":
                                 st.error(f"❌ KM/RH Awal pada {req['tipe']} bermasalah (0 atau lebih kecil dari histori {req['last_ind']}).")
                                 st.stop()
                     
-                    with st.spinner("🚀 Memecah data & Mengupload..."):
+                    with st.spinner("🚀 Memecah data & Mengirim ke Server (Mohon tunggu)..."):
                         url_km = upload_foto(foto_km)
                         url_evidance = upload_foto(foto_evidance)
                         ts_now = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
                         tgl_str = tanggal.strftime("%d/%m/%Y")
                         
                         rincian_wa_items = []
+                        batch_data_req = [] # <-- WADAH KOTAK UNTUK SISTEM BATCH
+                        
                         for idx_r, req in enumerate(sub_requests, 1):
                             desc_final = deskripsi
                             if tim_bareng: desc_final += f"\n\n[Tim: {', '.join(tim_bareng)}]"
@@ -1832,7 +1849,9 @@ elif st.session_state.page == "📝 Form Request Dana":
                                 jarak_final_text, lat_berangkat, long_berangkat, req['plat'], 
                                 rek_penerima, no_rek, nominal_tf, url_km, url_evidance, lat_tujuan, long_tujuan
                             ]
-                            append_data(SHEET_REQUEST, data_req, target_ss)
+                            # Masukkan semua tiket ke dalam wadah (belum dikirim)
+                            batch_data_req.append(data_req)
+                            
                             if req['plat'] and req['plat'] not in list_nopol_bersih: save_new_nopol_to_csv(req['plat'])
 
                             # Rangkum rincian item untuk WA TANPA NOMINAL UANG
@@ -1848,30 +1867,34 @@ elif st.session_state.page == "📝 Form Request Dana":
                                 detail_item += f" | Durasi: {req['hari']} Malam"
                             rincian_wa_items.append(detail_item)
                                 
-                        if pm_selected_list: update_pm_ticket_status(target_ss, pm_selected_list, "REQUESTED")
-                            
-                        # GENERATE TEKS WA PENGAJUAN REQUEST (DETAIL LENGKAP KECUALI NOMINAL UANG)
-                        tim_str = ", ".join(tim_bareng) if tim_bareng else "-"
-                        rincian_str = "\n".join(rincian_wa_items)
-                        wa_req_text = (
-                            f"*PENGAJUAN REQUEST DANA OPERASIONAL (SiRAPI)*\n"
-                            f"📅 Tanggal : {tgl_str} ({ts_now.split(' ')[1]})\n"
-                            f"🌐 Wilayah : NOP {nop} ({cluster})\n"
-                            f"👤 Nama PIC : {nama} ({role})\n"
-                            f"👥 Rekan Tim : {tim_str}\n"
-                            f"🎫 Tiket Pokok : {base_tiket_clean}\n"
-                            f"📍 Site ID : {site_id if site_id else '-'}\n"
-                            f"🛠️ Keperluan : {keperluan}\n"
-                            f"🛣️ Estimasi Rute : {jarak_final_text if jarak_final_text else '-'}\n\n"
-                            f"*📋 Detail Pekerjaan:*\n{deskripsi if deskripsi else '-'}\n\n"
-                            f"*🛒 Rincian Kebutuhan (Sub-Tiket):*\n{rincian_str}\n\n"
-                            f"*🏦 Rekening Penerima:*\n{rek_penerima} - {no_rek}\n\n"
-                            f"*📸 Lampiran Foto Evidance:*\n"
-                            f"• Foto KM/RH Awal : {url_km if url_km else '-'}\n"
-                            f"• Foto Evidance : {url_evidance if url_evidance else '-'}"
-                        )
-                        st.session_state.req_wa_ready = wa_req_text
-                        st.success(f"🎉 Berhasil menyimpan & memecah {len(sub_requests)} sub-tiket! Silakan salin laporan WhatsApp di bawah ini.")
+                        # PUSH SEMUA TIKET (BATCH) SEKALI JALAN KE GOOGLE SHEETS! (MENCEGAH OVERWRITE)
+                        sukses_simpan = append_data_multiple(SHEET_REQUEST, batch_data_req, target_ss)
+                        
+                        if sukses_simpan:
+                            if pm_selected_list: update_pm_ticket_status(target_ss, pm_selected_list, "REQUESTED")
+                                
+                            # GENERATE TEKS WA PENGAJUAN REQUEST (TANPA NOMINAL UANG)
+                            tim_str = ", ".join(tim_bareng) if tim_bareng else "-"
+                            rincian_str = "\n".join(rincian_wa_items)
+                            wa_req_text = (
+                                f"*PENGAJUAN REQUEST DANA OPERASIONAL (SiRAPI)*\n"
+                                f"📅 Tanggal : {tgl_str} ({ts_now.split(' ')[1]})\n"
+                                f"🌐 Wilayah : NOP {nop} ({cluster})\n"
+                                f"👤 Nama PIC : {nama} ({role})\n"
+                                f"👥 Rekan Tim : {tim_str}\n"
+                                f"🎫 Tiket Pokok : {base_tiket_clean}\n"
+                                f"📍 Site ID : {site_id if site_id else '-'}\n"
+                                f"🛠️ Keperluan : {keperluan}\n"
+                                f"🛣️ Estimasi Rute : {jarak_final_text if jarak_final_text else '-'}\n\n"
+                                f"*📋 Detail Pekerjaan:*\n{deskripsi if deskripsi else '-'}\n\n"
+                                f"*🛒 Rincian Kebutuhan (Sub-Tiket):*\n{rincian_str}\n\n"
+                                f"*🏦 Rekening Penerima:*\n{rek_penerima} - {no_rek}\n\n"
+                                f"*📸 Lampiran Foto Evidance:*\n"
+                                f"• Foto KM/RH Awal : {url_km if url_km else '-'}\n"
+                                f"• Foto Evidance : {url_evidance if url_evidance else '-'}"
+                            )
+                            st.session_state.req_wa_ready = wa_req_text
+                            st.success(f"🎉 Berhasil menyimpan & memecah {len(sub_requests)} sub-tiket secara berurutan! Silakan salin laporan WhatsApp di bawah ini.")
 
         # TAMPILKAN GENERATOR WA SETELAH REQUEST DISUBMIT
         if st.session_state.get("req_wa_ready"):
