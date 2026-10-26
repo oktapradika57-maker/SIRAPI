@@ -904,7 +904,8 @@ def get_local_img_base64(filepath):
 
 def append_data(sheet_name, data, spreadsheet_id):
     try:
-        client = get_gspread_client().open_by_key(spreadsheet_id)
+        # Menggunakan koneksi database asli bawaan aplikasi Anda yang sudah stabil!
+        client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
         ws = client.worksheet(sheet_name)
         safe_data = [str(x) if x is not None else "" for x in data]
         ws.append_row(safe_data, value_input_option="USER_ENTERED", table_range="A1")
@@ -915,9 +916,10 @@ def append_data(sheet_name, data, spreadsheet_id):
         return False
 
 def append_data_multiple(sheet_name, list_of_data, spreadsheet_id):
-    # FUNGSI INI AKAN MENGIRIM 2, 3, ATAU 10 TIKET SEKALIGUS DALAM 1X KLIK TANPA TUMPANG TINDIH
+    # FUNGSI INI AKAN MENGIRIM SEMUA TIKET SEKALIGUS DALAM 1X KLIK TANPA TUMPANG TINDIH
     try:
-        client = get_gspread_client().open_by_key(spreadsheet_id)
+        # Menggunakan koneksi database asli bawaan aplikasi Anda yang sudah stabil!
+        client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
         ws = client.worksheet(sheet_name)
         safe_list = []
         for data in list_of_data:
@@ -928,7 +930,6 @@ def append_data_multiple(sheet_name, list_of_data, spreadsheet_id):
     except Exception as e:
         st.error(f"⚠️ Gagal menyimpan Data Batch ke Spreadsheet. Error: {e}")
         return False
-
 def update_approval_status(spreadsheet_id, row_index, new_status, remark="-"):
     try:
         client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
