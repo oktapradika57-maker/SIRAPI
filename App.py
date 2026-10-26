@@ -2041,7 +2041,9 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                     st.success("🎉 Data Ditarik!")
                 else:
                     st.session_state.pjb_data = None
-                    st.error("❌ Data Pengajuan (Request) Tidak ditemukan di Database.")        if st.session_state.get("pjb_data"):
+                    st.error("❌ Data Pengajuan (Request) Tidak ditemukan di Database.")        
+                    
+        if st.session_state.get("pjb_data"):
             d = st.session_state.pjb_data
             
             # --- JIKA LOLOS, LANJUTKAN MENAMPILKAN FORM PJB SEPERTI BIASA ---
