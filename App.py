@@ -2047,7 +2047,7 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                 ditemukan_pjb = None
                 
                 if selected_key_clean in row_lookup_map:
-                    r_ exact = row_lookup_map[selected_key_clean][1]
+                    r_exact = row_lookup_map[selected_key_clean][1]
                     ditemukan_req = {
                         "NOP": r_exact[2], "Cluster": r_exact[4], "Nama": r_exact[5], "Role": r_exact[6], "Site": r_exact[7], "Keperluan": r_exact[8], 
                         "BBM": r_exact[10] if len(r_exact)>10 else "", "Desc": r_exact[11] if len(r_exact)>11 else "", 
