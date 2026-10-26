@@ -1894,7 +1894,7 @@ elif st.session_state.page == "📝 Form Request Dana":
                     st.rerun()
 
 # ==========================================
-# PAGE 2: FORM PJB OPERASIONAL 
+# PAGE 2: FORM PJB OPERASIONAL (RULES SERAGAM PALANGKARAYA & PANGKALANBUN)
 # ==========================================
 elif st.session_state.page == "✅ Form PJB Operasional":
     st.markdown("<div class='header-card'><h2>✅ PORTAL PJB (PENYELESAIAN)</h2><p>Pilih dan selesaikan sub-tiket Anda secara spesifik.</p></div>", unsafe_allow_html=True)
@@ -1908,30 +1908,34 @@ elif st.session_state.page == "✅ Form PJB Operasional":
         
         site_dict, site_list, tim_dict, list_nopol_csv, nik_dict = load_excel_data()
         
+        # --- ALGORITMA FILTER PJB SERAGAM (PALANGKARAYA & PANGKALANBUN IDENTIK) ---
         status_verif_dict = {}
         for r in app_r[1:]:
-            if len(r) > 5 and r[3] == "Verifikasi PJB":
+            if len(r) > 5 and str(r[3]).strip() == "Verifikasi PJB":
                 tiket_app = str(r[2]).strip().upper()
                 if tiket_app != "": 
-                    status_verif_dict[tiket_app] = str(r[5]).strip()
+                    status_verif_dict[tiket_app] = str(r[5]).strip().upper()
 
         pjb_counts = {}
-        pjb_cat_counts = {}
+        pjb_item_counts = {}
         pjb_tickets_all_set = set()
         for r in pjb_r[1:]:
-            if len(r) > 21 and r[21].strip() != "":
-                tk_str = r[36].strip() if (len(r) > 36 and r[36].strip()) else r[21].strip()
+            if len(r) > 21 and str(r[21]).strip() != "":
+                tk_main = str(r[21]).strip().upper()
+                tk_str = r[36].strip() if (len(r) > 36 and str(r[36]).strip()) else tk_main
                 kat_pjb = str(r[8]).strip().upper() if len(r) > 8 else ""
-                tk_list = [t.strip().upper() for t in tk_str.split(",")]
+                tk_list = [t.strip().upper() for t in tk_str.split(",") if t.strip()]
+                if tk_main not in tk_list:
+                    tk_list.append(tk_main)
                 pjb_tickets_all_set.update(tk_list)
                 for t_clean in tk_list:
                     if t_clean and status_verif_dict.get(t_clean) != "REJECTED":
                         pjb_counts[t_clean] = pjb_counts.get(t_clean, 0) + 1
-                        pjb_cat_counts[(t_clean, kat_pjb)] = pjb_cat_counts.get((t_clean, kat_pjb), 0) + 1
+                        pjb_item_counts[(t_clean, kat_pjb)] = pjb_item_counts.get((t_clean, kat_pjb), 0) + 1
         
         req_app_status = {}
         for r in app_r[1:]:
-            if len(r) > 5 and r[3] == "Request Dana":
+            if len(r) > 5 and str(r[3]).strip() == "Request Dana":
                 tiket_app = str(r[2]).strip().upper()
                 if tiket_app != "": 
                     req_app_status[tiket_app] = str(r[5]).strip().upper()
@@ -1951,9 +1955,15 @@ elif st.session_state.page == "✅ Form PJB Operasional":
             pass_nominal = st.text_input("🔑 Akses Nominal (Admin):", type="password")
             
         req_counts = {}
-        req_cat_counts = {}
+        req_item_counts = {}
         pending_list, pending_options = [], []
-        pbu_row_lookup = {}
+        row_lookup_map = {}
+        
+        # Hitung frekuensi nomor tiket di sheet Request untuk mendeteksi apakah ada tiket kembar beda item (Support/BBM/Material)
+        ticket_occurrence = defaultdict(int)
+        for r in req_r[1:]:
+            if len(r) > 3 and str(r[3]).strip() != "":
+                ticket_occurrence[str(r[3]).strip().upper()] += 1
         
         for row_idx, r in enumerate(req_r[1:], start=1):
             if len(r) > 5 and str(r[3]).strip() != "":
@@ -1965,92 +1975,54 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                 base_tiket = req_tk_raw.split(" [")[0].strip()
                 if req_app_status.get(req_tk_raw) == "REJECTED" or req_app_status.get(base_tiket) == "REJECTED":
                     continue 
-
-                # =========================================================================
-                # LOGIKA PALANGKARAYA (TETAP ASLI, TIDAK DIUBAH SAMA SEKALI)
-                # =========================================================================
-                if nop_cari != "Pangkalanbun":
-                    req_counts[req_tk_raw] = req_counts.get(req_tk_raw, 0) + 1
-                    if req_counts[req_tk_raw] > pjb_counts.get(req_tk_raw, 0):
-                        is_ready_to_pjb = True
-                        if "[MOTOR-2]" in req_tk_raw or "[MOBIL-2]" in req_tk_raw:
-                            tiket_tahap_1 = req_tk_raw.replace("-2]", "-1]")
-                            if pjb_counts.get(tiket_tahap_1, 0) == 0:
-                                is_ready_to_pjb = False
-                                
-                        if is_ready_to_pjb:
-                            item = {
-                                "Tanggal": r[1], 
-                                "Nama": r[5], 
-                                "No Request": req_tk_raw, 
-                                "Kategori Item": kat_req, 
-                                "Keperluan": r[8] if len(r)>8 else ""
-                            }
-                            if pass_nominal == "B0924649": 
-                                item["Nominal Request"] = f"Rp {clean_nominal(r[9]):,.0f}" if len(r)>9 else "Rp 0"
-                            if "PM" in (r[8] if len(r)>8 else ""):
-                                pm_list = [t.strip() for t in req_tk_raw.split(",") if t.strip()]
-                                rem = [t for t in pm_list if pjb_counts.get(t, 0) == 0]
-                                item["Sisa Tiket PM"] = ", ".join(rem) if rem else "Menunggu Verifikasi"
-                            
-                            if nama_pjb != "-- Pilih Nama --":
-                                nama_bersih = nama_pjb.strip().upper()
-                                if nama_bersih in nm or nm in nama_bersih:
-                                    pending_list.append(item)
-                                    pending_options.append(req_tk_raw)
-                            else: 
-                                pending_list.append(item)
-
-                # =========================================================================
-                # LOGIKA KHUSUS PANGKALANBUN (PISAHKAN SUPPORT, BBM, MATERIAL MESKI TIKET SAMA)
-                # =========================================================================
+                
+                req_counts[req_tk_raw] = req_counts.get(req_tk_raw, 0) + 1
+                req_item_counts[(req_tk_raw, kat_req_up)] = req_item_counts.get((req_tk_raw, kat_req_up), 0) + 1
+                
+                # Jika nomor tiket unik/sudah ter-split dengan tag [...], gunakan hitungan tiket; jika tiket kembar beda kategori, gunakan hitungan per kategori
+                if ticket_occurrence[req_tk_raw] > 1 and "[" not in req_tk_raw:
+                    masih_pending = req_item_counts[(req_tk_raw, kat_req_up)] > pjb_item_counts.get((req_tk_raw, kat_req_up), 0)
                 else:
-                    req_cat_counts[(req_tk_raw, kat_req_up)] = req_cat_counts.get((req_tk_raw, kat_req_up), 0) + 1
-                    sudah_pjb_kat = pjb_cat_counts.get((req_tk_raw, kat_req_up), 0)
-                    
-                    # Jika di sheet Pangkalanbun belum ada tag [...], pisahkan per (Tiket, Kategori)
-                    is_pending_pbu = req_cat_counts[(req_tk_raw, kat_req_up)] > sudah_pjb_kat
-                    if "[" in req_tk_raw and "]" in req_tk_raw:
-                        req_counts[req_tk_raw] = req_counts.get(req_tk_raw, 0) + 1
-                        is_pending_pbu = req_counts[req_tk_raw] > pjb_counts.get(req_tk_raw, 0)
-
-                    if is_pending_pbu:
-                        is_ready_to_pjb = True
-                        if "[MOTOR-2]" in req_tk_raw or "[MOBIL-2]" in req_tk_raw:
-                            tiket_tahap_1 = req_tk_raw.replace("-2]", "-1]")
-                            if pjb_counts.get(tiket_tahap_1, 0) == 0:
-                                is_ready_to_pjb = False
-
-                        if is_ready_to_pjb:
-                            # Buat label unik agar Support, BBM, Material muncul semua di dropdown Pangkalanbun
-                            if "[" in req_tk_raw and "]" in req_tk_raw:
-                                label_opt = f"{req_tk_raw} | {kat_req} (#{row_idx})" if req_tk_raw in pbu_row_lookup else req_tk_raw
-                            else:
-                                label_opt = f"{req_tk_raw} [{kat_req_up if kat_req_up else 'ITEM'}] (#{row_idx})"
-                            pbu_row_lookup[label_opt.upper()] = (req_tk_raw, r)
-
-                            item = {
-                                "Tanggal": r[1], 
-                                "Nama": r[5], 
-                                "No Request": label_opt, 
-                                "Kategori Item": kat_req, 
-                                "Keperluan": r[8] if len(r)>8 else ""
-                            }
-                            if pass_nominal == "B0924649": 
-                                item["Nominal Request"] = f"Rp {clean_nominal(r[9]):,.0f}" if len(r)>9 else "Rp 0"
-                            if "PM" in (r[8] if len(r)>8 else ""):
-                                pm_list = [t.strip() for t in req_tk_raw.split(",") if t.strip()]
-                                rem = [t for t in pm_list if pjb_counts.get(t, 0) == 0]
-                                item["Sisa Tiket PM"] = ", ".join(rem) if rem else "Menunggu Verifikasi"
-
-                            if nama_pjb != "-- Pilih Nama --":
-                                nama_bersih = nama_pjb.strip().upper()
-                                if nama_bersih in nm or nm in nama_bersih:
-                                    pending_list.append(item)
-                                    pending_options.append(label_opt)
-                            else:
+                    masih_pending = req_counts[req_tk_raw] > pjb_counts.get(req_tk_raw, 0)
+                
+                if masih_pending:
+                    is_ready_to_pjb = True
+                    if "[MOTOR-2]" in req_tk_raw or "[MOBIL-2]" in req_tk_raw:
+                        tiket_tahap_1 = req_tk_raw.replace("-2]", "-1]")
+                        if pjb_counts.get(tiket_tahap_1, 0) == 0:
+                            is_ready_to_pjb = False
+                            
+                    if is_ready_to_pjb:
+                        # Jika ada beberapa item (Support, BBM, Material) dengan nomor tiket sama, beri penanda kategori agar muncul semua di dropdown
+                        if ticket_occurrence[req_tk_raw] > 1 and (req_tk_raw in row_lookup_map or "[" not in req_tk_raw):
+                            option_label = f"{req_tk_raw} — {kat_req} (#{row_idx})"
+                        else:
+                            option_label = req_tk_raw
+                        row_lookup_map[option_label.upper()] = (req_tk_raw, r)
+                        
+                        item = {
+                            "Tanggal": r[1], 
+                            "Nama": r[5], 
+                            "No Request": option_label, 
+                            "Kategori Item": kat_req, 
+                            "Keperluan": r[8] if len(r)>8 else ""
+                        }
+                        if pass_nominal == "B0924649": 
+                            item["Nominal Request"] = f"Rp {clean_nominal(r[9]):,.0f}" if len(r)>9 else "Rp 0"
+                        
+                        if "PM" in (r[8] if len(r)>8 else ""):
+                            pm_list = [t.strip() for t in req_tk_raw.split(",") if t.strip()]
+                            rem = [t for t in pm_list if pjb_counts.get(t, 0) == 0]
+                            item["Sisa Tiket PM"] = ", ".join(rem) if rem else "Menunggu Verifikasi"
+                        
+                        if nama_pjb != "-- Pilih Nama --":
+                            nama_bersih = nama_pjb.strip().upper()
+                            if nama_bersih in nm or nm in nama_bersih:
                                 pending_list.append(item)
-                                pending_options.append(label_opt)
+                                pending_options.append(option_label)
+                        else: 
+                            pending_list.append(item)
+                            pending_options.append(option_label)
         
         if pending_list: 
             st.dataframe(pd.DataFrame(pending_list), hide_index=True, use_container_width=True)
@@ -2062,30 +2034,28 @@ elif st.session_state.page == "✅ Form PJB Operasional":
             pilihan_tiket = st.selectbox("🎫 Pilih Sub-Tiket Pending yang ingin di-PJB-kan:", ["-- Pilih Tiket --"] + pending_options + ["-- Ketik Manual --"]) if pending_options else "-- Ketik Manual --"
             cari_tiket = st.text_input("Ketik Manual (Termasuk Request Baru Hasil Izin Revisi):") if pilihan_tiket == "-- Ketik Manual --" else ("" if pilihan_tiket == "-- Pilih Tiket --" else pilihan_tiket)
         
-        raw_selected_key = str(cari_tiket).strip().upper()
-        # Jika Pangkalanbun menggunakan label terpisah (#row), kembalikan valid_cari_tiket ke tiket asli saat disimpan
-        if nop_cari == "Pangkalanbun" and raw_selected_key in pbu_row_lookup:
-            valid_cari_tiket = pbu_row_lookup[raw_selected_key][0]
+        selected_key_clean = str(cari_tiket).strip().upper()
+        if selected_key_clean in row_lookup_map:
+            valid_cari_tiket = row_lookup_map[selected_key_clean][0]
         else:
-            valid_cari_tiket = raw_selected_key
+            valid_cari_tiket = selected_key_clean
 
         with col_s3: 
             st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
-            if st.button("Tarik Data PJB", type="primary", use_container_width=True) and raw_selected_key:
+            if st.button("Tarik Data PJB", type="primary", use_container_width=True) and selected_key_clean:
                 ditemukan_req = None
                 ditemukan_pjb = None
                 
-                # Jika Pangkalanbun & dipilih dari dropdown, tarik baris spesifik item tersebut (Support / BBM / Material)
-                if nop_cari == "Pangkalanbun" and raw_selected_key in pbu_row_lookup:
-                    r_match = pbu_row_lookup[raw_selected_key][1]
+                if selected_key_clean in row_lookup_map:
+                    r_ exact = row_lookup_map[selected_key_clean][1]
                     ditemukan_req = {
-                        "NOP": r_match[2], "Cluster": r_match[4], "Nama": r_match[5], "Role": r_match[6], "Site": r_match[7], "Keperluan": r_match[8], 
-                        "BBM": r_match[10] if len(r_match)>10 else "", "Desc": r_match[11] if len(r_match)>11 else "", 
-                        "KMAwal": clean_indicator(r_match[12]) if len(r_match)>12 else 0.0, 
-                        "NominalReq": clean_nominal(r_match[9]) if len(r_match)>9 else 0, 
-                        "Jarak": r_match[13] if len(r_match)>13 else "", "Plat": r_match[16] if len(r_match)>16 else "",
-                        "LatBerangkat": r_match[14] if len(r_match)>14 else "0", "LongBerangkat": r_match[15] if len(r_match)>15 else "0",
-                        "LatTujuan": r_match[22] if len(r_match)>22 else "0", "LongTujuan": r_match[23] if len(r_match)>23 else "0",
+                        "NOP": r_exact[2], "Cluster": r_exact[4], "Nama": r_exact[5], "Role": r_exact[6], "Site": r_exact[7], "Keperluan": r_exact[8], 
+                        "BBM": r_exact[10] if len(r_exact)>10 else "", "Desc": r_exact[11] if len(r_exact)>11 else "", 
+                        "KMAwal": clean_indicator(r_exact[12]) if len(r_exact)>12 else 0.0, 
+                        "NominalReq": clean_nominal(r_exact[9]) if len(r_exact)>9 else 0, 
+                        "Jarak": r_exact[13] if len(r_exact)>13 else "", "Plat": r_exact[16] if len(r_exact)>16 else "",
+                        "LatBerangkat": r_exact[14] if len(r_exact)>14 else "0", "LongBerangkat": r_exact[15] if len(r_exact)>15 else "0",
+                        "LatTujuan": r_exact[22] if len(r_exact)>22 else "0", "LongTujuan": r_exact[23] if len(r_exact)>23 else "0",
                     }
                 else:
                     for r in reversed(req_r[1:]):
@@ -2113,7 +2083,7 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                         ditemukan_req["nota_lama"] = int(clean_nominal(ditemukan_pjb[20])) if len(ditemukan_pjb)>20 else 0
                         
                     st.session_state.pjb_data = ditemukan_req
-                    st.success(f"🎉 Data Ditarik: {ditemukan_req.get('BBM', '')}!")
+                    st.success("🎉 Data Ditarik!")
                 else:
                     st.session_state.pjb_data = None
                     st.error("❌ Data Pengajuan (Request) Tidak ditemukan di Database.")
@@ -2942,97 +2912,349 @@ elif st.session_state.page == "📈 Live Monitoring":
                 st.dataframe(pd.DataFrame(eval_list).style.apply(highlight_markup, subset=['Status Jarak', 'Status Konsumsi']), hide_index=True, use_container_width=True)
 
         with t4:
-            st.markdown("### 🚙 Analisa Performa & Efisiensi Mobil (Berdasarkan NOPOL)")
-            st.info("💡 **AKURAT:** Tabel ini mengambil perhitungan absolut dari Plat Nopol langsung (mengabaikan salah ketik di form awal).")
+            st.markdown("### 🚙 Analisa Penggunaan Dana & Efisiensi Mobil per KM & NOPOL")
+            st.info("💡 **ANALISA LENGKAP:** Menampilkan akumulasi jarak tempuh (KM), konsumsi BBM (Liter), total realisasi dana (Rp), rasio kehematan mesin (**KM/Liter**), hingga **Biaya Dana per KM (Rp/KM)** untuk setiap NOPOL dan rincian per tiket.")
             
+            # Indeks pencarian cepat KM Awal & Jarak Satelit dari Sheet Request
+            req_lookup_car = {}
+            for rq in req_r[1:]:
+                if len(rq) > 12 and str(rq[3]).strip():
+                    tk_rq = str(rq[3]).strip().upper()
+                    req_lookup_car[tk_rq] = {
+                        "km_awal": float(clean_indicator(rq[12])),
+                        "jarak_sat": rq[13] if len(rq) > 13 else "-",
+                        "cluster": rq[4] if len(rq) > 4 else "-"
+                    }
+
             car_stats = {}
+            car_trips_detail = []
+
             for pjb in pjb_r[1:]:
-                if len(pjb) > 24:
-                    kategori = str(pjb[8]).lower()
-                    plat = str(pjb[12]).strip().upper()
+                if len(pjb) > 23:
+                    kategori = str(pjb[8]).strip()
+                    plat_raw = str(pjb[12]).strip().upper()
+                    plat_clean = re.sub(r'\s+', ' ', plat_raw)
                     
-                    if "mobil" in kategori and plat and plat not in ["", "0", "NONE", "NAN"]:
-                        if plat not in car_stats:
-                            car_stats[plat] = {"Total KM": 0.0, "Total Liter": 0.0, "Total Dana": 0}
+                    if "mobil" in kategori.lower() and plat_clean not in ["", "0", "NONE", "NAN", "-"]:
+                        no_tkt = str(pjb[21]).strip().upper() if len(pjb) > 21 else "-"
+                        tgl_pjb_str = str(pjb[1]).strip() if len(pjb) > 1 else "-"
+                        nama_pic = str(pjb[4]).strip() if len(pjb) > 4 else "-"
+                        site_tujuan = str(pjb[6]).strip() if len(pjb) > 6 else "-"
+                        keperluan_pjb = str(pjb[7]).strip() if len(pjb) > 7 else "-"
                         
-                        try:
-                            # Hitung absolut trip dari sistem PJB langsung
-                            trip = float(pjb[24]) if len(pjb)>24 and str(pjb[24]).strip() else 0.0
-                            liter = float(str(pjb[22]).replace(',', '.')) if len(pjb)>22 else 0.0
-                            nominal = clean_nominal(pjb[11]) if len(pjb)>11 else 0
-                            
-                            car_stats[plat]["Total KM"] += trip
-                            car_stats[plat]["Total Liter"] += liter
-                            car_stats[plat]["Total Dana"] += nominal
-                        except: pass
-            
-            car_list = []
-            for plat, data in car_stats.items():
-                eff = data["Total KM"] / data["Total Liter"] if data["Total Liter"] > 0 else 0.0
-                car_list.append({
-                    "NOPOL Kendaraan": plat,
-                    "Total Akumulasi Jarak (KM)": round(data["Total KM"], 2),
-                    "Total Pengisian BBM (Liter)": round(data["Total Liter"], 2),
-                    "Total Dana Dikeluarkan": f"Rp {data['Total Dana']:,.0f}",
-                    "Efisiensi Mesin": f"{eff:.2f} KM / Liter"
-                })
-                
-            if car_list:
-                df_cars = pd.DataFrame(car_list).sort_values("Total Akumulasi Jarak (KM)", ascending=False)
-                
-                # --- TAMBAHAN GRAFIK MOBIL ---
-                st.bar_chart(df_cars.set_index("NOPOL Kendaraan")["Total Akumulasi Jarak (KM)"])
-                # -----------------------------
-                
-                st.dataframe(df_cars, hide_index=True, use_container_width=True)
-                st.download_button("📥 Export Data Mobil", data=df_cars.to_csv(index=False), file_name="Data_Mobil.csv")
+                        km_akhir_val = float(clean_indicator(pjb[10])) if len(pjb) > 10 else 0.0
+                        trip_col = float(clean_indicator(pjb[24])) if len(pjb) > 24 and str(pjb[24]).strip() else 0.0
+                        
+                        rq_info = req_lookup_car.get(no_tkt, {})
+                        km_awal_val = rq_info.get("km_awal", 0.0)
+                        
+                        # Jika kolom TKM_RH (pjb[24]) kosong/0, hitung otomatis dari KM Akhir - KM Awal
+                        if trip_col > 0:
+                            trip_km = trip_col
+                            if km_awal_val == 0 and km_akhir_val >= trip_km:
+                                km_awal_val = km_akhir_val - trip_km
+                        elif km_akhir_val > km_awal_val and km_awal_val > 0:
+                            trip_km = km_akhir_val - km_awal_val
+                        else:
+                            trip_km = 0.0
+
+                        liter_val = float(clean_indicator(pjb[22])) if len(pjb) > 22 else 0.0
+                        harga_l_val = clean_nominal(pjb[23]) if len(pjb) > 23 else 0
+                        nominal_pjb_val = clean_nominal(pjb[11]) if len(pjb) > 11 else 0
+                        nominal_nota_val = clean_nominal(pjb[20]) if len(pjb) > 20 else 0
+                        dana_aktual = nominal_pjb_val if nominal_pjb_val > 0 else nominal_nota_val
+
+                        # Jika liter kosong tapi dana ada, estimasikan liter dari harga satuan atau standar BBM
+                        if liter_val <= 0 and dana_aktual > 0:
+                            est_harga = harga_l_val if harga_l_val >= 6000 else 10000
+                            liter_val = round(dana_aktual / est_harga, 2)
+
+                        rasio_trip_kml = (trip_km / liter_val) if liter_val > 0 else 0.0
+                        biaya_per_km_trip = (dana_aktual / trip_km) if trip_km > 0 else 0.0
+
+                        if plat_clean not in car_stats:
+                            car_stats[plat_clean] = {
+                                "PIC Terakhir": nama_pic,
+                                "Cluster": pjb[3] if len(pjb) > 3 else "-",
+                                "Jml Trip": 0,
+                                "KM Awal Min": km_awal_val if km_awal_val > 0 else None,
+                                "KM Akhir Max": km_akhir_val,
+                                "Total KM": 0.0,
+                                "Total Liter": 0.0,
+                                "Total Dana": 0,
+                                "Jenis BBM": kategori.replace("Mobil -", "").strip()
+                            }
+
+                        car_stats[plat_clean]["PIC Terakhir"] = nama_pic
+                        car_stats[plat_clean]["Jml Trip"] += 1
+                        if km_awal_val > 0:
+                            cur_min = car_stats[plat_clean]["KM Awal Min"]
+                            car_stats[plat_clean]["KM Awal Min"] = min(cur_min, km_awal_val) if cur_min is not None else km_awal_val
+                        if km_akhir_val > car_stats[plat_clean]["KM Akhir Max"]:
+                            car_stats[plat_clean]["KM Akhir Max"] = km_akhir_val
+                        car_stats[plat_clean]["Total KM"] += trip_km
+                        car_stats[plat_clean]["Total Liter"] += liter_val
+                        car_stats[plat_clean]["Total Dana"] += dana_aktual
+
+                        status_trip = "🟢 Efisien (≥ 8 KM/L)" if rasio_trip_kml >= 8 else ("🟡 Standar (7-8 KM/L)" if rasio_trip_kml >= 7 else ("🔴 Boros (< 7 KM/L)" if rasio_trip_kml > 0 else "⚪ KM/Liter=0"))
+                        car_trips_detail.append({
+                            "Tanggal PJB": tgl_pjb_str,
+                            "NOPOL": plat_clean,
+                            "Nama PIC": nama_pic,
+                            "No Tiket": no_tkt,
+                            "Site ID": site_tujuan,
+                            "Keperluan": keperluan_pjb,
+                            "Jenis BBM": kategori,
+                            "KM Awal": round(km_awal_val, 1),
+                            "KM Akhir": round(km_akhir_val, 1),
+                            "Jarak Tempuh (KM)": round(trip_km, 2),
+                            "BBM (Liter)": round(liter_val, 2),
+                            "Dana BBM (Rp)": dana_aktual,
+                            "Efisiensi (KM/L)": round(rasio_trip_kml, 2),
+                            "Biaya per KM (Rp/KM)": round(biaya_per_km_trip, 0),
+                            "Status": status_trip
+                        })
+
+            if car_stats:
+                # Filter NOPOL
+                all_nopols_filter = sorted(list(car_stats.keys()))
+                selected_nopols = st.multiselect("🔍 Filter NOPOL Kendaraan (Kosongkan untuk semua unit):", all_nopols_filter, default=[])
+                active_nopols = selected_nopols if selected_nopols else all_nopols_filter
+
+                car_list = []
+                tot_km_all, tot_liter_all, tot_dana_all, tot_trip_all = 0.0, 0.0, 0, 0
+
+                for plat in active_nopols:
+                    d_car = car_stats[plat]
+                    t_km = d_car["Total KM"]
+                    t_lit = d_car["Total Liter"]
+                    t_dn = d_car["Total Dana"]
+                    t_trp = d_car["Jml Trip"]
+
+                    tot_km_all += t_km
+                    tot_liter_all += t_lit
+                    tot_dana_all += t_dn
+                    tot_trip_all += t_trp
+
+                    eff_kml = (t_km / t_lit) if t_lit > 0 else 0.0
+                    cost_per_km = (t_dn / t_km) if t_km > 0 else 0.0
+                    rata_dana_trip = (t_dn / t_trp) if t_trp > 0 else 0.0
+
+                    if eff_kml >= 8.0:
+                        st_unit = "🟢 Sangat Efisien (≥ 8 KM/L)"
+                    elif eff_kml >= 7.0:
+                        st_unit = "🟡 Normal (7 - 8 KM/L)"
+                    elif eff_kml > 0:
+                        st_unit = "🔴 Boros (< 7 KM/L)"
+                    else:
+                        st_unit = "⚪ Data KM Belum Lengkap"
+
+                    car_list.append({
+                        "NOPOL Kendaraan": plat,
+                        "PIC Terakhir": d_car["PIC Terakhir"],
+                        "Jenis BBM": d_car["Jenis BBM"],
+                        "Jml Trip": t_trp,
+                        "Odometer Terakhir (KM)": round(d_car["KM Akhir Max"], 1),
+                        "Total Jarak (KM)": round(t_km, 2),
+                        "Total BBM (Liter)": round(t_lit, 2),
+                        "Total Dana BBM (Rp)_num": t_dn,
+                        "Total Dana BBM": f"Rp {t_dn:,.0f}",
+                        "Efisiensi (KM/L)_num": round(eff_kml, 2),
+                        "Efisiensi Mesin": f"{eff_kml:.2f} KM/L",
+                        "Biaya per KM (Rp/KM)_num": round(cost_per_km, 0),
+                        "Biaya Dana / KM": f"Rp {cost_per_km:,.0f} / KM",
+                        "Rata-rata Dana / Trip": f"Rp {rata_dana_trip:,.0f}",
+                        "Status Performa": st_unit
+                    })
+
+                avg_kml_global = (tot_km_all / tot_liter_all) if tot_liter_all > 0 else 0.0
+                avg_rp_km_global = (tot_dana_all / tot_km_all) if tot_km_all > 0 else 0.0
+
+                mc1, mc2, mc3, mc4 = st.columns(4)
+                mc1.markdown(f"<div class='metric-3d'><div class='metric-title'>Total Jarak Tempuh ({len(active_nopols)} Mobil)</div><div class='metric-value'>{tot_km_all:,.1f} KM</div></div>", unsafe_allow_html=True)
+                mc2.markdown(f"<div class='metric-3d'><div class='metric-title'>Total Pengeluaran BBM Mobil</div><div class='metric-value'>Rp {tot_dana_all:,.0f}</div></div>", unsafe_allow_html=True)
+                mc3.markdown(f"<div class='metric-3d'><div class='metric-title'>Rata-Rata Biaya Dana / KM</div><div class='metric-value'>Rp {avg_rp_km_global:,.0f} / KM</div></div>", unsafe_allow_html=True)
+                mc4.markdown(f"<div class='metric-3d'><div class='metric-title'>Rata-Rata Efisiensi BBM</div><div class='metric-value'>{avg_kml_global:.2f} KM/L</div></div>", unsafe_allow_html=True)
+
+                df_cars = pd.DataFrame(car_list).sort_values("Total Dana BBM (Rp)_num", ascending=False)
+
+                c_ch1, c_ch2 = st.columns(2)
+                with c_ch1:
+                    st.markdown("##### 📊 Grafik Total Jarak Tempuh (KM) per NOPOL")
+                    st.bar_chart(df_cars.set_index("NOPOL Kendaraan")["Total Jarak (KM)"])
+                with c_ch2:
+                    st.markdown("##### 💰 Grafik Biaya Dana per KM (Rp/KM) per NOPOL")
+                    st.bar_chart(df_cars.set_index("NOPOL Kendaraan")["Biaya per KM (Rp/KM)_num"])
+
+                st.markdown("##### 📋 Tabel Rekapitulasi Performa & Penggunaan Dana Mobil per NOPOL")
+                df_cars_view = df_cars.drop(columns=["Total Dana BBM (Rp)_num", "Efisiensi (KM/L)_num", "Biaya per KM (Rp/KM)_num"])
+                st.dataframe(df_cars_view, hide_index=True, use_container_width=True)
+                st.download_button("📥 Export Rekap Performa Mobil per NOPOL (CSV)", data=df_cars_view.to_csv(index=False).encode('utf-8'), file_name=f"Analisa_Mobil_NOPOL_{nop_live}.csv", mime="text/csv")
+
+                st.markdown("<hr style='margin: 20px 0;'>", unsafe_allow_html=True)
+                st.markdown("##### 🧾 Rincian Riwayat Perjalanan & Penggunaan Dana Mobil per Tiket")
+                df_trips = pd.DataFrame([t for t in car_trips_detail if t["NOPOL"] in active_nopols])
+                if not df_trips.empty:
+                    df_trips_view = df_trips.copy()
+                    df_trips_view["Dana BBM (Rp)"] = df_trips_view["Dana BBM (Rp)"].apply(lambda x: f"Rp {x:,.0f}")
+                    df_trips_view["Biaya per KM (Rp/KM)"] = df_trips_view["Biaya per KM (Rp/KM)"].apply(lambda x: f"Rp {x:,.0f}/KM")
+                    st.dataframe(df_trips_view, hide_index=True, use_container_width=True)
+                    st.download_button("📥 Export Rincian Perjalanan Mobil per Tiket (CSV)", data=df_trips.to_csv(index=False).encode('utf-8'), file_name=f"Detail_Trip_Mobil_{nop_live}.csv", mime="text/csv")
             else:
-                st.info("Belum ada data perjalanan Mobil.")
+                st.info("Belum ada data PJB perjalanan Mobil di wilayah ini.")
 
         with t5:
-            st.markdown("### ⚡ Datalog Rekapitulasi Performa Genset")
-            st.info("Log riwayat operasi Genset, validasi RH, dan bukti capturan tiket untuk tim MBP.")
+            st.markdown("### ⚡ Analisa Penggunaan Dana, Konsumsi BBM & Datalog Performa Genset")
+            st.info("💡 **ANALISA GENSET LENGKAP:** Memantau akumulasi Running Hours (RH), konsumsi BBM per Jam (**Liter/RH**), biaya operasional per Jam (**Rp/RH**), kesesuaian Durasi Jam Backup vs RH Meter, serta link bukti tiket MBP.")
             
+            req_lookup_gen = {}
+            for rq in req_r[1:]:
+                if len(rq) > 12 and str(rq[3]).strip():
+                    req_lookup_gen[str(rq[3]).strip().upper()] = float(clean_indicator(rq[12]))
+
+            gen_summary = {}
             datalog_genset = []
+
             for pjb in pjb_r[1:]:
-                if len(pjb) > 24 and "genset" in str(pjb[8]).lower():
-                    # Membaca data Jam Mulai/Akhir dari kolom 37, 38, 39
-                    jam_mulai = pjb[37] if len(pjb) > 37 else "-"
-                    jam_akhir = pjb[38] if len(pjb) > 38 else "-"
-                    link_tiket = pjb[39] if len(pjb) > 39 else ""
-                    
-                    try:
-                        no_tiket_gen = str(pjb[21]).strip().upper()
-                        req_match = next((x for x in req_r[1:] if len(x) > 13 and str(x[3]).strip().upper() == no_tiket_gen), None)
-                        rh_awal = float(clean_indicator(req_match[12])) if req_match else float(pjb[10]) # Fallback
-                        
-                        rh_akhir = float(clean_indicator(pjb[10]))
-                        
-                        # --- PERHITUNGAN AKTUAL TOTAL RUNNING GENSET ---
-                        total_rh = rh_akhir - rh_awal 
-                    except:
-                        rh_awal, rh_akhir, total_rh = 0.0, 0.0, 0.0
+                if len(pjb) > 23 and "genset" in str(pjb[8]).lower():
+                    tgl_pjb_g = str(pjb[1]).strip() if len(pjb) > 1 else "-"
+                    no_tiket_gen = str(pjb[21]).strip().upper() if len(pjb) > 21 else "-"
+                    nama_mbp = str(pjb[4]).strip() if len(pjb) > 4 else "-"
+                    site_gen = str(pjb[6]).strip() if len(pjb) > 6 else "-"
+                    kat_bbm_gen = str(pjb[8]).strip() if len(pjb) > 8 else "-"
+                    id_genset = str(pjb[12]).strip().upper() if len(pjb) > 12 and str(pjb[12]).strip() else f"GENSET-{site_gen}"
+
+                    jam_mulai = str(pjb[37]).strip() if len(pjb) > 37 and str(pjb[37]).strip() else "-"
+                    jam_akhir = str(pjb[38]).strip() if len(pjb) > 38 and str(pjb[38]).strip() else "-"
+                    link_tiket = str(pjb[39]).strip() if len(pjb) > 39 and str(pjb[39]).strip() else (str(pjb[15]).strip() if len(pjb) > 15 else "")
+
+                    # Hitung Durasi Jam Backup dari Jam Mulai s/d Jam Selesai
+                    durasi_jam_backup = 0.0
+                    if jam_mulai not in ["-", ""] and jam_akhir not in ["-", ""]:
+                        try:
+                            t_start = datetime.strptime(jam_mulai[:5], "%H:%M")
+                            t_end = datetime.strptime(jam_akhir[:5], "%H:%M")
+                            diff_sec = (t_end - t_start).total_seconds()
+                            if diff_sec < 0:
+                                diff_sec += 86400 # Lintas hari (lewat tengah malam)
+                            durasi_jam_backup = round(diff_sec / 3600.0, 2)
+                        except Exception:
+                            durasi_jam_backup = 0.0
+
+                    rh_akhir = float(clean_indicator(pjb[10])) if len(pjb) > 10 else 0.0
+                    rh_trip_col = float(clean_indicator(pjb[24])) if len(pjb) > 24 and str(pjb[24]).strip() else 0.0
+                    rh_awal = req_lookup_gen.get(no_tiket_gen, 0.0)
+
+                    if rh_trip_col > 0:
+                        total_rh = rh_trip_col
+                        if rh_awal == 0 and rh_akhir >= total_rh:
+                            rh_awal = rh_akhir - total_rh
+                    elif rh_akhir > rh_awal and rh_awal > 0:
+                        total_rh = rh_akhir - rh_awal
+                    else:
+                        total_rh = durasi_jam_backup if durasi_jam_backup > 0 else 0.0
+
+                    liter_gen = float(clean_indicator(pjb[22])) if len(pjb) > 22 else 0.0
+                    harga_l_gen = clean_nominal(pjb[23]) if len(pjb) > 23 else 0
+                    dana_gen = clean_nominal(pjb[11]) if len(pjb) > 11 else 0
+                    if dana_gen == 0 and len(pjb) > 20:
+                        dana_gen = clean_nominal(pjb[20])
+
+                    if liter_gen <= 0 and dana_gen > 0:
+                        est_h_gen = harga_l_gen if harga_l_gen >= 6000 else 14500
+                        liter_gen = round(dana_gen / est_h_gen, 2)
+
+                    liter_per_rh = (liter_gen / total_rh) if total_rh > 0 else 0.0
+                    biaya_per_rh = (dana_gen / total_rh) if total_rh > 0 else 0.0
+
+                    if liter_per_rh > 4.5:
+                        st_gen = f"🔴 Boros ({liter_per_rh:.2f} L/RH)"
+                    elif liter_per_rh > 0:
+                        st_gen = f"🟢 Normal ({liter_per_rh:.2f} L/RH)"
+                    else:
+                        st_gen = "⚪ RH Belum Terbaca"
+
+                    if id_genset not in gen_summary:
+                        gen_summary[id_genset] = {
+                            "PIC Terakhir": nama_mbp,
+                            "Site Terakhir": site_gen,
+                            "Jml Backup": 0,
+                            "RH Terakhir": rh_akhir,
+                            "Total RH": 0.0,
+                            "Total Liter": 0.0,
+                            "Total Dana": 0
+                        }
+                    gen_summary[id_genset]["PIC Terakhir"] = nama_mbp
+                    gen_summary[id_genset]["Site Terakhir"] = site_gen
+                    gen_summary[id_genset]["Jml Backup"] += 1
+                    if rh_akhir > gen_summary[id_genset]["RH Terakhir"]:
+                        gen_summary[id_genset]["RH Terakhir"] = rh_akhir
+                    gen_summary[id_genset]["Total RH"] += total_rh
+                    gen_summary[id_genset]["Total Liter"] += liter_gen
+                    gen_summary[id_genset]["Total Dana"] += dana_gen
 
                     datalog_genset.append({
-                        "Tanggal PJB": pjb[1],
-                        "No Tiket / Site": pjb[21],
-                        "Nama MBP": pjb[4],
-                        "ID Genset": pjb[12],
+                        "Tanggal PJB": tgl_pjb_g,
+                        "No Tiket": no_tiket_gen,
+                        "Site ID": site_gen,
+                        "Nama MBP": nama_mbp,
+                        "ID Genset / Nopol": id_genset,
+                        "Jenis BBM": kat_bbm_gen,
                         "Jam Mulai": jam_mulai,
                         "Jam Selesai": jam_akhir,
-                        "RH Awal": rh_awal,
-                        "RH Akhir": rh_akhir,
+                        "Durasi Jam": f"{durasi_jam_backup:.2f} Jam" if durasi_jam_backup > 0 else "-",
+                        "RH Awal": round(rh_awal, 2),
+                        "RH Akhir": round(rh_akhir, 2),
                         "Total Run (RH)": round(total_rh, 2),
+                        "BBM (Liter)": round(liter_gen, 2),
+                        "Harga/L": f"Rp {harga_l_gen:,.0f}" if harga_l_gen > 0 else "-",
+                        "Total Dana PJB": f"Rp {dana_gen:,.0f}",
+                        "Konsumsi (L/RH)": f"{liter_per_rh:.2f} L/RH",
+                        "Biaya / RH": f"Rp {biaya_per_rh:,.0f}/RH",
+                        "Status Konsumsi": st_gen,
                         "Bukti Tiket": link_tiket
                     })
-            
+
             if datalog_genset:
+                tot_rh_all = sum(g["Total RH"] for g in gen_summary.values())
+                tot_lit_gen_all = sum(g["Total Liter"] for g in gen_summary.values())
+                tot_dana_gen_all = sum(g["Total Dana"] for g in gen_summary.values())
+                avg_l_rh = (tot_lit_gen_all / tot_rh_all) if tot_rh_all > 0 else 0.0
+                avg_rp_rh = (tot_dana_gen_all / tot_rh_all) if tot_rh_all > 0 else 0.0
+
+                mg1, mg2, mg3, mg4 = st.columns(4)
+                mg1.markdown(f"<div class='metric-3d'><div class='metric-title'>Total Running Hours (RH)</div><div class='metric-value'>{tot_rh_all:,.1f} RH</div></div>", unsafe_allow_html=True)
+                mg2.markdown(f"<div class='metric-3d'><div class='metric-title'>Total Dana BBM Genset</div><div class='metric-value'>Rp {tot_dana_gen_all:,.0f}</div></div>", unsafe_allow_html=True)
+                mg3.markdown(f"<div class='metric-3d'><div class='metric-title'>Rata-Rata Konsumsi / Jam</div><div class='metric-value'>{avg_l_rh:.2f} L / RH</div></div>", unsafe_allow_html=True)
+                mg4.markdown(f"<div class='metric-3d'><div class='metric-title'>Rata-Rata Biaya / RH</div><div class='metric-value'>Rp {avg_rp_rh:,.0f} / RH</div></div>", unsafe_allow_html=True)
+
+                st.markdown("##### 📊 Rekapitulasi Performa & Penggunaan Dana per ID Genset")
+                rekap_gen_list = []
+                for id_g, dg in gen_summary.items():
+                    l_rh = (dg["Total Liter"] / dg["Total RH"]) if dg["Total RH"] > 0 else 0.0
+                    rp_rh = (dg["Total Dana"] / dg["Total RH"]) if dg["Total RH"] > 0 else 0.0
+                    rekap_gen_list.append({
+                        "ID Genset / Nopol": id_g,
+                        "PIC MBP Terakhir": dg["PIC Terakhir"],
+                        "Site Terakhir": dg["Site Terakhir"],
+                        "Jml Backup (Tiket)": dg["Jml Backup"],
+                        "RH Meter Terakhir": round(dg["RH Terakhir"], 2),
+                        "Total Running (RH)": round(dg["Total RH"], 2),
+                        "Total BBM (Liter)": round(dg["Total Liter"], 2),
+                        "Total Dana BBM": f"Rp {dg['Total Dana']:,.0f}",
+                        "Konsumsi (Liter/RH)": f"{l_rh:.2f} L/RH",
+                        "Biaya Dana / RH": f"Rp {rp_rh:,.0f} / RH",
+                        "Total Dana_num": dg["Total Dana"]
+                    })
+                df_rekap_gen = pd.DataFrame(rekap_gen_list).sort_values("Total Dana_num", ascending=False).drop(columns=["Total Dana_num"])
+                st.dataframe(df_rekap_gen, hide_index=True, use_container_width=True)
+
+                st.markdown("##### 📋 Datalog Riwayat Backup Genset per Tiket")
                 df_genset = pd.DataFrame(datalog_genset)
                 st.dataframe(df_genset, hide_index=True, use_container_width=True)
-                st.download_button("📥 Export Datalog Genset (CSV)", data=df_genset.to_csv(index=False), file_name="Datalog_Genset.csv")
+                st.download_button("📥 Export Datalog Genset Lengkap (CSV)", data=df_genset.to_csv(index=False).encode('utf-8'), file_name=f"Datalog_Genset_{nop_live}.csv", mime="text/csv")
             else:
                 st.info("Belum ada datalog PJB Genset yang divalidasi.")
-
 
 # ==========================================
 # PAGE 6: REPORT & AUTO PJB
@@ -3054,7 +3276,6 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
         
         with tab_report1:
             if len(pjb_r) > 1 or len(rekap_r) > 1:
-                # 1. KUMPULKAN OTOMATIS SEMUA FOTO YANG BENAR-BENAR DIUPLOAD TIM DARI FORM PJB
                 PHOTO_COLS_SPEC = [
                     (13, "Evidance Pengisian BBM"),
                     (14, "Kwitansi Support / Non-BBM"),
@@ -3088,7 +3309,7 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                     pdf_url = str(pjb_row[35]).strip() if len(pjb_row) > 35 and str(pjb_row[35]).strip().startswith("http") else ""
                     return photos, pdf_url
 
-                # Simpan daftar PJB berdasarkan Tiket Utuh & Tiket Dasar (Base Ticket)
+                # Indeks PJB seragam untuk Palangkaraya & Pangkalanbun
                 dict_pjb_exact = defaultdict(list)
                 dict_pjb_base = defaultdict(list)
                 all_pjb_records = []
@@ -3129,24 +3350,12 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                 with col_f2:
                     filter_role = st.multiselect("💼 Role Pekerjaan (Pilih Banyak):", list_role, default=list_role)
 
-                # Khusus Pangkalanbun: opsi agar seluruh item (Support, BBM, Material) keluar semua walaupun di Rekap PJB hanya tertulis 1 tiket dasar
-                if nop_report == "Pangkalanbun":
-                    mode_sumber_pbu = st.radio(
-                        "📌 Mode Penarikan Tiket Pangkalanbun:",
-                        [
-                            "Tampilkan Semua Item Sub-Tiket (Support, BBM, Material, dll.) dari Rekap PJB + Form PJB",
-                            "Tarik Langsung Semua Data dari Sheet Form PJB"
-                        ],
-                        index=0
-                    )
-                else:
-                    mode_sumber_pbu = "Palangkaraya_Default"
-
-                # 2. SUSUN LIST DATA UNTUK TABEL AUTO-EDIT ADMIN
+                # Algoritma seragam Palangkaraya & Pangkalanbun: tarik dari Rekap PJB & otomatis jabarkan semua sub-item (Support, BBM, Material, dll.)
                 draft_rows = []
-                if nop_report != "Pangkalanbun":
-                    # LOGIKA PALANGKARAYA TETAP COCOK SEPERTI SEMULA
-                    ticket_counts = defaultdict(int)
+                ticket_counts_exact = defaultdict(int)
+                expanded_base_set = set()
+
+                if len(rekap_r) > 1:
                     for row in rekap_r[1:]:
                         row_periode = row[16].strip() if len(row) > 16 else ""
                         row_role = row[6].strip() if len(row) > 6 else ""
@@ -3154,128 +3363,105 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                         pass_role = (len(filter_role) == 0) or (row_role in filter_role)
 
                         if pass_periode and pass_role:
-                            found_tiket = None
+                            found_exact = None
+                            found_base = None
                             for cell in row:
                                 c_up = str(cell).strip().upper()
+                                if not c_up:
+                                    continue
                                 if c_up in dict_pjb_exact:
-                                    found_tiket = c_up
+                                    found_exact = c_up
                                     break
-                            if found_tiket:
-                                idx_for_tk = ticket_counts[found_tiket]
-                                rec_list = dict_pjb_exact[found_tiket]
-                                rec_pjb = rec_list[idx_for_tk] if idx_for_tk < len(rec_list) else rec_list[-1]
-                                ticket_counts[found_tiket] += 1
+                                c_base = c_up.split(" [")[0].strip()
+                                if c_base in dict_pjb_base:
+                                    found_base = c_base
+                                    break
 
-                                photo_links_str = " | ".join([f"{lbl}::{url}" for lbl, url in rec_pjb["photos"]])
-                                draft_rows.append({
-                                    "Cetak": True,
-                                    "No Tiket": found_tiket,
-                                    "Tanggal": row[0] if len(row) > 0 and str(row[0]).strip() else rec_pjb["tanggal"],
-                                    "Periode": row_periode,
-                                    "Nama": row[4] if len(row) > 4 and str(row[4]).strip() else rec_pjb["nama"],
-                                    "Role": row_role if row_role else rec_pjb["role"],
-                                    "Kategori": rec_pjb["kategori"],
-                                    "Keperluan": row[8] if len(row) > 8 and str(row[8]).strip() else rec_pjb["keperluan"],
-                                    "Deskripsi": row[9] if len(row) > 9 and str(row[9]).strip() else rec_pjb["deskripsi"],
-                                    "Nominal": clean_nominal(row[15]) if len(row) > 15 and str(row[15]).strip() else rec_pjb["nominal"],
-                                    "Jml Foto": len(rec_pjb["photos"]),
-                                    "Data Foto (Label::URL)": photo_links_str,
-                                    "Link PDF UM": rec_pjb["pdf_link"]
-                                })
-                else:
-                    # LOGIKA KHUSUS PANGKALANBUN: PECAH & KELUARKAN SEMUA ITEM (SUPPORT, BBM, MATERIAL, DLL.)
-                    if "Langsung" in mode_sumber_pbu or len(rekap_r) <= 1:
-                        for rec_pjb in all_pjb_records:
-                            if len(filter_role) == 0 or rec_pjb["role"] in filter_role:
-                                photo_links_str = " | ".join([f"{lbl}::{url}" for lbl, url in rec_pjb["photos"]])
-                                draft_rows.append({
-                                    "Cetak": True,
-                                    "No Tiket": f"{rec_pjb['tiket']} ({rec_pjb['kategori']})" if "[" not in rec_pjb['tiket'] and rec_pjb['kategori'] else rec_pjb['tiket'],
-                                    "Tanggal": rec_pjb["tanggal"],
-                                    "Periode": filter_periode if filter_periode != "Semua Periode" else "Periode Aktif",
-                                    "Nama": rec_pjb["nama"],
-                                    "Role": rec_pjb["role"],
-                                    "Kategori": rec_pjb["kategori"],
-                                    "Keperluan": rec_pjb["keperluan"],
-                                    "Deskripsi": rec_pjb["deskripsi"],
-                                    "Nominal": rec_pjb["nominal"],
-                                    "Jml Foto": len(rec_pjb["photos"]),
-                                    "Data Foto (Label::URL)": photo_links_str,
-                                    "Link PDF UM": rec_pjb["pdf_link"]
-                                })
-                    else:
-                        used_pjb_indices = defaultdict(int)
-                        expanded_base_tickets = set()
-                        for row in rekap_r[1:]:
-                            row_periode = row[16].strip() if len(row) > 16 else ""
-                            row_role = row[6].strip() if len(row) > 6 else ""
-                            pass_periode = (filter_periode == "Semua Periode") or (row_periode == filter_periode)
-                            pass_role = (len(filter_role) == 0) or (row_role in filter_role)
-
-                            if pass_periode and pass_role:
-                                found_exact = None
-                                found_base = None
-                                for cell in row:
-                                    c_up = str(cell).strip().upper()
-                                    if not c_up:
-                                        continue
-                                    if c_up in dict_pjb_exact:
-                                        found_exact = c_up
-                                        break
-                                    c_base = c_up.split(" [")[0].strip()
-                                    if c_base in dict_pjb_base:
-                                        found_base = c_base
-                                        break
-
-                                # Jika di Rekap PJB tertulis tiket dasar sementara di Form PJB ada banyak item (Support, BBM, Material)
-                                target_base = (found_exact.split(" [")[0].strip() if found_exact else found_base)
-                                if target_base and target_base in dict_pjb_base:
-                                    all_sub_recs = dict_pjb_base[target_base]
-                                    # Jika hanya 1 baris di Rekap PJB tapi di Form PJB ada beberapa item (misal Support, BBM, Material), keluarkan semuanya!
-                                    if len(all_sub_recs) > 1 and target_base not in expanded_base_tickets:
-                                        expanded_base_tickets.add(target_base)
-                                        for rec_pjb in all_sub_recs:
-                                            photo_links_str = " | ".join([f"{lbl}::{url}" for lbl, url in rec_pjb["photos"]])
-                                            tampil_tk = f"{rec_pjb['tiket']} [{rec_pjb['kategori']}]" if "[" not in rec_pjb['tiket'] and rec_pjb['kategori'] else rec_pjb['tiket']
-                                            draft_rows.append({
-                                                "Cetak": True,
-                                                "No Tiket": tampil_tk,
-                                                "Tanggal": rec_pjb["tanggal"] if rec_pjb["tanggal"] != "-" else (row[0] if len(row) > 0 else "-"),
-                                                "Periode": row_periode,
-                                                "Nama": rec_pjb["nama"] if rec_pjb["nama"] != "-" else (row[4] if len(row) > 4 else "-"),
-                                                "Role": rec_pjb["role"] if rec_pjb["role"] != "-" else row_role,
-                                                "Kategori": rec_pjb["kategori"],
-                                                "Keperluan": rec_pjb["keperluan"] if rec_pjb["keperluan"] != "-" else (row[8] if len(row) > 8 else "-"),
-                                                "Deskripsi": rec_pjb["deskripsi"] if rec_pjb["deskripsi"] != "-" else (row[9] if len(row) > 9 else "-"),
-                                                "Nominal": rec_pjb["nominal"] if rec_pjb["nominal"] > 0 else (clean_nominal(row[15]) if len(row) > 15 else 0),
-                                                "Jml Foto": len(rec_pjb["photos"]),
-                                                "Data Foto (Label::URL)": photo_links_str,
-                                                "Link PDF UM": rec_pjb["pdf_link"]
-                                            })
-                                    elif target_base not in expanded_base_tickets:
-                                        idx_b = used_pjb_indices[target_base]
-                                        rec_pjb = all_sub_recs[idx_b] if idx_b < len(all_sub_recs) else all_sub_recs[-1]
-                                        used_pjb_indices[target_base] += 1
+                            if found_exact:
+                                recs_exact = dict_pjb_exact[found_exact]
+                                # Jika nomor tiket di Rekap PJB tidak memiliki tag [...] tetapi di Form PJB ada beberapa item (Support, BBM, Material) dengan nomor tiket tsb
+                                if "[" not in found_exact and len(recs_exact) > 1 and found_exact not in expanded_base_set:
+                                    expanded_base_set.add(found_exact)
+                                    for rec_pjb in recs_exact:
                                         photo_links_str = " | ".join([f"{lbl}::{url}" for lbl, url in rec_pjb["photos"]])
                                         draft_rows.append({
                                             "Cetak": True,
-                                            "No Tiket": found_exact if found_exact else rec_pjb["tiket"],
-                                            "Tanggal": row[0] if len(row) > 0 and str(row[0]).strip() else rec_pjb["tanggal"],
+                                            "No Tiket": f"{rec_pjb['tiket']} [{rec_pjb['kategori']}]" if rec_pjb['kategori'] else rec_pjb['tiket'],
+                                            "Tanggal": rec_pjb["tanggal"] if rec_pjb["tanggal"] != "-" else (row[0] if len(row) > 0 else "-"),
                                             "Periode": row_periode,
-                                            "Nama": row[4] if len(row) > 4 and str(row[4]).strip() else rec_pjb["nama"],
-                                            "Role": row_role if row_role else rec_pjb["role"],
+                                            "Nama": rec_pjb["nama"] if rec_pjb["nama"] != "-" else (row[4] if len(row) > 4 else "-"),
+                                            "Role": rec_pjb["role"] if rec_pjb["role"] != "-" else row_role,
                                             "Kategori": rec_pjb["kategori"],
-                                            "Keperluan": row[8] if len(row) > 8 and str(row[8]).strip() else rec_pjb["keperluan"],
-                                            "Deskripsi": row[9] if len(row) > 9 and str(row[9]).strip() else rec_pjb["deskripsi"],
-                                            "Nominal": clean_nominal(row[15]) if len(row) > 15 and str(row[15]).strip() else rec_pjb["nominal"],
+                                            "Keperluan": rec_pjb["keperluan"] if rec_pjb["keperluan"] != "-" else (row[8] if len(row) > 8 else "-"),
+                                            "Deskripsi": rec_pjb["deskripsi"] if rec_pjb["deskripsi"] != "-" else (row[9] if len(row) > 9 else "-"),
+                                            "Nominal": rec_pjb["nominal"] if rec_pjb["nominal"] > 0 else (clean_nominal(row[15]) if len(row) > 15 else 0),
                                             "Jml Foto": len(rec_pjb["photos"]),
                                             "Data Foto (Label::URL)": photo_links_str,
                                             "Link PDF UM": rec_pjb["pdf_link"]
                                         })
+                                elif found_exact not in expanded_base_set:
+                                    idx_for_tk = ticket_counts_exact[found_exact]
+                                    rec_pjb = recs_exact[idx_for_tk] if idx_for_tk < len(recs_exact) else recs_exact[-1]
+                                    ticket_counts_exact[found_exact] += 1
+                                    photo_links_str = " | ".join([f"{lbl}::{url}" for lbl, url in rec_pjb["photos"]])
+                                    draft_rows.append({
+                                        "Cetak": True,
+                                        "No Tiket": found_exact,
+                                        "Tanggal": row[0] if len(row) > 0 and str(row[0]).strip() else rec_pjb["tanggal"],
+                                        "Periode": row_periode,
+                                        "Nama": row[4] if len(row) > 4 and str(row[4]).strip() else rec_pjb["nama"],
+                                        "Role": row_role if row_role else rec_pjb["role"],
+                                        "Kategori": rec_pjb["kategori"],
+                                        "Keperluan": row[8] if len(row) > 8 and str(row[8]).strip() else rec_pjb["keperluan"],
+                                        "Deskripsi": row[9] if len(row) > 9 and str(row[9]).strip() else rec_pjb["deskripsi"],
+                                        "Nominal": clean_nominal(row[15]) if len(row) > 15 and str(row[15]).strip() else rec_pjb["nominal"],
+                                        "Jml Foto": len(rec_pjb["photos"]),
+                                        "Data Foto (Label::URL)": photo_links_str,
+                                        "Link PDF UM": rec_pjb["pdf_link"]
+                                    })
+                            elif found_base and found_base not in expanded_base_set:
+                                expanded_base_set.add(found_base)
+                                for rec_pjb in dict_pjb_base[found_base]:
+                                    photo_links_str = " | ".join([f"{lbl}::{url}" for lbl, url in rec_pjb["photos"]])
+                                    draft_rows.append({
+                                        "Cetak": True,
+                                        "No Tiket": rec_pjb["tiket"],
+                                        "Tanggal": rec_pjb["tanggal"] if rec_pjb["tanggal"] != "-" else (row[0] if len(row) > 0 else "-"),
+                                        "Periode": row_periode,
+                                        "Nama": rec_pjb["nama"] if rec_pjb["nama"] != "-" else (row[4] if len(row) > 4 else "-"),
+                                        "Role": rec_pjb["role"] if rec_pjb["role"] != "-" else row_role,
+                                        "Kategori": rec_pjb["kategori"],
+                                        "Keperluan": rec_pjb["keperluan"] if rec_pjb["keperluan"] != "-" else (row[8] if len(row) > 8 else "-"),
+                                        "Deskripsi": rec_pjb["deskripsi"] if rec_pjb["deskripsi"] != "-" else (row[9] if len(row) > 9 else "-"),
+                                        "Nominal": rec_pjb["nominal"] if rec_pjb["nominal"] > 0 else (clean_nominal(row[15]) if len(row) > 15 else 0),
+                                        "Jml Foto": len(rec_pjb["photos"]),
+                                        "Data Foto (Label::URL)": photo_links_str,
+                                        "Link PDF UM": rec_pjb["pdf_link"]
+                                    })
 
-                # 3. FITUR AUTO-EDIT LIST & DATA OLEH ADMIN SEBELUM CETAK PDF
+                # Fallback otomatis: jika sheet Rekap PJB belum diisi untuk periode tsb, tarik langsung dari Form PJB agar daftar tidak kosong
+                if not draft_rows and all_pjb_records:
+                    for rec_pjb in all_pjb_records:
+                        if len(filter_role) == 0 or rec_pjb["role"] in filter_role:
+                            photo_links_str = " | ".join([f"{lbl}::{url}" for lbl, url in rec_pjb["photos"]])
+                            draft_rows.append({
+                                "Cetak": True,
+                                "No Tiket": f"{rec_pjb['tiket']} [{rec_pjb['kategori']}]" if "[" not in rec_pjb['tiket'] and rec_pjb['kategori'] else rec_pjb['tiket'],
+                                "Tanggal": rec_pjb["tanggal"],
+                                "Periode": filter_periode if filter_periode != "Semua Periode" else "Form PJB",
+                                "Nama": rec_pjb["nama"],
+                                "Role": rec_pjb["role"],
+                                "Kategori": rec_pjb["kategori"],
+                                "Keperluan": rec_pjb["keperluan"],
+                                "Deskripsi": rec_pjb["deskripsi"],
+                                "Nominal": rec_pjb["nominal"],
+                                "Jml Foto": len(rec_pjb["photos"]),
+                                "Data Foto (Label::URL)": photo_links_str,
+                                "Link PDF UM": rec_pjb["pdf_link"]
+                            })
+
                 st.markdown("<div class='section-title'>✏️ 2. Tabel Auto-Edit List PJB & Foto (Khusus Admin)</div>", unsafe_allow_html=True)
-                st.info("💡 **AUTO-EDIT ADMIN:** Anda dapat mengedit langsung **No Tiket, Tanggal, Nama, Role, Kategori, Deskripsi, Nominal, memilih/menghapus baris (`Cetak`)**, atau mengedit **Data Foto** di tabel bawah ini sebelum men-generate laporan PDF.")
+                st.info("💡 **AUTO-EDIT ADMIN:** Anda dapat mengedit langsung **No Tiket, Tanggal, Nama, Role, Kategori, Deskripsi, Nominal, mencentang/menghapus baris (`Cetak`)**, atau menyesuaikan **Data Foto** di tabel bawah ini sebelum men-generate PDF.")
 
                 if draft_rows:
                     df_draft = pd.DataFrame(draft_rows)
@@ -3332,7 +3518,7 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                             raw_photos_str = str(erow.get("Data Foto (Label::URL)", "")).strip()
                             pdf_um_url = str(erow.get("Link PDF UM", "")).strip()
 
-                            # Parse hanya foto yang benar-benar ada link-nya (Tanpa Kotak Tidak Ada!)
+                            # Hanya tampilkan foto yang diupload tim (tanpa kotak kosong "Tidak Ada")
                             valid_photos = []
                             if raw_photos_str and raw_photos_str != "nan":
                                 for part in raw_photos_str.split("|"):
@@ -3344,7 +3530,6 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                                     elif part.startswith("http"):
                                         valid_photos.append(("Lampiran Foto PJB", part))
 
-                            # Tentukan lebar grid otomatis: jika 1 foto (100%), jika 2-3 foto atau lebih tampil full proporsional
                             box_width = "100%" if len(valid_photos) == 1 else "48%"
 
                             html_content += f"""
