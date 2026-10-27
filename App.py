@@ -753,14 +753,29 @@ def load_excel_data():
 
     try:
         df_tim_pbun = pd.read_excel("NAMA NOP PANGKALANBUN & NOPOL MBP.xlsx").fillna("")
+        
+        # 🚀 FITUR BARU: Deteksi otomatis kolom Lat dan Long di file Pangkalanbun
+        col_lat_pbun = next((c for c in df_tim_pbun.columns if 'lat' in str(c).lower()), None)
+        col_lon_pbun = next((c for c in df_tim_pbun.columns if 'lon' in str(c).lower() or 'lng' in str(c).lower()), None)
+
         for _, row in df_tim_pbun.iterrows():
-            nama = str(row['NAMA']).strip().upper()
+            nama = str(row.get('NAMA', '')).strip().upper()
             if nama and nama not in ["NAN", ""]:
                 if nama not in tim_dict:
-                    tim_dict[nama] = {'Latitude': 0, 'Longtitude': 0}
-                if str(row['ROLE']).strip():
-                    tim_dict[nama]['ROLE'] = str(row['ROLE']).strip().upper()
-                nopol = str(row['NOPOL']).strip().upper()
+                    tim_dict[nama] = {'Latitude': 0.0, 'Longtitude': 0.0}
+                
+                # 🚀 FITUR BARU: Masukkan data Latitude & Longitude jika kolomnya tersedia
+                if col_lat_pbun and str(row.get(col_lat_pbun, "")).strip() not in ["", "0", "NAN"]:
+                    try: tim_dict[nama]['Latitude'] = float(str(row[col_lat_pbun]).replace(',', '.'))
+                    except: pass
+                if col_lon_pbun and str(row.get(col_lon_pbun, "")).strip() not in ["", "0", "NAN"]:
+                    try: tim_dict[nama]['Longtitude'] = float(str(row[col_lon_pbun]).replace(',', '.'))
+                    except: pass
+                    
+                if str(row.get('ROLE', '')).strip():
+                    tim_dict[nama]['ROLE'] = str(row.get('ROLE', '')).strip().upper()
+                    
+                nopol = str(row.get('NOPOL', '')).strip().upper()
                 if nopol and nopol not in ["NAN", "0", "NONE", ""]:
                     tim_dict[nama]['NOPOL'] = nopol
                     if nopol not in list_nopol_csv:
