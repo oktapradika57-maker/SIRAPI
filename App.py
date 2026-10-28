@@ -564,7 +564,7 @@ AUTHORIZED_PASSWORDS = [
 ]
 CUTOFF_DATE = datetime(2026, 8, 1).date()
 
-cloudinary.config(cloud_name="fxm61tjv", api_key="624877324969231", api_secret="LIFO6pfEg9fOM3nbsY8FBbVTpSI", secure=True)
+cloudinary.config(cloud_name="ji9i1hei", api_key="277523771179144", api_secret="7eg20WV-Bzf9DXEoT8rg3H99V6c", secure=True)
 
 SHEET_REQUEST = "Form Request dana"        
 SHEET_PJB = "Form PJB"
@@ -882,31 +882,67 @@ def get_user_tickets_status(nama, req_rows, pjb_rows, app_rows):
             
     return outstanding_all, outstanding_lock, aging_tickets, sorted(history, key=lambda x: x["Status"], reverse=True)
 
+CLOUDINARY_ACCOUNTS = [
+    # 1. Akun Utama Baru (Aktif Sekarang)
+    {
+        "cloud_name": "ji9i1hei",
+        "api_key": "277523771179144",
+        "api_secret": "7eg20WV-Bzf9DXEoT8rg3H99V6c"
+    },
+    # 2. Akun Cadangan (Otomatis dipakai jika akun utama penuh / saat kuota bulanan akun lama sudah reset)
+    {
+        "cloud_name": "fxm61tjv",
+        "api_key": "624877324969231",
+        "api_secret": "LIFO6pfEg9fOM3nbsY8FBbVTpSI"
+    }
+]
+
 def upload_foto(file):
     return upload_foto_compressed(file)
 
 def upload_foto_compressed(file):
-    if file is None: return ""
+    if file is None:
+        return ""
     try:
         raw_bytes = file.getvalue()
         with Image.open(io.BytesIO(raw_bytes)) as img:
             if img.mode != 'RGB':
                 img = img.convert('RGB')
-            img.thumbnail((1280, 1280))
+            # Kompresi optimal 960px (quality 55): gambar tetap jelas di PDF A4 namun hemat kuota Cloudinary hingga 75%
+            img.thumbnail((960, 960))
             img_byte_arr = io.BytesIO()
-            img.save(img_byte_arr, format='JPEG', quality=65)
+            img.save(img_byte_arr, format='JPEG', quality=55, optimize=True)
             img_byte_arr.seek(0)
             encoded = base64.b64encode(img_byte_arr.read()).decode('utf-8')
             img_byte_arr.close()
         del raw_bytes
-        url = cloudinary.uploader.upload(f"data:image/jpeg;base64,{encoded}", resource_type="auto").get("secure_url")
+
+        for acc in CLOUDINARY_ACCOUNTS:
+            try:
+                cloudinary.config(
+                    cloud_name=acc["cloud_name"],
+                    api_key=acc["api_key"],
+                    api_secret=acc["api_secret"],
+                    secure=True
+                )
+                res = cloudinary.uploader.upload(
+                    f"data:image/jpeg;base64,{encoded}",
+                    resource_type="auto"
+                )
+                url = res.get("secure_url", "")
+                if url:
+                    del encoded
+                    gc.collect()
+                    return url
+            except Exception:
+                continue
+
         del encoded
         gc.collect()
-        return url
+        return ""
     except Exception:
         gc.collect()
         return ""
-
 @st.cache_data(ttl=3600, max_entries=1, show_spinner=False)
 def get_local_img_base64(filepath):
     try:
