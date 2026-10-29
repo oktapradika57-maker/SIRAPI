@@ -552,6 +552,318 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# =================================================================
+# 📱🖥️ PILIHAN TAMPILAN: WEB / HP  (BLOK TAMBAHAN)
+#   - Default otomatis: HP kalau dibuka dari smartphone, Web kalau dari komputer
+#   - Bisa diganti manual lewat tombol "Web | HP" di pojok kanan atas
+#   - Link langsung untuk tim lapangan:  https://<alamat-app>/?view=hp
+# =================================================================
+def _terdeteksi_hp() -> bool:
+    """Tebak perangkat dari User-Agent (butuh Streamlit >= 1.37). Kalau gagal -> dianggap komputer."""
+    try:
+        ua = (st.context.headers.get("User-Agent") or "").lower()
+        return any(k in ua for k in ("iphone", "ipod", "mobile"))
+    except Exception:
+        return False
+
+if "view_mode" not in st.session_state:
+    _qp = str(st.query_params.get("view", "")).lower()
+    st.session_state.view_mode = _qp if _qp in ("web", "hp") else ("hp" if _terdeteksi_hp() else "web")
+
+def _ganti_tampilan():
+    pilihan = st.session_state.get("_view_pick", "")
+    st.session_state.view_mode = "hp" if "HP" in pilihan else "web"
+    st.query_params["view"] = st.session_state.view_mode
+
+IS_HP = st.session_state.view_mode == "hp"
+
+_CSS_COMMON = """
+<style>
+    /* Tombol pilih tampilan (segmented) */
+    .st-key-view_switch { display:flex; justify-content:flex-end; padding:10px 0 2px 0; }
+    .st-key-view_switch div[role="radiogroup"] {
+        display:inline-flex; gap:2px; background:#E2E8F0; padding:3px; border-radius:999px;
+    }
+    .st-key-view_switch div[role="radiogroup"] label {
+        margin:0 !important; padding:6px 16px !important; border-radius:999px; cursor:pointer;
+    }
+    .st-key-view_switch div[role="radiogroup"] label > div:first-child { display:none !important; }
+    .st-key-view_switch div[role="radiogroup"] label:has(input:checked) {
+        background:#FFFFFF; box-shadow:0 1px 3px rgba(15,23,42,.18);
+    }
+    .st-key-view_switch div[role="radiogroup"] label p {
+        font-size:.82rem !important; font-weight:700 !important; margin:0 !important;
+    }
+
+    /* Layar sentuh: jangan biarkan efek hover "menempel" setelah ditekan */
+    @media (hover: none) {
+        div[data-testid="stButton"] > button:hover,
+        div[data-testid="stFormSubmitButton"] > button:hover,
+        .btn-sidata-blue:hover, .btn-sidata-red:hover, .sidata-area-card:hover {
+            transform: none !important;
+        }
+    }
+</style>
+"""
+
+_CSS_WEB = """
+<style>
+    /* Selector lama (.main .block-container) tidak cocok di Streamlit versi baru,
+       sehingga lebar maksimal 1180px tidak pernah aktif. Ini menutup celah itu. */
+    [data-testid="stMainBlockContainer"], .stMainBlockContainer {
+        max-width: 1180px !important;
+        margin: 0 auto !important;
+        padding: 0.25rem 1.25rem 3rem 1.25rem !important;
+    }
+</style>
+"""
+
+_CSS_HP = """
+<style>
+    /* ---------- Kanvas: satu kolom ala aplikasi HP ---------- */
+    .stApp { background:#E9EEF8 !important; }
+    [data-testid="stMainBlockContainer"], .stMainBlockContainer, .main .block-container {
+        max-width: 480px !important;
+        margin: 0 auto !important;
+        padding: 0.4rem 0.85rem 5rem 0.85rem !important;
+        background: #F4F7FE;
+    }
+    @media (min-width: 700px) {   /* pratinjau di komputer: tampil seperti bingkai HP */
+        [data-testid="stMainBlockContainer"], .stMainBlockContainer, .main .block-container {
+            min-height: 100vh;
+            box-shadow: 0 0 0 1px #DCE3F0, 0 24px 60px rgba(15,23,42,.12);
+        }
+    }
+    .st-key-view_switch { justify-content:stretch; }
+    .st-key-view_switch div[role="radiogroup"] { display:flex; width:100%; }
+    .st-key-view_switch div[role="radiogroup"] label { flex:1; justify-content:center; padding:10px 0 !important; }
+
+    /* ---------- Kolom: ditumpuk ke bawah (4 kolom -> 2x2) ---------- */
+    div[data-testid="stHorizontalBlock"] {
+        flex-direction: row !important; flex-wrap: wrap !important; gap: 0.6rem !important;
+    }
+    div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"],
+    div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+        flex: 1 1 100% !important; width: 100% !important; min-width: 100% !important;
+    }
+    div[data-testid="stHorizontalBlock"]:has(> div:nth-child(4):last-child) > div[data-testid="stColumn"],
+    div[data-testid="stHorizontalBlock"]:has(> div:nth-child(4):last-child) > div[data-testid="column"] {
+        flex: 1 1 calc(50% - 0.3rem) !important; width: calc(50% - 0.3rem) !important; min-width: calc(50% - 0.3rem) !important;
+    }
+
+    /* Baris atas halaman dalam: tombol Beranda + badge area, menempel di atas saat scroll */
+    div[data-testid="stHorizontalBlock"]:has(.st-key-btn_home) {
+        flex-wrap: nowrap !important; position: sticky; top: 0; z-index: 60;
+        background: #F4F7FE; padding: 8px 0 6px 0; margin-bottom: 4px;
+    }
+    div[data-testid="stHorizontalBlock"]:has(.st-key-btn_home) > div[data-testid="stColumn"],
+    div[data-testid="stHorizontalBlock"]:has(.st-key-btn_home) > div[data-testid="column"] {
+        flex: 0 0 auto !important; width: auto !important; min-width: 0 !important;
+    }
+    div[data-testid="stHorizontalBlock"]:has(.st-key-btn_home) > div:first-child { flex: 1 1 auto !important; }
+    div[data-testid="stHorizontalBlock"]:has(.st-key-btn_home) div[data-testid="stMarkdownContainer"] > div {
+        padding: 12px 10px !important; font-size: .72rem !important; white-space: nowrap;
+    }
+
+    /* ---------- Tipografi & kartu ---------- */
+    .sidata-logo-badge { width:170px; padding:14px 18px 12px 18px; margin-bottom:14px; }
+    .sidata-logo-badge img { width:118px; }
+    .sidata-top-wrapper { margin-bottom:18px; }
+    .sidata-main-title { font-size:1.45rem !important; line-height:1.25 !important; }
+    .sidata-main-sub { font-size:.86rem !important; line-height:1.45 !important; }
+    .sidata-area-card { min-height:0; padding:22px 16px 18px 16px; border-radius:18px; }
+    .sidata-card-heading { font-size:1.15rem !important; }
+    .sidata-card-desc { font-size:.84rem !important; line-height:1.55 !important; }
+    .header-card { padding:16px 14px !important; border-radius:16px !important; margin-bottom:16px !important; }
+    .header-card h1, .header-card h2, .header-card h3 { font-size:1.2rem !important; }
+    .header-card p, .header-card span, .header-card div { font-size:.84rem !important; }
+    .section-title { font-size:1.05rem !important; margin:22px 0 10px 0 !important; }
+    .metric-3d { padding:14px 12px !important; margin-bottom:10px !important; }
+    .metric-value { font-size:1.45rem !important; }
+    div[data-testid="stWidgetLabel"] p, div[data-testid="stWidgetLabel"] label { font-size:.88rem !important; }
+    div[data-testid="stAlert"] { font-size:.88rem; }
+
+    /* ---------- Input: 16px agar iPhone tidak zoom sendiri, area sentuh >= 48px ---------- */
+    div[data-baseweb="input"] input, div[data-baseweb="base-input"] input,
+    div[data-baseweb="textarea"] textarea, .stTextInput input, .stNumberInput input,
+    .stDateInput input, .stTextArea textarea, div[data-baseweb="select"] input {
+        font-size: 16px !important;
+    }
+    div[data-baseweb="input"] input, div[data-baseweb="base-input"] input,
+    .stTextInput input, .stNumberInput input, .stDateInput input { padding: 12px 14px !important; }
+    div[data-baseweb="select"] > div { min-height: 50px !important; }
+    li[role="option"] { min-height: 46px !important; }
+    div[data-testid="stCheckbox"] label { min-height: 44px; align-items: center; }
+    div[role="radiogroup"] label { padding: 6px 0; }
+
+    /* ---------- Tombol ---------- */
+    div[data-testid="stButton"] > button, div[data-testid="stFormSubmitButton"] > button,
+    div[data-testid="stDownloadButton"] > button {
+        min-height: 54px !important; border-radius: 12px !important; padding: 10px 12px !important;
+    }
+    div[data-testid="stButton"] > button *, div[data-testid="stFormSubmitButton"] > button * {
+        font-size: .9rem !important; line-height: 1.25 !important; white-space: normal !important;
+    }
+    .btn-sidata-blue, .btn-sidata-red {
+        padding: 16px 14px !important; font-size: .9rem !important; border-radius: 12px !important;
+    }
+
+    /* ---------- Tab, expander, upload ---------- */
+    .stTabs [data-baseweb="tab-list"] { overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
+    .stTabs [data-baseweb="tab"] { padding: 10px 14px !important; white-space: nowrap; flex: 0 0 auto; }
+    div[data-testid="stExpander"] summary { min-height: 48px; }
+    section[data-testid="stFileUploaderDropzone"] {
+        flex-direction: column; align-items: stretch; gap: .6rem; padding: 1rem;
+    }
+    section[data-testid="stFileUploaderDropzone"] button { width: 100%; min-height: 48px; }
+</style>
+"""
+
+st.markdown(_CSS_COMMON + (_CSS_HP if IS_HP else _CSS_WEB), unsafe_allow_html=True)
+
+try:
+    _sw = st.container(key="view_switch")   # butuh Streamlit >= 1.39
+except TypeError:
+    _sw = st.container()
+with _sw:
+    st.radio(
+        "Tampilan", ["🖥️ Web", "📱 HP"],
+        index=1 if IS_HP else 0, horizontal=True,
+        key="_view_pick", on_change=_ganti_tampilan, label_visibility="collapsed",
+    )
+
+
+# =================================================================
+# 🧭 WIZARD FORM REQUEST DANA (khusus mode HP) — form dipecah 6 langkah
+#   - Mode Web: form tetap satu halaman seperti biasa (tidak ada yang berubah)
+#   - Mode HP : tiap langkah tampil sendiri, tombol Kembali/Lanjut menempel di bawah layar
+#   - Semua isian TETAP hidup di semua langkah (hanya disembunyikan), jadi hitungan
+#     jarak, split tiket, dan validasi lama berjalan persis seperti sebelumnya
+# =================================================================
+import inspect as _inspect
+
+HAS_KEYED = "key" in _inspect.signature(st.container).parameters   # butuh Streamlit >= 1.39
+WZ_ON = IS_HP and HAS_KEYED
+WZ_STEPS = ["Petugas & Tiket", "Pekerjaan", "Rute", "Rincian Dana", "Pembayaran", "Kirim"]
+
+def _wz_box(key):
+    """Pembungkus satu langkah. Di mode Web tidak mengubah tampilan sama sekali."""
+    return st.container(key=key) if HAS_KEYED else st.container()
+
+def _wz_go(n):
+    st.session_state.wz_step = max(1, min(len(WZ_STEPS), int(n)))
+    st.session_state.wz_scroll = st.session_state.get("wz_scroll", 0) + 1
+
+def _wz_clamp(n):
+    """Dipanggil tepat sebelum st.stop(). Kalau pengguna sudah melangkah lewat langkah n,
+    tarik balik ke langkah n supaya pesan error-nya terlihat (bukan halaman kosong)."""
+    if WZ_ON and st.session_state.get("wz_step", 1) > n:
+        _wz_go(n)
+        st.rerun()
+
+_CSS_WZ = """
+<style>
+    [data-testid="stMainBlockContainer"], .stMainBlockContainer, .main .block-container {
+        padding-bottom: 7.5rem !important;
+    }
+    /* Header langkah */
+    .wz-head { background:#FFFFFF; border:1px solid #E2E8F0; border-radius:14px;
+               padding:12px 14px; margin:2px 0 12px 0; box-shadow:0 2px 8px rgba(15,23,42,.05); }
+    .wz-top { display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-bottom:9px; }
+    .wz-top span { font-size:.68rem; font-weight:800; letter-spacing:.06em; color:#64748B; }
+    .wz-top b { font-size:1rem; color:#0F172A; }
+    .wz-bar { display:flex; gap:4px; }
+    .wz-bar i { flex:1; height:6px; border-radius:99px; background:#E2E8F0; }
+    .wz-bar i.done { background:#10B981; }
+    .wz-bar i.cur { background:#0066FF; }
+
+    /* Ringkasan kelengkapan di langkah terakhir */
+    .wz-row { display:flex; gap:8px; padding:9px 11px; border-radius:10px; margin-bottom:6px;
+              font-size:.86rem; line-height:1.4; }
+    .wz-row.ok   { background:#ECFDF5; color:#065F46; }
+    .wz-row.warn { background:#FFFBEB; color:#92400E; }
+    .wz-row.err  { background:#FEF2F2; color:#991B1B; }
+
+    /* Bar Kembali / Lanjut menempel di bawah layar */
+    .st-key-wz_nav {
+        position: fixed; left: 50%; bottom: 0; transform: translateX(-50%);
+        width: min(480px, 100vw); box-sizing: border-box; z-index: 900;
+        background: rgba(255,255,255,.97); backdrop-filter: blur(8px);
+        border-top: 1px solid #E2E8F0; box-shadow: 0 -6px 20px rgba(15,23,42,.10);
+        padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px)) 12px;
+    }
+    .st-key-wz_nav div[data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; gap: .5rem !important; }
+    .st-key-wz_nav div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"],
+    .st-key-wz_nav div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+        flex: 1 1 0 !important; width: auto !important; min-width: 0 !important;
+    }
+    .st-key-wz_nav div[data-testid="stHorizontalBlock"] > div:nth-child(2) { flex: 2 1 0 !important; }
+
+    /* Iframe 0px (skrip scroll-ke-atas) jangan memakan ruang */
+    div[data-testid="stElementContainer"]:has(iframe[height="0"]) {
+        position: absolute; height: 0; overflow: hidden; margin: 0; padding: 0;
+    }
+</style>
+"""
+
+def _wz_render():
+    """Gambar header langkah + bar navigasi bawah, dan sembunyikan langkah yang tidak aktif."""
+    if not WZ_ON:
+        return
+    if not st.session_state.get("req_nop"):      # belum pilih NOP / baru masuk halaman -> mulai dari langkah 1
+        st.session_state.wz_step = 1
+        return
+
+    n = len(WZ_STEPS)
+    step = min(max(int(st.session_state.get("wz_step", 1)), 1), n)
+    sembunyi = ",".join('[class*="st-key-wz%d_"]' % i for i in range(1, n + 1) if i != step)
+    st.markdown(_CSS_WZ + "<style>" + sembunyi + "{display:none !important;}</style>", unsafe_allow_html=True)
+
+    segmen = "".join(
+        '<i class="%s"></i>' % ("done" if i < step else ("cur" if i == step else ""))
+        for i in range(1, n + 1)
+    )
+    st.markdown(
+        '<div class="wz-head"><div class="wz-top"><span>LANGKAH %d DARI %d</span><b>%s</b></div>'
+        '<div class="wz-bar">%s</div></div>' % (step, n, WZ_STEPS[step - 1], segmen),
+        unsafe_allow_html=True,
+    )
+
+    with st.container(key="wz_nav"):
+        c_prev, c_next = st.columns([1, 2])
+        with c_prev:
+            st.button("⬅️ Kembali", key="wz_prev", on_click=_wz_go, args=(step - 1,),
+                      disabled=(step == 1), use_container_width=True)
+        with c_next:
+            if step < n:
+                st.button("Lanjut: %s ➡️" % WZ_STEPS[step], key="wz_next", type="primary",
+                          on_click=_wz_go, args=(step + 1,), use_container_width=True)
+            else:
+                st.button("Langkah terakhir ☝️", key="wz_next_off", disabled=True, use_container_width=True)
+
+    if st.session_state.get("wz_scroll"):        # setiap ganti langkah, gulir kembali ke atas
+        st.components.v1.html(
+            "<script>try{var d=window.parent.document;"
+            "var m=d.querySelector('[data-testid=\"stMain\"]')||d.querySelector('section.main');"
+            "if(m){m.scrollTo({top:0});}window.parent.scrollTo(0,0);}catch(e){}</script>"
+            "<!--" + str(st.session_state.wz_scroll) + "-->",
+            height=0,
+        )
+
+def _wz_ringkasan(items):
+    """items = [(no_langkah, nama, 'ok'|'warn'|'err', pesan)]. Ditampilkan di langkah terakhir."""
+    ikon = {"ok": "✅", "warn": "⚠️", "err": "❌"}
+    baris = ""
+    for no, nama_langkah, status, pesan in items:
+        teks = nama_langkah if status == "ok" else nama_langkah + " — " + pesan
+        baris += '<div class="wz-row %s"><span>%s</span><span>%s</span></div>' % (status, ikon[status], teks)
+    st.markdown('<div class="section-title">📋 Ringkasan Kelengkapan</div>' + baris, unsafe_allow_html=True)
+    for no, nama_langkah, status, pesan in items:
+        if status != "ok":
+            st.button("✏️ Perbaiki Langkah %d: %s" % (no, nama_langkah), key="wz_fix_%d" % no,
+                      on_click=_wz_go, args=(no,), use_container_width=True)
+
+
 # ==========================================
 # 1. MASTER DATA & KONFIGURASI
 # ==========================================
@@ -1025,7 +1337,7 @@ if st.session_state.page != "🏠 Hub Menu Utama":
     st.markdown("<div style='height: 18px;'></div>", unsafe_allow_html=True)
     c_nav1, c_nav2 = st.columns([3, 1])
     with c_nav1:
-        if st.button("⬅️ KEMBALI KE BERANDA UTAMA", use_container_width=True):
+        if st.button("⬅️ BERANDA" if IS_HP else "⬅️ KEMBALI KE BERANDA UTAMA", use_container_width=True, key="btn_home"):
             st.session_state.page = "🏠 Hub Menu Utama"
             st.session_state.pdf_ready = False
             st.session_state.req_wa_ready = ""
@@ -1314,11 +1626,14 @@ elif st.session_state.page == "🎫 Master Tiket PM":
 # ==========================================
 elif st.session_state.page == "📝 Form Request Dana":
     st.markdown("<div class='header-card'><h2>📝 PORTAL PENGAJUAN DANA</h2><p>Operational System - Input Pengajuan Baru / Revisi (Multi-Split Engine)</p></div>", unsafe_allow_html=True)
+    _wz_render()
     
-    nop = st.selectbox("📌 1. Pilih Database Regional (NOP)", [""] + list(MASTER_DATA.keys()))
+    with _wz_box("wz1_nop"):
+        nop = st.selectbox("📌 1. Pilih Database Regional (NOP)", [""] + list(MASTER_DATA.keys()), key="req_nop")
     
     if nop != "":
-        st.markdown("<div class='section-title'>📋 2. Informasi Petugas & Tiket Pokok</div>", unsafe_allow_html=True)
+        with _wz_box("wz1_t"):
+            st.markdown("<div class='section-title'>📋 2. Informasi Petugas & Tiket Pokok</div>", unsafe_allow_html=True)
         target_ss = MASTER_DATA[nop]["spreadsheet_id"]
         data_all = fetch_spreadsheet_data(target_ss)
         req_r, pjb_r, app_r = data_all[SHEET_REQUEST], data_all[SHEET_PJB], data_all[SHEET_APP]
@@ -1342,630 +1657,664 @@ elif st.session_state.page == "📝 Form Request Dana":
 
         col1, col2 = st.columns(2)
         with col1:
-            tanggal = st.date_input("Tanggal Pengajuan")
-            cluster = st.selectbox("Cluster Regional", [""] + MASTER_DATA[nop]["clusters"])
+            with _wz_box("wz1_a"):
+                tanggal = st.date_input("Tanggal Pengajuan")
+                cluster = st.selectbox("Cluster Regional", [""] + MASTER_DATA[nop]["clusters"])
             
-            idx_nama_login = MASTER_DATA[nop]["names"].index(st.session_state.logged_in_user) if st.session_state.logged_in_user in MASTER_DATA[nop]["names"] else 0
-            nama = st.selectbox("Nama Petugas / Pemohon (PIC Utama)", [""] + MASTER_DATA[nop]["names"], index=idx_nama_login+1 if idx_nama_login != 0 else 0)
+                idx_nama_login = MASTER_DATA[nop]["names"].index(st.session_state.logged_in_user) if st.session_state.logged_in_user in MASTER_DATA[nop]["names"] else 0
+                nama = st.selectbox("Nama Petugas / Pemohon (PIC Utama)", [""] + MASTER_DATA[nop]["names"], index=idx_nama_login+1 if idx_nama_login != 0 else 0)
             
-            nama_lookup = nama.strip().upper()
+                nama_lookup = nama.strip().upper()
             
-            out_all, out_lock, aging_tickets, hist_cek = get_user_tickets_status(nama, req_r, pjb_r, app_r)
-            if aging_tickets:
-                st.warning(f"🔔 PENGINGAT: Sdr/i {nama}, Anda memiliki **{len(aging_tickets)}** pengajuan yang tertunda PJB >3 Hari!")
+                out_all, out_lock, aging_tickets, hist_cek = get_user_tickets_status(nama, req_r, pjb_r, app_r)
+                if aging_tickets:
+                    st.warning(f"🔔 PENGINGAT: Sdr/i {nama}, Anda memiliki **{len(aging_tickets)}** pengajuan yang tertunda PJB >3 Hari!")
             
-            for hc in hist_cek:
-                if "DITOLAK" in hc["Status"]: st.error(f"⚠️ HARAP REVISI/RE-REQUEST: {hc['Tiket']} {hc['Status']}")
-                elif "Review Admin" in hc["Status"]: st.warning(f"⏳ VERIFIKASI: {hc['Tiket']} Sedang Dalam Verifikasi Admin.")
+                for hc in hist_cek:
+                    if "DITOLAK" in hc["Status"]: st.error(f"⚠️ HARAP REVISI/RE-REQUEST: {hc['Tiket']} {hc['Status']}")
+                    elif "Review Admin" in hc["Status"]: st.warning(f"⏳ VERIFIKASI: {hc['Tiket']} Sedang Dalam Verifikasi Admin.")
 
-            default_bank, default_no_rek = "BNI", ""
-            if nama_lookup != "" and nama_lookup in tim_dict:
-                auto_lat_brgkt, auto_long_brgkt = str(tim_dict[nama_lookup].get("Latitude", "0")), str(tim_dict[nama_lookup].get("Longtitude", "0"))
-                for r in reversed(req_r[1:]): 
-                    if len(r) > 18 and str(r[5]).strip().upper() == nama_lookup:
-                        if str(r[17]).strip() in ["BNI", "BCA", "MANDIRI", "BRI"]:
-                            default_bank, default_no_rek = str(r[17]).strip(), str(r[18]).strip(); break
+                default_bank, default_no_rek = "BNI", ""
+                if nama_lookup != "" and nama_lookup in tim_dict:
+                    auto_lat_brgkt, auto_long_brgkt = str(tim_dict[nama_lookup].get("Latitude", "0")), str(tim_dict[nama_lookup].get("Longtitude", "0"))
+                    for r in reversed(req_r[1:]): 
+                        if len(r) > 18 and str(r[5]).strip().upper() == nama_lookup:
+                            if str(r[17]).strip() in ["BNI", "BCA", "MANDIRI", "BRI"]:
+                                default_bank, default_no_rek = str(r[17]).strip(), str(r[18]).strip(); break
                             
-            is_locked_user = len(out_lock) > 0
+                is_locked_user = len(out_lock) > 0
             
-            default_role_idx = 0
-            if nama_lookup in tim_dict and 'ROLE' in tim_dict[nama_lookup]:
-                role_val = tim_dict[nama_lookup]['ROLE']
-                roles_list = ["-- Pilih Role --", "Admin", "Koordinator", "PM", "TE", "MBP", "CME"]
-                if role_val in roles_list:
-                    default_role_idx = roles_list.index(role_val)
+                default_role_idx = 0
+                if nama_lookup in tim_dict and 'ROLE' in tim_dict[nama_lookup]:
+                    role_val = tim_dict[nama_lookup]['ROLE']
+                    roles_list = ["-- Pilih Role --", "Admin", "Koordinator", "PM", "TE", "MBP", "CME"]
+                    if role_val in roles_list:
+                        default_role_idx = roles_list.index(role_val)
                     
-            role = st.selectbox("Role Jabatan", ["-- Pilih Role --", "Admin", "Koordinator", "PM", "TE", "MBP", "CME"], index=default_role_idx)
+                role = st.selectbox("Role Jabatan", ["-- Pilih Role --", "Admin", "Koordinator", "PM", "TE", "MBP", "CME"], index=default_role_idx)
             
-            if len(site_list) > 0:
-                site_id = st.selectbox("ID Site / Lokasi", [""] + site_list)
-                if site_id != "-- Pilih Site ID --" and site_id in site_dict:
-                    auto_lat_tujuan, auto_long_tujuan = str(site_dict[site_id].get("Latitude Tujuan", "0")), str(site_dict[site_id].get("Longtitude Tujuan", "0"))
-            else: site_id = st.text_input("ID Site / Lokasi")
+                if len(site_list) > 0:
+                    site_id = st.selectbox("ID Site / Lokasi", [""] + site_list)
+                    if site_id != "-- Pilih Site ID --" and site_id in site_dict:
+                        auto_lat_tujuan, auto_long_tujuan = str(site_dict[site_id].get("Latitude Tujuan", "0")), str(site_dict[site_id].get("Longtitude Tujuan", "0"))
+                else: site_id = st.text_input("ID Site / Lokasi")
 
         with col2:
-            keperluan = st.selectbox("Klasifikasi Keperluan Dana", LIST_KEPERLUAN)
+            with _wz_box("wz1_b"):
+                keperluan = st.selectbox("Klasifikasi Keperluan Dana", LIST_KEPERLUAN)
             
-            pm_selected_list = []
-            if keperluan == "PM":
-                st.markdown("<div style='background-color:#F0F9FF; padding:15px; border-radius:10px; border-left: 5px solid #0EA5E9; margin-bottom: 15px;'><b>🎫 Fitur Multi-Select Tiket PM</b><br><small>Silakan pilih sebanyak mungkin tiket yang akan dikerjakan dalam 1x pencairan dana ini.</small></div>", unsafe_allow_html=True)
+                pm_selected_list = []
+                if keperluan == "PM":
+                    st.markdown("<div style='background-color:#F0F9FF; padding:15px; border-radius:10px; border-left: 5px solid #0EA5E9; margin-bottom: 15px;'><b>🎫 Fitur Multi-Select Tiket PM</b><br><small>Silakan pilih sebanyak mungkin tiket yang akan dikerjakan dalam 1x pencairan dana ini.</small></div>", unsafe_allow_html=True)
                 
-                pm_r = data_all.get(SHEET_TIKET_PM, [])
-                avail_pm = []
-                for r in pm_r[1:]: 
-                    try:
-                        if len(r) >= 6:
-                            cek_nop = str(r[1]).strip().replace(" ", "").upper()
-                            target_nop = nop.strip().replace(" ", "").upper()
-                            cek_status = str(r[5]).strip().upper()
-                            cek_tiket = str(r[3]).strip().upper()
-                            if cek_nop == target_nop and "AVAILABLE" in cek_status and cek_tiket != "":
-                                avail_pm.append(cek_tiket)
-                    except Exception:
-                        continue
+                    pm_r = data_all.get(SHEET_TIKET_PM, [])
+                    avail_pm = []
+                    for r in pm_r[1:]: 
+                        try:
+                            if len(r) >= 6:
+                                cek_nop = str(r[1]).strip().replace(" ", "").upper()
+                                target_nop = nop.strip().replace(" ", "").upper()
+                                cek_status = str(r[5]).strip().upper()
+                                cek_tiket = str(r[3]).strip().upper()
+                                if cek_nop == target_nop and "AVAILABLE" in cek_status and cek_tiket != "":
+                                    avail_pm.append(cek_tiket)
+                        except Exception:
+                            continue
                         
-                pm_selected_list = st.multiselect("Pilih Tiket PM yang akan digarap (Multi-Select):", avail_pm)
-                tiket_string = ", ".join(pm_selected_list)
+                    pm_selected_list = st.multiselect("Pilih Tiket PM yang akan digarap (Multi-Select):", avail_pm)
+                    tiket_string = ", ".join(pm_selected_list)
                 
-                if not tiket_string: tiket = st.text_input("Atau ketik Manual Tiket PM (Jika tidak ada di dropdown):")
-                else: tiket = st.text_input("Tiket yang akan diajukan (Auto-Fill):", value=tiket_string, disabled=True)
-            else:
-                tiket = st.text_input("Nomor Tiket SWFM (WAJIB)")
-                
-            base_tiket_clean = tiket.strip().upper()
-            
-            is_duplicate = False
-            is_rejected_request = False
-            
-            for r in reversed(app_r[1:]):
-                if len(r) > 5 and r[3] == "Request Dana" and str(r[2]).strip().upper() == base_tiket_clean:
-                    if str(r[5]).strip().upper() == "REJECTED": is_rejected_request = True
-                    break
-            
-            if base_tiket_clean != "" and not is_rejected_request:
-                for t in all_requested_tickets:
-                    if base_tiket_clean in t: 
-                        is_duplicate = True
-                        break
-                        
-            status_izin = "NONE"
-            if is_duplicate:
-                safe_app_r = app_r[1:] if len(app_r) > 1 else []
-                for r in reversed(safe_app_r):
-                    if len(r) > 5 and r[3] == "Izin Revisi" and str(r[2]).strip().upper() == base_tiket_clean:
-                        status_izin = str(r[5]).strip()
-                        break
-                        
-                if status_izin != "APPROVED":
-                    st.error(f"⛔ Akses Terkunci: Tiket Pokok **{base_tiket_clean}** sudah terdaftar di database. Untuk merevisi atau menambah item dana pada tiket ini, Anda **WAJIB** meminta Izin Revisi ke Admin.")
-                    if status_izin == "PENDING":
-                        st.warning("⏳ Status: Permintaan Izin Revisi Anda sedang MENUNGGU VERIFIKASI Admin.")
-                    else:
-                        if st.button("🚨 Minta Izin Revisi ke Admin Sekarang", type="primary", use_container_width=True):
-                            append_data(SHEET_APP, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), nama, base_tiket_clean, "Izin Revisi", 0, "PENDING", "-"], target_ss)
-                            st.success("Permintaan Izin Revisi terkirim! Silakan hubungi Admin.")
-                            time.sleep(2.5); st.rerun()
-                    st.stop()
+                    if not tiket_string: tiket = st.text_input("Atau ketik Manual Tiket PM (Jika tidak ada di dropdown):")
+                    else: tiket = st.text_input("Tiket yang akan diajukan (Auto-Fill):", value=tiket_string, disabled=True)
                 else:
-                    st.success("✅ Izin Revisi DIBERIKAN Admin. Silakan isi kembali data perbaikan Anda di bawah ini.")
+                    tiket = st.text_input("Nomor Tiket SWFM (WAJIB)")
+                
+                base_tiket_clean = tiket.strip().upper()
+            
+                is_duplicate = False
+                is_rejected_request = False
+            
+                for r in reversed(app_r[1:]):
+                    if len(r) > 5 and r[3] == "Request Dana" and str(r[2]).strip().upper() == base_tiket_clean:
+                        if str(r[5]).strip().upper() == "REJECTED": is_rejected_request = True
+                        break
+            
+                if base_tiket_clean != "" and not is_rejected_request:
+                    for t in all_requested_tickets:
+                        if base_tiket_clean in t: 
+                            is_duplicate = True
+                            break
+                        
+                status_izin = "NONE"
+                if is_duplicate:
+                    safe_app_r = app_r[1:] if len(app_r) > 1 else []
+                    for r in reversed(safe_app_r):
+                        if len(r) > 5 and r[3] == "Izin Revisi" and str(r[2]).strip().upper() == base_tiket_clean:
+                            status_izin = str(r[5]).strip()
+                            break
+                        
+                    if status_izin != "APPROVED":
+                        st.error(f"⛔ Akses Terkunci: Tiket Pokok **{base_tiket_clean}** sudah terdaftar di database. Untuk merevisi atau menambah item dana pada tiket ini, Anda **WAJIB** meminta Izin Revisi ke Admin.")
+                        if status_izin == "PENDING":
+                            st.warning("⏳ Status: Permintaan Izin Revisi Anda sedang MENUNGGU VERIFIKASI Admin.")
+                        else:
+                            if st.button("🚨 Minta Izin Revisi ke Admin Sekarang", type="primary", use_container_width=True):
+                                append_data(SHEET_APP, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), nama, base_tiket_clean, "Izin Revisi", 0, "PENDING", "-"], target_ss)
+                                st.success("Permintaan Izin Revisi terkirim! Silakan hubungi Admin.")
+                                time.sleep(2.5); st.rerun()
+                        _wz_clamp(1)
+                        st.stop()
+                    else:
+                        st.success("✅ Izin Revisi DIBERIKAN Admin. Silakan isi kembali data perbaikan Anda di bawah ini.")
                     
-            if is_rejected_request:
-                st.info(f"💡 Info: Request dengan tiket **{base_tiket_clean}** sebelumnya ditolak. Anda dapat menginput ulang (Re-Submit) di form ini.")
+                if is_rejected_request:
+                    st.info(f"💡 Info: Request dengan tiket **{base_tiket_clean}** sebelumnya ditolak. Anda dapat menginput ulang (Re-Submit) di form ini.")
 
-            # --- TAMBAHAN KLASIFIKASI PEKERJAAN MULTIPLE (MULAI) ---
-            st.markdown("<div class='section-title'>🏗️ Klasifikasi & Detail Pekerjaan</div>", unsafe_allow_html=True)
-            st.info("💡 Pilih semua jenis pekerjaan yang dilakukan. Pilihan akan otomatis merangkum Deskripsi, mengunci Uang Makan, dan memunculkan Checklist khusus.")
+            with _wz_box("wz2_a"):
+                # --- TAMBAHAN KLASIFIKASI PEKERJAAN MULTIPLE (MULAI) ---
+                st.markdown("<div class='section-title'>🏗️ Klasifikasi & Detail Pekerjaan</div>", unsafe_allow_html=True)
+                st.info("💡 Pilih semua jenis pekerjaan yang dilakukan. Pilihan akan otomatis merangkum Deskripsi, mengunci Uang Makan, dan memunculkan Checklist khusus.")
             
-            c_job1, c_job2 = st.columns(2)
-            with c_job1:
-                opt_atas = ["RRU", "Antena MW/RF", "Jumper", "Optik", "Odu", "Pindah Mounting", "Lainnya (Ketik Manual)"]
-                val_atas = st.multiselect("📡 Tshoot Bagian Atas", opt_atas)
-                manual_atas = st.text_input("Sebutkan (Atas Lainnya):") if "Lainnya (Ketik Manual)" in val_atas else ""
+                c_job1, c_job2 = st.columns(2)
+                with c_job1:
+                    opt_atas = ["RRU", "Antena MW/RF", "Jumper", "Optik", "Odu", "Pindah Mounting", "Lainnya (Ketik Manual)"]
+                    val_atas = st.multiselect("📡 Tshoot Bagian Atas", opt_atas)
+                    manual_atas = st.text_input("Sebutkan (Atas Lainnya):") if "Lainnya (Ketik Manual)" in val_atas else ""
                 
-                is_kirim_mat = st.checkbox("📦 Pengiriman Material")
-                mat_module = st.text_input("Wajib: Nama Module yang dikirim:") if is_kirim_mat else ""
-                mat_site = st.text_input("Wajib: Site ID Tujuan Pengiriman:") if is_kirim_mat else ""
+                    is_kirim_mat = st.checkbox("📦 Pengiriman Material")
+                    mat_module = st.text_input("Wajib: Nama Module yang dikirim:") if is_kirim_mat else ""
+                    mat_site = st.text_input("Wajib: Site ID Tujuan Pengiriman:") if is_kirim_mat else ""
                 
-            with c_job2:
-                opt_bawah = ["Module APR", "Backplane Rectifier", "Replace Board BTS", "Replace Optik Transmisi", "Replace Idu", "Add Batterai", "Add Rectifier", "Tshoot Power dan rectifier", "Pengecekan MCB", "BCP", "Automasi Genset", "Preventive Maintenance SITE", "Preventive Maintenance GENSET", "Preventive Maintenance SITE & GENSET (Tim PM)", "Lainnya (Ketik Manual)"]
-                val_bawah = st.multiselect("🔌 Tshoot Bagian Bawah", opt_bawah)
-                manual_bawah = st.text_input("Sebutkan (Bawah Lainnya):") if "Lainnya (Ketik Manual)" in val_bawah else ""
+                with c_job2:
+                    opt_bawah = ["Module APR", "Backplane Rectifier", "Replace Board BTS", "Replace Optik Transmisi", "Replace Idu", "Add Batterai", "Add Rectifier", "Tshoot Power dan rectifier", "Pengecekan MCB", "BCP", "Automasi Genset", "Preventive Maintenance SITE", "Preventive Maintenance GENSET", "Preventive Maintenance SITE & GENSET (Tim PM)", "Lainnya (Ketik Manual)"]
+                    val_bawah = st.multiselect("🔌 Tshoot Bagian Bawah", opt_bawah)
+                    manual_bawah = st.text_input("Sebutkan (Bawah Lainnya):") if "Lainnya (Ketik Manual)" in val_bawah else ""
 
-            # Merangkum Deskripsi Otomatis dari Pilihan Tim
-            auto_desc = []
-            if val_atas:
-                c_atas = [x for x in val_atas if x != "Lainnya (Ketik Manual)"]
-                if manual_atas: c_atas.append(manual_atas)
-                if c_atas: auto_desc.append("BAGIAN ATAS: " + ", ".join(c_atas))
-            if val_bawah:
-                c_bawah = [x for x in val_bawah if x != "Lainnya (Ketik Manual)"]
-                if manual_bawah: c_bawah.append(manual_bawah)
-                if c_bawah: auto_desc.append("BAGIAN BAWAH: " + ", ".join(c_bawah))
-            if is_kirim_mat:
-                auto_desc.append(f"PENGIRIMAN MATERIAL: {mat_module} (Tujuan: Site {mat_site})")
+                # Merangkum Deskripsi Otomatis dari Pilihan Tim
+                auto_desc = []
+                if val_atas:
+                    c_atas = [x for x in val_atas if x != "Lainnya (Ketik Manual)"]
+                    if manual_atas: c_atas.append(manual_atas)
+                    if c_atas: auto_desc.append("BAGIAN ATAS: " + ", ".join(c_atas))
+                if val_bawah:
+                    c_bawah = [x for x in val_bawah if x != "Lainnya (Ketik Manual)"]
+                    if manual_bawah: c_bawah.append(manual_bawah)
+                    if c_bawah: auto_desc.append("BAGIAN BAWAH: " + ", ".join(c_bawah))
+                if is_kirim_mat:
+                    auto_desc.append(f"PENGIRIMAN MATERIAL: {mat_module} (Tujuan: Site {mat_site})")
                 
-            str_auto_desc = "\n".join(auto_desc)
+                str_auto_desc = "\n".join(auto_desc)
             
-            # Text area akan otomatis terisi dari rangkuman di atas!
-            deskripsi = st.text_area("Deskripsi Pekerjaan / Justifikasi (Auto-Fill System):", value=str_auto_desc, height=120)
-            # --- TAMBAHAN KLASIFIKASI PEKERJAAN MULTIPLE (SELESAI) ---
+                # Text area akan otomatis terisi dari rangkuman di atas!
+                deskripsi = st.text_area("Deskripsi Pekerjaan / Justifikasi (Auto-Fill System):", value=str_auto_desc, height=120)
+                # --- TAMBAHAN KLASIFIKASI PEKERJAAN MULTIPLE (SELESAI) ---
             
-            list_nama_tim = [n for n in MASTER_DATA[nop]["names"] if n.strip().upper() != nama_lookup and n != ""]
-            tim_bareng = st.multiselect("👥 Pilih Rekan Tim yang Berangkat Bersama (Opsional)", list_nama_tim)
+                list_nama_tim = [n for n in MASTER_DATA[nop]["names"] if n.strip().upper() != nama_lookup and n != ""]
+                tim_bareng = st.multiselect("👥 Pilih Rekan Tim yang Berangkat Bersama (Opsional)", list_nama_tim)
             
-            tim_terkunci = []
-            if role in ["TE", "MBP", "CME"] and tim_bareng:
-                for member in tim_bareng:
-                    _, m_out_lock, _, _ = get_user_tickets_status(member, req_r, pjb_r, app_r)
-                    if len(m_out_lock) > 0: tim_terkunci.append(member)
+                tim_terkunci = []
+                if role in ["TE", "MBP", "CME"] and tim_bareng:
+                    for member in tim_bareng:
+                        _, m_out_lock, _, _ = get_user_tickets_status(member, req_r, pjb_r, app_r)
+                        if len(m_out_lock) > 0: tim_terkunci.append(member)
 
-        st.markdown("<div class='section-title'>📍 3. Rute Peta (Satelit)</div>", unsafe_allow_html=True)
-        c_lat1, c_lon1, c_lat2, c_lon2 = st.columns(4)
-        with c_lat1: lat_berangkat = st.text_input("Lat Berangkat", value=auto_lat_brgkt)
-        with c_lon1: long_berangkat = st.text_input("Long Berangkat", value=auto_long_brgkt)
-        with c_lat2: lat_tujuan = st.text_input("Lat Tujuan", value=auto_lat_tujuan)
-        with c_lon2: long_tujuan = st.text_input("Long Tujuan", value=auto_long_tujuan)
+        with _wz_box("wz3_a"):
+            st.markdown("<div class='section-title'>📍 3. Rute Peta (Satelit)</div>", unsafe_allow_html=True)
+            c_lat1, c_lon1, c_lat2, c_lon2 = st.columns(4)
+            with c_lat1: lat_berangkat = st.text_input("Lat Berangkat", value=auto_lat_brgkt)
+            with c_lon1: long_berangkat = st.text_input("Long Berangkat", value=auto_long_brgkt)
+            with c_lat2: lat_tujuan = st.text_input("Lat Tujuan", value=auto_lat_tujuan)
+            with c_lon2: long_tujuan = st.text_input("Long Tujuan", value=auto_long_tujuan)
 
-        jarak_km_oneway = 0.0
-        jarak_km_pp = 0.0
-        jarak_final_text = ""
-        invalid_coords = False
+            jarak_km_oneway = 0.0
+            jarak_km_pp = 0.0
+            jarak_final_text = ""
+            invalid_coords = False
         
-        clat1, clon1 = clean_coord(lat_berangkat), clean_coord(long_berangkat)
-        clat2, clon2 = clean_coord(lat_tujuan), clean_coord(long_tujuan)
+            clat1, clon1 = clean_coord(lat_berangkat), clean_coord(long_berangkat)
+            clat2, clon2 = clean_coord(lat_tujuan), clean_coord(long_tujuan)
         
-        if clat1 != 0 and clon1 != 0 and clat2 != 0 and clon2 != 0:
-            with st.spinner("Satelit menarik rute..."):
-                jarak_km_oneway, poly, durasi_sec = get_route_and_distance(clon1, clat1, clon2, clat2)
-            jarak_km_pp = jarak_km_oneway * 2
+            if clat1 != 0 and clon1 != 0 and clat2 != 0 and clon2 != 0:
+                with st.spinner("Satelit menarik rute..."):
+                    jarak_km_oneway, poly, durasi_sec = get_route_and_distance(clon1, clat1, clon2, clat2)
+                jarak_km_pp = jarak_km_oneway * 2
             
-            dur_jam_pp = (durasi_sec * 2) / 3600.0
-            jam_int = int(dur_jam_pp)
-            mnt_int = int((dur_jam_pp - jam_int) * 60)
+                dur_jam_pp = (durasi_sec * 2) / 3600.0
+                jam_int = int(dur_jam_pp)
+                mnt_int = int((dur_jam_pp - jam_int) * 60)
             
-            jarak_final_text = f"{jarak_km_pp:.1f} Km (PP) | {jam_int} Jam {mnt_int} Mnt"
-            st.info(f"🛣️ Jarak Tempuh Peta: **{jarak_km_pp:.1f} Km (PP)** (Titik HB ke Site: {jarak_km_oneway:.1f} Km)\n\n⏱️ Estimasi Waktu (PP): **{jam_int} Jam {mnt_int} Mnt**")
-        else:
-            invalid_coords = True
-            st.warning("⚠️ Koordinat masih 0 / belum lengkap. Sistem berpotensi menolak karena tidak bisa menghitung jarak tempuh aktual.")
+                jarak_final_text = f"{jarak_km_pp:.1f} Km (PP) | {jam_int} Jam {mnt_int} Mnt"
+                st.info(f"🛣️ Jarak Tempuh Peta: **{jarak_km_pp:.1f} Km (PP)** (Titik HB ke Site: {jarak_km_oneway:.1f} Km)\n\n⏱️ Estimasi Waktu (PP): **{jam_int} Jam {mnt_int} Mnt**")
+            else:
+                invalid_coords = True
+                st.warning("⚠️ Koordinat masih 0 / belum lengkap. Sistem berpotensi menolak karena tidak bisa menghitung jarak tempuh aktual.")
 
         auto_nopol = ""
         if nama_lookup != "" and nama_lookup in tim_dict:
             auto_nopol = str(tim_dict[nama_lookup].get("NOPOL", "")).strip()
             if auto_nopol in ["nan", "0", "None"]: auto_nopol = ""
 
-        st.markdown("<div class='section-title'>🛒 4. Rincian Kebutuhan Dana (Pilih Bisa Lebih Dari 1)</div>", unsafe_allow_html=True)
-        st.info("💡 **INFO SPLIT ENGINE:** Anda bisa memilih banyak kebutuhan sekaligus. Sistem akan otomatis memecah form ini menjadi beberapa tiket PJB pending yang terpisah.")
+        with _wz_box("wz4_a"):
+            st.markdown("<div class='section-title'>🛒 4. Rincian Kebutuhan Dana (Pilih Bisa Lebih Dari 1)</div>", unsafe_allow_html=True)
+            st.info("💡 **INFO SPLIT ENGINE:** Anda bisa memilih banyak kebutuhan sekaligus. Sistem akan otomatis memecah form ini menjadi beberapa tiket PJB pending yang terpisah.")
         
-        kebutuhan_dana_list = st.multiselect("Silakan pilih seluruh jenis pengeluaran untuk tiket ini:", ["BBM", "Uang Makan", "Penginapan", "Material", "Support", "Fery Reguler/Carter", "Klotok/Kapal Carter"])
+            kebutuhan_dana_list = st.multiselect("Silakan pilih seluruh jenis pengeluaran untuk tiket ini:", ["BBM", "Uang Makan", "Penginapan", "Material", "Support", "Fery Reguler/Carter", "Klotok/Kapal Carter"])
         
-        sub_requests = []
-        is_mobil = is_motor = is_genset = False
-        total_motor_this_month = 0
+            sub_requests = []
+            is_mobil = is_motor = is_genset = False
+            total_motor_this_month = 0
         
-        if "BBM" in kebutuhan_dana_list:
-            st.markdown("<div style='background-color:#F8FAFC; padding:15px; border-radius:10px; border-left: 5px solid #3B82F6; margin-bottom: 15px; box-shadow: 2px 2px 5px rgba(0,0,0,0.05);'>", unsafe_allow_html=True)
-            jns_bbm_list = st.multiselect("BBM untuk Kendaraan/Peralatan apa saja?", ["Mobil", "Motor", "Genset"])
+            if "BBM" in kebutuhan_dana_list:
+                st.markdown("<div style='background-color:#F8FAFC; padding:15px; border-radius:10px; border-left: 5px solid #3B82F6; margin-bottom: 15px; box-shadow: 2px 2px 5px rgba(0,0,0,0.05);'>", unsafe_allow_html=True)
+                jns_bbm_list = st.multiselect("BBM untuk Kendaraan/Peralatan apa saja?", ["Mobil", "Motor", "Genset"])
             
-            # ---------------------------------------------------------
-            # LOGIKA MOBIL (OPSI 1x ATAU 2x PENGISIAN)
-            # ---------------------------------------------------------
-            if "Mobil" in jns_bbm_list:
-                is_mobil = True
-                with st.expander("🚙 Input Nominal & Indikator BBM Mobil", expanded=True):
-                    c_m1, c_m2 = st.columns(2)
-                    with c_m1:
-                        jb_mobil = st.selectbox("Jenis BBM Mobil", ["Pertalite", "Pertamax", "Dexlite", "Bio Solar", "Pertamina Dex"], key="b_mob")
-                        est_liter_mob = round(jarak_km_pp / 9.0, 1) if jarak_km_pp > 0 else 5.0
-                        est_harga_mob = 10000 if "Pertalite" in jb_mobil else (12500 if "Pertamax" in jb_mobil else (14500 if "Dexlite" in jb_mobil else 6800))
+                # ---------------------------------------------------------
+                # LOGIKA MOBIL (OPSI 1x ATAU 2x PENGISIAN)
+                # ---------------------------------------------------------
+                if "Mobil" in jns_bbm_list:
+                    is_mobil = True
+                    with st.expander("🚙 Input Nominal & Indikator BBM Mobil", expanded=True):
+                        c_m1, c_m2 = st.columns(2)
+                        with c_m1:
+                            jb_mobil = st.selectbox("Jenis BBM Mobil", ["Pertalite", "Pertamax", "Dexlite", "Bio Solar", "Pertamina Dex"], key="b_mob")
+                            est_liter_mob = round(jarak_km_pp / 9.0, 1) if jarak_km_pp > 0 else 5.0
+                            est_harga_mob = 10000 if "Pertalite" in jb_mobil else (12500 if "Pertamax" in jb_mobil else (14500 if "Dexlite" in jb_mobil else 6800))
                         
-                        opsi_pengisian_mob = st.radio("Opsi Pengisian Mobil:", ["1x Pengisian", "2x Pengisian (Kapasitas Tangki Kurang)"], key="opt_mob")
+                            opsi_pengisian_mob = st.radio("Opsi Pengisian Mobil:", ["1x Pengisian", "2x Pengisian (Kapasitas Tangki Kurang)"], key="opt_mob")
+                        
+                            if opsi_pengisian_mob == "1x Pengisian":
+                                keb_mobil = st.number_input("Estimasi Dana BBM Mobil (Rp)", min_value=0, step=1000, value=int(est_liter_mob * est_harga_mob), key="k_mob")
+                                st.info(f"⛽ Estimasi ± **{est_liter_mob} Liter**.")
+                            else:
+                                st.info("💡 Sistem otomatis memecah tiket ini jadi [MOBIL-1] & [MOBIL-2].")
+                                l_mob_1 = st.number_input("Liter Pengisian 1 (Wajib)", min_value=1.0, step=1.0, value=est_liter_mob / 2, key="lmob_1")
+                                l_mob_2 = st.number_input("Liter Pengisian 2 (Wajib)", min_value=1.0, step=1.0, value=est_liter_mob / 2, key="lmob_2")
+                            
+                                keb_mobil_1 = int(l_mob_1 * est_harga_mob)
+                                keb_mobil_2 = int(l_mob_2 * est_harga_mob)
+                                st.info(f"💰 Estimasi Total (Tahap 1+2): Rp {(keb_mobil_1 + keb_mobil_2):,.0f}")
+
+                        with c_m2:
+                            idx_mob = options_nopol.index(auto_nopol) if auto_nopol in options_nopol else 0
+                            pilihan_mob = st.selectbox("Plat Mobil", options_nopol, index=idx_mob, key="p_mob")
+                            if pilihan_mob == "-- Pilih Nopol / Ketik Baru --": plat_mobil = st.text_input("Ketik Plat Mobil:", key="pmob_man").strip().upper()
+                            else: plat_mobil = pilihan_mob.strip().upper()
+                            
+                            last_km_mob = get_last_indicator(plat_mobil, "Mobil", pjb_r)
+                            km_awal_mob = st.number_input(f"KM Awal Mobil (Last: {last_km_mob})", min_value=0.0, step=0.1, value=float(last_km_mob), key="km_mob")
                         
                         if opsi_pengisian_mob == "1x Pengisian":
-                            keb_mobil = st.number_input("Estimasi Dana BBM Mobil (Rp)", min_value=0, step=1000, value=int(est_liter_mob * est_harga_mob), key="k_mob")
-                            st.info(f"⛽ Estimasi ± **{est_liter_mob} Liter**.")
+                            sub_requests.append({"tiket": f"{base_tiket_clean} [MOBIL]", "kategori": f"Mobil - {jb_mobil}", "kebutuhan": keb_mobil, "plat": plat_mobil, "indikator": km_awal_mob, "last_ind": last_km_mob, "tipe": "Mobil"})
                         else:
-                            st.info("💡 Sistem otomatis memecah tiket ini jadi [MOBIL-1] & [MOBIL-2].")
-                            l_mob_1 = st.number_input("Liter Pengisian 1 (Wajib)", min_value=1.0, step=1.0, value=est_liter_mob / 2, key="lmob_1")
-                            l_mob_2 = st.number_input("Liter Pengisian 2 (Wajib)", min_value=1.0, step=1.0, value=est_liter_mob / 2, key="lmob_2")
-                            
-                            keb_mobil_1 = int(l_mob_1 * est_harga_mob)
-                            keb_mobil_2 = int(l_mob_2 * est_harga_mob)
-                            st.info(f"💰 Estimasi Total (Tahap 1+2): Rp {(keb_mobil_1 + keb_mobil_2):,.0f}")
+                            sub_requests.append({"tiket": f"{base_tiket_clean} [MOBIL-1]", "kategori": f"Mobil - {jb_mobil} (Isi 1)", "kebutuhan": keb_mobil_1, "plat": plat_mobil, "indikator": km_awal_mob, "last_ind": last_km_mob, "tipe": "Mobil"})
+                            sub_requests.append({"tiket": f"{base_tiket_clean} [MOBIL-2]", "kategori": f"Mobil - {jb_mobil} (Isi 2)", "kebutuhan": keb_mobil_2, "plat": plat_mobil, "indikator": km_awal_mob, "last_ind": last_km_mob, "tipe": "Mobil"})
 
-                    with c_m2:
-                        idx_mob = options_nopol.index(auto_nopol) if auto_nopol in options_nopol else 0
-                        pilihan_mob = st.selectbox("Plat Mobil", options_nopol, index=idx_mob, key="p_mob")
-                        if pilihan_mob == "-- Pilih Nopol / Ketik Baru --": plat_mobil = st.text_input("Ketik Plat Mobil:", key="pmob_man").strip().upper()
-                        else: plat_mobil = pilihan_mob.strip().upper()
-                            
-                        last_km_mob = get_last_indicator(plat_mobil, "Mobil", pjb_r)
-                        km_awal_mob = st.number_input(f"KM Awal Mobil (Last: {last_km_mob})", min_value=0.0, step=0.1, value=float(last_km_mob), key="km_mob")
+                # ---------------------------------------------------------
+                # LOGIKA MOTOR (OPSI 1x ATAU 2x PENGISIAN)
+                # ---------------------------------------------------------
+                if "Motor" in jns_bbm_list:
+                    is_motor = True
+                    with st.expander("🏍️ Input Nominal & Indikator BBM Motor", expanded=True):
+                        c_mt1, c_mt2 = st.columns(2)
+                        with c_mt1:
+                            k_tangki = st.number_input("Kapasitas Tangki (Liter)", min_value=0.0, step=0.1, value=4.0, key="kt_mot")
+                            h_satuan = st.number_input("Harga Satuan (Rp/Liter)", min_value=0, step=500, value=10000, key="hs_mot")
+                            est_l_mot = round(jarak_km_pp / 35.0, 1) if jarak_km_pp > 0 else 2.0
                         
-                    if opsi_pengisian_mob == "1x Pengisian":
-                        sub_requests.append({"tiket": f"{base_tiket_clean} [MOBIL]", "kategori": f"Mobil - {jb_mobil}", "kebutuhan": keb_mobil, "plat": plat_mobil, "indikator": km_awal_mob, "last_ind": last_km_mob, "tipe": "Mobil"})
-                    else:
-                        sub_requests.append({"tiket": f"{base_tiket_clean} [MOBIL-1]", "kategori": f"Mobil - {jb_mobil} (Isi 1)", "kebutuhan": keb_mobil_1, "plat": plat_mobil, "indikator": km_awal_mob, "last_ind": last_km_mob, "tipe": "Mobil"})
-                        sub_requests.append({"tiket": f"{base_tiket_clean} [MOBIL-2]", "kategori": f"Mobil - {jb_mobil} (Isi 2)", "kebutuhan": keb_mobil_2, "plat": plat_mobil, "indikator": km_awal_mob, "last_ind": last_km_mob, "tipe": "Mobil"})
-
-            # ---------------------------------------------------------
-            # LOGIKA MOTOR (OPSI 1x ATAU 2x PENGISIAN)
-            # ---------------------------------------------------------
-            if "Motor" in jns_bbm_list:
-                is_motor = True
-                with st.expander("🏍️ Input Nominal & Indikator BBM Motor", expanded=True):
-                    c_mt1, c_mt2 = st.columns(2)
-                    with c_mt1:
-                        k_tangki = st.number_input("Kapasitas Tangki (Liter)", min_value=0.0, step=0.1, value=4.0, key="kt_mot")
-                        h_satuan = st.number_input("Harga Satuan (Rp/Liter)", min_value=0, step=500, value=10000, key="hs_mot")
-                        est_l_mot = round(jarak_km_pp / 35.0, 1) if jarak_km_pp > 0 else 2.0
+                            opsi_pengisian = st.radio("Opsi Pengisian Motor:", ["1x Pengisian", "2x Pengisian (Kapasitas Tangki Kurang)"], key="opt_mot")
                         
-                        opsi_pengisian = st.radio("Opsi Pengisian Motor:", ["1x Pengisian", "2x Pengisian (Kapasitas Tangki Kurang)"], key="opt_mot")
-                        
-                        if opsi_pengisian == "1x Pengisian":
-                            l_butuh = st.number_input("Liter Kebutuhan?", min_value=0.0, step=0.1, value=est_l_mot, key="lb_mot")
-                            keb_motor = int(l_butuh * h_satuan)
-                            st.info(f"💰 Estimasi Rp {keb_motor:,.0f}")
-                            if l_butuh > k_tangki and k_tangki > 0:
-                                st.error("🚨 Pengisian melebihi kapasitas tangki! Silakan pilih Opsi 2x Pengisian.")
-                                motor_limit_lock = True
-                        else:
-                            st.info("💡 Sistem otomatis memecah tiket ini jadi [MOTOR-1] & [MOTOR-2].")
-                            l_butuh_1 = st.number_input("Liter Pengisian 1 (Wajib)", min_value=0.1, step=0.1, value=k_tangki if k_tangki > 0 else 4.0, key="lmot_1")
-                            sisa_est = est_l_mot - l_butuh_1 if est_l_mot > l_butuh_1 else 1.0
-                            l_butuh_2 = st.number_input("Liter Pengisian 2 (Wajib)", min_value=0.1, step=0.1, value=sisa_est, key="lmot_2")
+                            if opsi_pengisian == "1x Pengisian":
+                                l_butuh = st.number_input("Liter Kebutuhan?", min_value=0.0, step=0.1, value=est_l_mot, key="lb_mot")
+                                keb_motor = int(l_butuh * h_satuan)
+                                st.info(f"💰 Estimasi Rp {keb_motor:,.0f}")
+                                if l_butuh > k_tangki and k_tangki > 0:
+                                    st.error("🚨 Pengisian melebihi kapasitas tangki! Silakan pilih Opsi 2x Pengisian.")
+                                    motor_limit_lock = True
+                            else:
+                                st.info("💡 Sistem otomatis memecah tiket ini jadi [MOTOR-1] & [MOTOR-2].")
+                                l_butuh_1 = st.number_input("Liter Pengisian 1 (Wajib)", min_value=0.1, step=0.1, value=k_tangki if k_tangki > 0 else 4.0, key="lmot_1")
+                                sisa_est = est_l_mot - l_butuh_1 if est_l_mot > l_butuh_1 else 1.0
+                                l_butuh_2 = st.number_input("Liter Pengisian 2 (Wajib)", min_value=0.1, step=0.1, value=sisa_est, key="lmot_2")
                             
-                            keb_motor_1 = int(l_butuh_1 * h_satuan)
-                            keb_motor_2 = int(l_butuh_2 * h_satuan)
-                            st.info(f"💰 Estimasi Total (Tahap 1+2): Rp {(keb_motor_1 + keb_motor_2):,.0f}")
+                                keb_motor_1 = int(l_butuh_1 * h_satuan)
+                                keb_motor_2 = int(l_butuh_2 * h_satuan)
+                                st.info(f"💰 Estimasi Total (Tahap 1+2): Rp {(keb_motor_1 + keb_motor_2):,.0f}")
                             
-                            if (l_butuh_1 > k_tangki and k_tangki > 0) or (l_butuh_2 > k_tangki and k_tangki > 0):
-                                st.error("🚨 Setiap pengisian per-tahap tidak boleh melebihi kapasitas tangki!")
-                                motor_limit_lock = True
+                                if (l_butuh_1 > k_tangki and k_tangki > 0) or (l_butuh_2 > k_tangki and k_tangki > 0):
+                                    st.error("🚨 Setiap pengisian per-tahap tidak boleh melebihi kapasitas tangki!")
+                                    motor_limit_lock = True
                                 
-                        jb_motor = st.selectbox("Jenis BBM Motor", ["Pertalite", "Pertamax"], key="b_mot")
+                            jb_motor = st.selectbox("Jenis BBM Motor", ["Pertalite", "Pertamax"], key="b_mot")
                     
-                    with c_mt2:
-                        idx_mot = options_nopol.index(auto_nopol) if auto_nopol in options_nopol else 0
-                        pilihan_mot = st.selectbox("Plat Motor", options_nopol, index=idx_mot, key="p_mot")
-                        if pilihan_mot == "-- Pilih Nopol / Ketik Baru --": plat_motor = st.text_input("Ketik Plat Motor:", key="pmot_man").strip().upper()
-                        else: plat_motor = pilihan_mot.strip().upper()
+                        with c_mt2:
+                            idx_mot = options_nopol.index(auto_nopol) if auto_nopol in options_nopol else 0
+                            pilihan_mot = st.selectbox("Plat Motor", options_nopol, index=idx_mot, key="p_mot")
+                            if pilihan_mot == "-- Pilih Nopol / Ketik Baru --": plat_motor = st.text_input("Ketik Plat Motor:", key="pmot_man").strip().upper()
+                            else: plat_motor = pilihan_mot.strip().upper()
                             
-                        last_km_mot = get_last_indicator(plat_motor, "Motor", pjb_r)
-                        km_awal_mot = st.number_input(f"KM Awal Motor (Last: {last_km_mot})", min_value=0.0, step=0.1, value=float(last_km_mot), key="km_mot")
+                            last_km_mot = get_last_indicator(plat_motor, "Motor", pjb_r)
+                            km_awal_mot = st.number_input(f"KM Awal Motor (Last: {last_km_mot})", min_value=0.0, step=0.1, value=float(last_km_mot), key="km_mot")
                     
-                    if not motor_limit_lock:
-                        if opsi_pengisian == "1x Pengisian":
-                            sub_requests.append({"tiket": f"{base_tiket_clean} [MOTOR]", "kategori": f"Motor - {jb_motor}", "kebutuhan": keb_motor, "plat": plat_motor, "indikator": km_awal_mot, "last_ind": last_km_mot, "tipe": "Motor"})
-                        else:
-                            sub_requests.append({"tiket": f"{base_tiket_clean} [MOTOR-1]", "kategori": f"Motor - {jb_motor} (Isi 1)", "kebutuhan": keb_motor_1, "plat": plat_motor, "indikator": km_awal_mot, "last_ind": last_km_mot, "tipe": "Motor"})
-                            sub_requests.append({"tiket": f"{base_tiket_clean} [MOTOR-2]", "kategori": f"Motor - {jb_motor} (Isi 2)", "kebutuhan": keb_motor_2, "plat": plat_motor, "indikator": km_awal_mot, "last_ind": last_km_mot, "tipe": "Motor"})
+                        if not motor_limit_lock:
+                            if opsi_pengisian == "1x Pengisian":
+                                sub_requests.append({"tiket": f"{base_tiket_clean} [MOTOR]", "kategori": f"Motor - {jb_motor}", "kebutuhan": keb_motor, "plat": plat_motor, "indikator": km_awal_mot, "last_ind": last_km_mot, "tipe": "Motor"})
+                            else:
+                                sub_requests.append({"tiket": f"{base_tiket_clean} [MOTOR-1]", "kategori": f"Motor - {jb_motor} (Isi 1)", "kebutuhan": keb_motor_1, "plat": plat_motor, "indikator": km_awal_mot, "last_ind": last_km_mot, "tipe": "Motor"})
+                                sub_requests.append({"tiket": f"{base_tiket_clean} [MOTOR-2]", "kategori": f"Motor - {jb_motor} (Isi 2)", "kebutuhan": keb_motor_2, "plat": plat_motor, "indikator": km_awal_mot, "last_ind": last_km_mot, "tipe": "Motor"})
                     
-                    current_month_str = datetime.now().strftime("%m/%Y")
-                    for r in req_r[1:]:
-                        if len(r) > 10:
-                            try:
-                                tgl_req = parse_date(r[1])
-                                if tgl_req.strftime("%m/%Y") == current_month_str and str(r[5]).strip().upper() == nama_lookup:
-                                    if "motor" in str(r[10]).lower(): total_motor_this_month += clean_nominal(r[9])
-                            except: pass
+                        current_month_str = datetime.now().strftime("%m/%Y")
+                        for r in req_r[1:]:
+                            if len(r) > 10:
+                                try:
+                                    tgl_req = parse_date(r[1])
+                                    if tgl_req.strftime("%m/%Y") == current_month_str and str(r[5]).strip().upper() == nama_lookup:
+                                        if "motor" in str(r[10]).lower(): total_motor_this_month += clean_nominal(r[9])
+                                except: pass
                             
-            if "Genset" in jns_bbm_list:
-                is_genset = True
-                with st.expander("⚡ Input Nominal & Indikator BBM Genset", expanded=True):
-                    c_g1, c_g2 = st.columns(2)
-                    with c_g1:
-                        jb_genset = st.selectbox("Jenis BBM Genset", ["Dexlite", "Bio Solar", "Pertalite"], key="b_gen")
-                        keb_genset = st.number_input("Estimasi Dana BBM Genset (Rp)", min_value=0, step=1000, value=150000, key="k_gen")
-                    with c_g2:
-                        pilihan_gen = st.selectbox("ID / Plat Genset", options_nopol, key="p_gen")
-                        if pilihan_gen == "-- Pilih Nopol / Ketik Baru --": plat_genset = st.text_input("Ketik ID Genset:", key="pgen_man").strip().upper()
-                        else: plat_genset = pilihan_gen.strip().upper()
+                if "Genset" in jns_bbm_list:
+                    is_genset = True
+                    with st.expander("⚡ Input Nominal & Indikator BBM Genset", expanded=True):
+                        c_g1, c_g2 = st.columns(2)
+                        with c_g1:
+                            jb_genset = st.selectbox("Jenis BBM Genset", ["Dexlite", "Bio Solar", "Pertalite"], key="b_gen")
+                            keb_genset = st.number_input("Estimasi Dana BBM Genset (Rp)", min_value=0, step=1000, value=150000, key="k_gen")
+                        with c_g2:
+                            pilihan_gen = st.selectbox("ID / Plat Genset", options_nopol, key="p_gen")
+                            if pilihan_gen == "-- Pilih Nopol / Ketik Baru --": plat_genset = st.text_input("Ketik ID Genset:", key="pgen_man").strip().upper()
+                            else: plat_genset = pilihan_gen.strip().upper()
                             
-                        last_rh_gen = get_last_indicator(plat_genset, "Genset", pjb_r)
-                        rh_awal_gen = st.number_input(f"RH Awal Genset (Last: {last_rh_gen})", min_value=0.0, step=0.1, value=float(last_rh_gen), key="rh_gen")
+                            last_rh_gen = get_last_indicator(plat_genset, "Genset", pjb_r)
+                            rh_awal_gen = st.number_input(f"RH Awal Genset (Last: {last_rh_gen})", min_value=0.0, step=0.1, value=float(last_rh_gen), key="rh_gen")
                         
-                    sub_requests.append({"tiket": f"{base_tiket_clean} [GENSET]", "kategori": f"Genset - {jb_genset}", "kebutuhan": keb_genset, "plat": plat_genset, "indikator": rh_awal_gen, "last_ind": last_rh_gen, "tipe": "Genset"})
-            st.markdown("</div>", unsafe_allow_html=True)
+                        sub_requests.append({"tiket": f"{base_tiket_clean} [GENSET]", "kategori": f"Genset - {jb_genset}", "kebutuhan": keb_genset, "plat": plat_genset, "indikator": rh_awal_gen, "last_ind": last_rh_gen, "tipe": "Genset"})
+                st.markdown("</div>", unsafe_allow_html=True)
             
-        if "Uang Makan" in kebutuhan_dana_list or "Penginapan" in kebutuhan_dana_list:
-            st.markdown("<div style='background-color:#E0F2FE; padding:15px; border-radius:10px; border-left: 5px solid #0284C7; margin-bottom: 15px;'>", unsafe_allow_html=True)
+            if "Uang Makan" in kebutuhan_dana_list or "Penginapan" in kebutuhan_dana_list:
+                st.markdown("<div style='background-color:#E0F2FE; padding:15px; border-radius:10px; border-left: 5px solid #0284C7; margin-bottom: 15px;'>", unsafe_allow_html=True)
             
-            c_um1, c_um2 = st.columns(2)
-            with c_um1:
-                hari_req = st.number_input("Rencana Berapa Hari (Durasi Kerja)?", min_value=1, step=1, value=1)
-                jml_org = 1 + len(tim_bareng)
-                
-            if "Uang Makan" in kebutuhan_dana_list:
-                st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
-                
-                # Blokir jika belum memilih kategori pekerjaan
-                if not val_atas and not val_bawah and not is_kirim_mat:
-                    st.error("❌ SISTEM MENOLAK: Anda memilih Uang Makan tapi belum menentukan jenis pekerjaan (Atas/Bawah/Material) di atas!")
-                    st.stop()
-                    
-                # Logika Sistem Cerdas (Berat = 60k, Ringan = 30k)
-                is_berat = False
-                if val_atas or is_kirim_mat: is_berat = True
-                if val_bawah:
-                    for item in val_bawah:
-                        # Jika ada pilihan SELAIN MCB dan BCP, otomatis dianggap kerja berat
-                        if item not in ["Pengecekan MCB", "BCP"]: 
-                            is_berat = True
-                            
-                if jarak_km_pp < 80:
-                    st.error(f"❌ JARAK TIDAK MEMENUHI SYARAT: Jarak tempuh Peta hanya {jarak_km_pp:.1f} KM. Syarat minimal Uang Makan adalah >80 KM. Nominal dikunci ke 0.")
-                    base_um = 0
-                    nom_req_um = 0
-                else:
-                    if is_berat:
-                        base_um = 60000
-                        alasan = f"✅ **Kategori Pekerjaan Berat:** Jarak {jarak_km_pp:.1f} KM (>80 KM) tercapai. Tim berhak mendapatkan **Rp 60.000/orang**."
-                    else:
-                        base_um = 30000
-                        alasan = f"⚠️ **Kategori Pekerjaan Ringan:** Jarak {jarak_km_pp:.1f} KM (>80 KM) namun pekerjaan ringan. Tim berhak mendapatkan **Rp 30.000/orang**."
-                    st.info(alasan)
-                
-                st.warning("🔒 **SYSTEM LOCK AKTIF:** Nominal tidak bisa diubah manual agar tertib. Hubungi Admin / Boss jika butuh approval khusus.")
-                
-                with c_um2:
-                    max_um_nominal = base_um * jml_org
-                    # FITUR DISABLED=TRUE akan mengunci kolom agar tidak bisa diketik tim
-                    nom_req_um = st.number_input(f"Nominal UM/Hari (TERKUNCI)", min_value=0, max_value=max_um_nominal if max_um_nominal > 0 else 100, value=max_um_nominal, step=5000, disabled=True)
-                    
-                tot_um = hari_req * nom_req_um
-                if tot_um > 0:
-                    st.success(f"💰 Total Estimasi Uang Makan: **Rp {tot_um:,.0f}**")
-                    kategori_teks = "Uang Makan (Pekerjaan Berat)" if is_berat else "Uang Makan (Pekerjaan Ringan)"
-                    sub_requests.append({"tiket": f"{base_tiket_clean} [UM]", "kategori": kategori_teks, "kebutuhan": tot_um, "plat": "", "indikator": 0.0, "last_ind": 0.0, "tipe": "UM", "hari": hari_req, "nom_um": nom_req_um})
-                
-            if "Penginapan" in kebutuhan_dana_list:
+                c_um1, c_um2 = st.columns(2)
                 with c_um1:
-                    malam_inap = st.number_input("Berapa Malam Menginap?", min_value=1, step=1, value=hari_req if hari_req == 1 else hari_req - 1)
-                with c_um2:
-                    max_inap_nominal = 150000 * jml_org
-                    nom_req_inap = st.number_input(f"Nominal Inap/Malam (Maks Rp 150.000 x {jml_org} org)", min_value=0, max_value=max_inap_nominal, step=10000, value=max_inap_nominal)
+                    hari_req = st.number_input("Rencana Berapa Hari (Durasi Kerja)?", min_value=1, step=1, value=1)
+                    jml_org = 1 + len(tim_bareng)
+                
+                if "Uang Makan" in kebutuhan_dana_list:
+                    st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
+                
+                    # Blokir jika belum memilih kategori pekerjaan
+                    if not val_atas and not val_bawah and not is_kirim_mat:
+                        st.error("❌ SISTEM MENOLAK: Anda memilih Uang Makan tapi belum menentukan jenis pekerjaan (Atas/Bawah/Material) di atas!")
+                        _wz_clamp(4)
+                        st.stop()
                     
-                tot_inap = malam_inap * nom_req_inap
-                st.success(f"🛏️ Total Estimasi Penginapan: **Rp {tot_inap:,.0f}**")
-                sub_requests.append({"tiket": f"{base_tiket_clean} [INAP]", "kategori": "Penginapan", "kebutuhan": tot_inap, "plat": "", "indikator": 0.0, "last_ind": 0.0, "tipe": "Inap", "hari": malam_inap, "nom_inap": nom_req_inap})
-            st.markdown("</div>", unsafe_allow_html=True)
-            
-        if "Material" in kebutuhan_dana_list:
-            with st.expander("📦 Detail Material", expanded=True):
-                keb_mat = st.number_input("Estimasi Dana Material (Rp)", min_value=0, step=1000)
-                sub_requests.append({"tiket": f"{base_tiket_clean} [MATERIAL]", "kategori": "Material", "kebutuhan": keb_mat, "plat": "", "indikator": 0.0, "last_ind": 0.0, "tipe": "Material"})
-                
-        if "Support" in kebutuhan_dana_list:
-            with st.expander("🤝 Detail Support", expanded=True):
-                keb_support = st.number_input("Estimasi Dana Support (Rp)", min_value=0, step=1000)
-                sub_requests.append({"tiket": f"{base_tiket_clean} [SUPPORT]", "kategori": "Support", "kebutuhan": keb_support, "plat": "", "indikator": 0.0, "last_ind": 0.0, "tipe": "Support"})
-                
-        if "Fery Reguler/Carter" in kebutuhan_dana_list:
-            with st.expander("⛴️ Detail Fery Reguler/Carter", expanded=True):
-                keb_fery = st.number_input("Estimasi Dana Fery (Rp)", min_value=0, step=1000)
-                sub_requests.append({"tiket": f"{base_tiket_clean} [FERY]", "kategori": "Fery", "kebutuhan": keb_fery, "plat": "", "indikator": 0.0, "last_ind": 0.0, "tipe": "Fery"})
-                
-        if "Klotok/Kapal Carter" in kebutuhan_dana_list:
-            with st.expander("🛥️ Detail Klotok/Kapal Carter", expanded=True):
-                keb_klotok = st.number_input("Estimasi Dana Klotok (Rp)", min_value=0, step=1000)
-                sub_requests.append({"tiket": f"{base_tiket_clean} [KLOTOK]", "kategori": "Klotok", "kebutuhan": keb_klotok, "plat": "", "indikator": 0.0, "last_ind": 0.0, "tipe": "Klotok"})
-
-        total_kebutuhan_all = sum([r['kebutuhan'] for r in sub_requests])
-        if sub_requests: st.markdown(f"<div class='metric-3d' style='border-top: 6px solid #10B981;'><div class='metric-title'>Total Kalkulasi Kebutuhan Dana</div><div class='metric-value'>Rp {total_kebutuhan_all:,.0f}</div></div>", unsafe_allow_html=True)
-
-        st.markdown("<div class='section-title'>🏦 5. Pembayaran & Lampiran</div>", unsafe_allow_html=True)
-        col_pay1, col_pay2 = st.columns(2)
-        with col_pay1:
-            bank_idx = ["BNI", "BCA", "MANDIRI", "BRI"].index(default_bank) if default_bank in ["BNI", "BCA", "MANDIRI", "BRI"] else 0
-            rek_penerima = st.selectbox("Bank Penerima", ["BNI", "BCA", "MANDIRI", "BRI"], index=bank_idx)
-            no_rek = st.text_input("Nomor Rekening", value=default_no_rek)
-        with col_pay2:
-            nominal_tf_str = st.text_input("Total Nominal Transfer Final", str(total_kebutuhan_all))
-            try: nominal_tf = int(nominal_tf_str.replace(".", "").replace(",", "").strip())
-            except: nominal_tf = 0
-            
-        st.markdown("<div class='section-title'>📸 Lampiran (Forensik AI)</div>", unsafe_allow_html=True)
-        c_up1, c_up2 = st.columns(2)
-        with c_up1: foto_km = ui_image_uploader("1. Foto KM / RH Genset Awal", key="req_km")
-        with c_up2: foto_evidance = ui_image_uploader("2. Foto Evidance Request", key="req_ev")
-        
-        # --- TAMBAHAN CHECKLIST DINAMIS (MULAI) ---
-        st.markdown("<div class='section-title'>✅ 6. Checklist Persiapan & Komitmen Tim</div>", unsafe_allow_html=True)
-        st.markdown("<div style='background-color:#FFFBEB; padding:15px; border-radius:10px; border-left: 5px solid #F59E0B; margin-bottom: 20px;'>", unsafe_allow_html=True)
-        st.write("⚠️ **WAJIB DICENTANG SELURUHNYA UNTUK MEMUNCULKAN TOMBOL SUBMIT:**")
-        
-        all_checked = True
-        
-        # Trigger Checklist Pintar dari pilihan Atas/Bawah/PM
-        show_atas = len(val_atas) > 0
-        show_bawah = len(val_bawah) > 0
-        show_pm = any("Preventive Maintenance" in x for x in val_bawah)
-        
-        if show_atas:
-            st.markdown("<b style='color:#EF4444;'>🛠️ TSHOOT BAGIAN ATAS:</b>", unsafe_allow_html=True)
-            if not st.checkbox("1. Body harnes", key="c_a1"): all_checked = False
-            if not st.checkbox("2. Tambang", key="c_a2"): all_checked = False
-            if not st.checkbox("3. Material/module", key="c_a3"): all_checked = False
-            if not st.checkbox("4. Helm Climbing", key="c_a4"): all_checked = False
-            if not st.checkbox("5. Tang amper", key="c_a5"): all_checked = False
-            if not st.checkbox("6. Pastikan sebelum naik semua material kondisi baik & berfungsi. JANGAN DIMULAI JIKA ADA KEKURANGAN.", key="c_a6"): all_checked = False
-            st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
-            
-        if show_bawah:
-            st.markdown("<b style='color:#3B82F6;'>🔌 TSHOOT BAGIAN BAWAH:</b>", unsafe_allow_html=True)
-            if not st.checkbox("1. Tang Amper", key="c_b1"): all_checked = False
-            if not st.checkbox("2. Sarung tangan", key="c_b2"): all_checked = False
-            if not st.checkbox("3. Material/Module", key="c_b3"): all_checked = False
-            if not st.checkbox("4. Sepatu Safety", key="c_b4"): all_checked = False
-            if not st.checkbox("5. Perkabelan dan optikal/sfp", key="c_b5"): all_checked = False
-            if not st.checkbox("6. Pastikan semua berfungsi, jangan memulai pekerjaan jika ada kekurangan.", key="c_b6"): all_checked = False
-            st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
-            
-        if show_pm:
-            st.markdown("<b style='color:#10B981;'>🦺 KHUSUS PREVENTIVE MAINTENANCE (JSA):</b>", unsafe_allow_html=True)
-            if not st.checkbox("1. Sertifikat", key="c_p1"): all_checked = False
-            if not st.checkbox("2. Box P3K standart (Eskalasi jika perlu)", key="c_p2"): all_checked = False
-            if not st.checkbox("3. Sepatu Safety", key="c_p3"): all_checked = False
-            if not st.checkbox("4. Banner ditulis site id dan nomor hp sesuai kebutuhan", key="c_p4"): all_checked = False
-            if not st.checkbox("5. Policeline", key="c_p5"): all_checked = False
-            if not st.checkbox("6. Semua tools JSA Wajib lengkap (MENGHINDARI REJECT PM DAN TEMUAN)", key="c_p6"): all_checked = False
-            st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
-            
-        if not (show_atas or show_bawah or show_pm):
-            if not st.checkbox("🤝 Saya BERKOMITMEN menyelesaikan pekerjaan ini dengan tuntas & bertanggung jawab.", key="c_def1"): all_checked = False
-            
-        st.markdown("</div>", unsafe_allow_html=True)
-        # --- TAMBAHAN CHECKLIST DINAMIS (SELESAI) ---
-
-        form_invalid = (nama == "" or cluster == "" or role == "-- Pilih Role --" or keperluan == "" or not base_tiket_clean)
-
-        if is_locked_user or len(tim_terkunci) > 0:
-            if is_locked_user: st.error(f"⛔ DILARANG REQUEST: Anda memiliki tiket pending atau ditolak!")
-            if len(tim_terkunci) > 0: st.error(f"⛔ DILARANG REQUEST: Tim bawaan Anda memiliki PJB pending!")
-        else:
-            if is_motor:
-                motor_kebutuhan = sum([r['kebutuhan'] for r in sub_requests if r['tipe'] == 'Motor'])
-                if (total_motor_this_month + motor_kebutuhan) > 500000:
-                    st.markdown("<div style='background-color:#FFE4E6; padding:20px; border-radius:10px; border-left: 5px solid #E11D48; margin-bottom: 25px;'>", unsafe_allow_html=True)
-                    safe_app_r = app_r[1:] if len(app_r) > 1 else []
-                    for r in reversed(safe_app_r):
-                        if len(r) > 5 and str(r[2]).strip().upper() == base_tiket_clean and r[3] == "Limit Motor":
-                            status_app_motor = str(r[5]).strip().upper()
-                            break
-                    if status_app_motor == "APPROVED": st.success("✅ Limit Motor disetujui Admin.")
-                    elif status_app_motor == "PENDING":
-                        st.warning("⏳ Menunggu verifikasi limit motor dari Admin.")
-                        motor_limit_lock = True
-                    elif status_app_motor == "REJECTED":
-                        st.error("❌ Limit DITOLAK.")
-                        motor_limit_lock = True
+                    # Logika Sistem Cerdas (Berat = 60k, Ringan = 30k)
+                    is_berat = False
+                    if val_atas or is_kirim_mat: is_berat = True
+                    if val_bawah:
+                        for item in val_bawah:
+                            # Jika ada pilihan SELAIN MCB dan BCP, otomatis dianggap kerja berat
+                            if item not in ["Pengecekan MCB", "BCP"]: 
+                                is_berat = True
+                            
+                    if jarak_km_pp < 80:
+                        st.error(f"❌ JARAK TIDAK MEMENUHI SYARAT: Jarak tempuh Peta hanya {jarak_km_pp:.1f} KM. Syarat minimal Uang Makan adalah >80 KM. Nominal dikunci ke 0.")
+                        base_um = 0
+                        nom_req_um = 0
                     else:
-                        st.error("🚨 Anda mencapai batas limit BBM Motor bulanan (>500k).")
-                        if st.button("🚨 Minta Approval Limit Motor", type="primary", use_container_width=True):
-                            append_data(SHEET_APP, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), nama, base_tiket_clean, "Limit Motor", motor_kebutuhan, "PENDING", f"Bulan ini: Rp {total_motor_this_month:,.0f}"], target_ss)
-                            st.success("Terkirim!"); time.sleep(2.5); st.rerun()
-                        motor_limit_lock = True
-                    st.markdown("</div>", unsafe_allow_html=True)
-            
-            if motor_limit_lock:
-                st.error("🚨 Selesaikan status Limit Motor di atas sebelum Anda dapat men-submit request ini.")
-            else:
-                if not all_checked:
-                    st.warning("⚠️ Silakan centang 3 Checklist Persiapan di atas agar Tombol Submit terbuka.")
+                        if is_berat:
+                            base_um = 60000
+                            alasan = f"✅ **Kategori Pekerjaan Berat:** Jarak {jarak_km_pp:.1f} KM (>80 KM) tercapai. Tim berhak mendapatkan **Rp 60.000/orang**."
+                        else:
+                            base_um = 30000
+                            alasan = f"⚠️ **Kategori Pekerjaan Ringan:** Jarak {jarak_km_pp:.1f} KM (>80 KM) namun pekerjaan ringan. Tim berhak mendapatkan **Rp 30.000/orang**."
+                        st.info(alasan)
                 
-                # Fitur 'disabled' akan membuat tombol tetap TAMPIL tapi tidak bisa diklik jika belum dicentang
-                if st.button("📤 Submit Request Dana", type="primary", use_container_width=True, disabled=not all_checked):
+                    st.warning("🔒 **SYSTEM LOCK AKTIF:** Nominal tidak bisa diubah manual agar tertib. Hubungi Admin / Boss jika butuh approval khusus.")
+                
+                    with c_um2:
+                        max_um_nominal = base_um * jml_org
+                        # FITUR DISABLED=TRUE akan mengunci kolom agar tidak bisa diketik tim
+                        nom_req_um = st.number_input(f"Nominal UM/Hari (TERKUNCI)", min_value=0, max_value=max_um_nominal if max_um_nominal > 0 else 100, value=max_um_nominal, step=5000, disabled=True)
                     
-                    # BLOKADE KHUSUS PENGIRIMAN MATERIAL
-                    if is_kirim_mat and (not mat_module or not mat_site):
-                        st.error("❌ PENGIRIMAN DITOLAK: Anda mencentang Pengiriman Material, WAJIB mengisi Nama Module dan Site ID Tujuan di bagian atas!")
-                        st.stop()
+                    tot_um = hari_req * nom_req_um
+                    if tot_um > 0:
+                        st.success(f"💰 Total Estimasi Uang Makan: **Rp {tot_um:,.0f}**")
+                        kategori_teks = "Uang Makan (Pekerjaan Berat)" if is_berat else "Uang Makan (Pekerjaan Ringan)"
+                        sub_requests.append({"tiket": f"{base_tiket_clean} [UM]", "kategori": kategori_teks, "kebutuhan": tot_um, "plat": "", "indikator": 0.0, "last_ind": 0.0, "tipe": "UM", "hari": hari_req, "nom_um": nom_req_um})
+                
+                if "Penginapan" in kebutuhan_dana_list:
+                    with c_um1:
+                        malam_inap = st.number_input("Berapa Malam Menginap?", min_value=1, step=1, value=hari_req if hari_req == 1 else hari_req - 1)
+                    with c_um2:
+                        max_inap_nominal = 150000 * jml_org
+                        nom_req_inap = st.number_input(f"Nominal Inap/Malam (Maks Rp 150.000 x {jml_org} org)", min_value=0, max_value=max_inap_nominal, step=10000, value=max_inap_nominal)
                     
-                    if form_invalid or not sub_requests or nominal_tf <= 0:
-                        st.error("❌ Mohon lengkapi formulir (Rincian Dana, Nominal, dan Tiket wajib diisi)!")
-                        st.stop()
-                        
-                    for req in sub_requests:
-                        if req['tipe'] in ['UM', 'Inap']:
-                            if invalid_coords:
-                                st.error("❌ Peta belum valid. Pastikan Lat & Long tidak 0.")
-                                st.stop()
-                            if jarak_km_pp < 80:
-                                st.error(f"❌ Jarak {jarak_km_pp:.1f} KM tidak memenuhi syarat akomodasi (Minimal 80 KM).")
-                                st.stop()
-                        elif req['tipe'] in ['Mobil', 'Motor', 'Genset']:
-                            if req['indikator'] <= 0 or req['indikator'] < req['last_ind']:
-                                st.error(f"❌ KM/RH Awal pada {req['tipe']} bermasalah (0 atau lebih kecil dari histori {req['last_ind']}).")
-                                st.stop()
-                    
-                    with st.spinner("🚀 Memecah data & Mengirim ke Server (Mohon tunggu)..."):
-                        url_km = upload_foto(foto_km)
-                        url_evidance = upload_foto(foto_evidance)
-                        ts_now = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-                        tgl_str = tanggal.strftime("%d/%m/%Y")
-                        
-                        rincian_wa_items = []
-                        batch_data_req = [] # <-- WADAH KOTAK UNTUK SISTEM BATCH
-                        
-                        for idx_r, req in enumerate(sub_requests, 1):
-                            desc_final = deskripsi
-                            if tim_bareng: desc_final += f"\n\n[Tim: {', '.join(tim_bareng)}]"
-                            if req['tipe'] == 'UM': desc_final += f"\n\n[REQ AKOMODASI: {req['hari']} Hari @ Rp {req['nom_um']:,.0f}/hari = Rp {req['kebutuhan']:,.0f}]"
-                            elif req['tipe'] == 'Inap': desc_final += f"\n\n[REQ PENGINAPAN: {req['hari']} Malam @ Rp {req['nom_inap']:,.0f}/malam = Rp {req['kebutuhan']:,.0f}]"
-                            
-                            data_req = [
-                                ts_now, tgl_str, nop, req['tiket'], cluster, nama, role, site_id, keperluan, 
-                                req['kebutuhan'], req['kategori'], desc_final, str(req['indikator']), 
-                                jarak_final_text, lat_berangkat, long_berangkat, req['plat'], 
-                                rek_penerima, no_rek, nominal_tf, url_km, url_evidance, lat_tujuan, long_tujuan
-                            ]
-                            # Masukkan semua tiket ke dalam wadah (belum dikirim)
-                            batch_data_req.append(data_req)
-                            
-                            if req['plat'] and req['plat'] not in list_nopol_bersih: save_new_nopol_to_csv(req['plat'])
+                    tot_inap = malam_inap * nom_req_inap
+                    st.success(f"🛏️ Total Estimasi Penginapan: **Rp {tot_inap:,.0f}**")
+                    sub_requests.append({"tiket": f"{base_tiket_clean} [INAP]", "kategori": "Penginapan", "kebutuhan": tot_inap, "plat": "", "indikator": 0.0, "last_ind": 0.0, "tipe": "Inap", "hari": malam_inap, "nom_inap": nom_req_inap})
+                st.markdown("</div>", unsafe_allow_html=True)
+            
+            if "Material" in kebutuhan_dana_list:
+                with st.expander("📦 Detail Material", expanded=True):
+                    keb_mat = st.number_input("Estimasi Dana Material (Rp)", min_value=0, step=1000)
+                    sub_requests.append({"tiket": f"{base_tiket_clean} [MATERIAL]", "kategori": "Material", "kebutuhan": keb_mat, "plat": "", "indikator": 0.0, "last_ind": 0.0, "tipe": "Material"})
+                
+            if "Support" in kebutuhan_dana_list:
+                with st.expander("🤝 Detail Support", expanded=True):
+                    keb_support = st.number_input("Estimasi Dana Support (Rp)", min_value=0, step=1000)
+                    sub_requests.append({"tiket": f"{base_tiket_clean} [SUPPORT]", "kategori": "Support", "kebutuhan": keb_support, "plat": "", "indikator": 0.0, "last_ind": 0.0, "tipe": "Support"})
+                
+            if "Fery Reguler/Carter" in kebutuhan_dana_list:
+                with st.expander("⛴️ Detail Fery Reguler/Carter", expanded=True):
+                    keb_fery = st.number_input("Estimasi Dana Fery (Rp)", min_value=0, step=1000)
+                    sub_requests.append({"tiket": f"{base_tiket_clean} [FERY]", "kategori": "Fery", "kebutuhan": keb_fery, "plat": "", "indikator": 0.0, "last_ind": 0.0, "tipe": "Fery"})
+                
+            if "Klotok/Kapal Carter" in kebutuhan_dana_list:
+                with st.expander("🛥️ Detail Klotok/Kapal Carter", expanded=True):
+                    keb_klotok = st.number_input("Estimasi Dana Klotok (Rp)", min_value=0, step=1000)
+                    sub_requests.append({"tiket": f"{base_tiket_clean} [KLOTOK]", "kategori": "Klotok", "kebutuhan": keb_klotok, "plat": "", "indikator": 0.0, "last_ind": 0.0, "tipe": "Klotok"})
 
-                            # Rangkum rincian item untuk WA TANPA NOMINAL UANG
-                            detail_item = f"{idx_r}. *{req['tiket']}* — {req['kategori']}"
-                            if req['plat']:
-                                detail_item += f" | Nopol/ID: {req['plat']}"
-                            if req['tipe'] in ['Mobil', 'Motor', 'Genset']:
-                                label_ind = "RH Awal" if req['tipe'] == 'Genset' else "KM Awal"
-                                detail_item += f" | {label_ind}: {req['indikator']}"
-                            elif req['tipe'] == 'UM':
-                                detail_item += f" | Durasi: {req['hari']} Hari"
-                            elif req['tipe'] == 'Inap':
-                                detail_item += f" | Durasi: {req['hari']} Malam"
-                            rincian_wa_items.append(detail_item)
-                                
-                        # PUSH SEMUA TIKET (BATCH) SEKALI JALAN KE GOOGLE SHEETS! (MENCEGAH OVERWRITE)
-                        sukses_simpan = append_data_multiple(SHEET_REQUEST, batch_data_req, target_ss)
+            total_kebutuhan_all = sum([r['kebutuhan'] for r in sub_requests])
+            if sub_requests: st.markdown(f"<div class='metric-3d' style='border-top: 6px solid #10B981;'><div class='metric-title'>Total Kalkulasi Kebutuhan Dana</div><div class='metric-value'>Rp {total_kebutuhan_all:,.0f}</div></div>", unsafe_allow_html=True)
+
+        with _wz_box("wz5_a"):
+            st.markdown("<div class='section-title'>🏦 5. Pembayaran & Lampiran</div>", unsafe_allow_html=True)
+            col_pay1, col_pay2 = st.columns(2)
+            with col_pay1:
+                bank_idx = ["BNI", "BCA", "MANDIRI", "BRI"].index(default_bank) if default_bank in ["BNI", "BCA", "MANDIRI", "BRI"] else 0
+                rek_penerima = st.selectbox("Bank Penerima", ["BNI", "BCA", "MANDIRI", "BRI"], index=bank_idx)
+                no_rek = st.text_input("Nomor Rekening", value=default_no_rek)
+            with col_pay2:
+                nominal_tf_str = st.text_input("Total Nominal Transfer Final", str(total_kebutuhan_all))
+                try: nominal_tf = int(nominal_tf_str.replace(".", "").replace(",", "").strip())
+                except: nominal_tf = 0
+            
+            st.markdown("<div class='section-title'>📸 Lampiran (Forensik AI)</div>", unsafe_allow_html=True)
+            c_up1, c_up2 = st.columns(2)
+            with c_up1: foto_km = ui_image_uploader("1. Foto KM / RH Genset Awal", key="req_km")
+            with c_up2: foto_evidance = ui_image_uploader("2. Foto Evidance Request", key="req_ev")
+        
+        with _wz_box("wz6_a"):
+            if WZ_ON:
+                _id_ok = bool(nama) and bool(cluster) and role != "-- Pilih Role --" and bool(keperluan) and bool(base_tiket_clean)
+                _perlu_peta = any(r["tipe"] in ("UM", "Inap") for r in sub_requests)
+                if is_kirim_mat and (not mat_module or not mat_site):
+                    _s2 = ("err", "Pengiriman Material: nama module & site tujuan wajib diisi")
+                elif not deskripsi.strip():
+                    _s2 = ("warn", "deskripsi pekerjaan masih kosong")
+                else:
+                    _s2 = ("ok", "")
+                if not invalid_coords: _s3 = ("ok", "")
+                elif _perlu_peta: _s3 = ("err", "koordinat wajib valid untuk Uang Makan / Penginapan")
+                else: _s3 = ("warn", "koordinat belum lengkap, jarak tidak terhitung")
+                if nominal_tf <= 0: _s5 = ("err", "total nominal transfer harus lebih dari 0")
+                elif not no_rek.strip(): _s5 = ("warn", "nomor rekening belum diisi")
+                else: _s5 = ("ok", "")
+                _wz_ringkasan([
+                    (1, "Petugas & tiket pokok", "ok" if _id_ok else "err", "nama, cluster, role, keperluan & nomor tiket wajib diisi"),
+                    (2, "Detail pekerjaan", _s2[0], _s2[1]),
+                    (3, "Rute peta", _s3[0], _s3[1]),
+                    (4, "Rincian dana", "ok" if sub_requests else "err", "pilih minimal 1 kebutuhan dana"),
+                    (5, "Pembayaran & lampiran", _s5[0], _s5[1]),
+                ])
+
+            # --- TAMBAHAN CHECKLIST DINAMIS (MULAI) ---
+            st.markdown("<div class='section-title'>✅ 6. Checklist Persiapan & Komitmen Tim</div>", unsafe_allow_html=True)
+            st.markdown("<div style='background-color:#FFFBEB; padding:15px; border-radius:10px; border-left: 5px solid #F59E0B; margin-bottom: 20px;'>", unsafe_allow_html=True)
+            st.write("⚠️ **WAJIB DICENTANG SELURUHNYA UNTUK MEMUNCULKAN TOMBOL SUBMIT:**")
+        
+            all_checked = True
+        
+            # Trigger Checklist Pintar dari pilihan Atas/Bawah/PM
+            show_atas = len(val_atas) > 0
+            show_bawah = len(val_bawah) > 0
+            show_pm = any("Preventive Maintenance" in x for x in val_bawah)
+        
+            if show_atas:
+                st.markdown("<b style='color:#EF4444;'>🛠️ TSHOOT BAGIAN ATAS:</b>", unsafe_allow_html=True)
+                if not st.checkbox("1. Body harnes", key="c_a1"): all_checked = False
+                if not st.checkbox("2. Tambang", key="c_a2"): all_checked = False
+                if not st.checkbox("3. Material/module", key="c_a3"): all_checked = False
+                if not st.checkbox("4. Helm Climbing", key="c_a4"): all_checked = False
+                if not st.checkbox("5. Tang amper", key="c_a5"): all_checked = False
+                if not st.checkbox("6. Pastikan sebelum naik semua material kondisi baik & berfungsi. JANGAN DIMULAI JIKA ADA KEKURANGAN.", key="c_a6"): all_checked = False
+                st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
+            
+            if show_bawah:
+                st.markdown("<b style='color:#3B82F6;'>🔌 TSHOOT BAGIAN BAWAH:</b>", unsafe_allow_html=True)
+                if not st.checkbox("1. Tang Amper", key="c_b1"): all_checked = False
+                if not st.checkbox("2. Sarung tangan", key="c_b2"): all_checked = False
+                if not st.checkbox("3. Material/Module", key="c_b3"): all_checked = False
+                if not st.checkbox("4. Sepatu Safety", key="c_b4"): all_checked = False
+                if not st.checkbox("5. Perkabelan dan optikal/sfp", key="c_b5"): all_checked = False
+                if not st.checkbox("6. Pastikan semua berfungsi, jangan memulai pekerjaan jika ada kekurangan.", key="c_b6"): all_checked = False
+                st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
+            
+            if show_pm:
+                st.markdown("<b style='color:#10B981;'>🦺 KHUSUS PREVENTIVE MAINTENANCE (JSA):</b>", unsafe_allow_html=True)
+                if not st.checkbox("1. Sertifikat", key="c_p1"): all_checked = False
+                if not st.checkbox("2. Box P3K standart (Eskalasi jika perlu)", key="c_p2"): all_checked = False
+                if not st.checkbox("3. Sepatu Safety", key="c_p3"): all_checked = False
+                if not st.checkbox("4. Banner ditulis site id dan nomor hp sesuai kebutuhan", key="c_p4"): all_checked = False
+                if not st.checkbox("5. Policeline", key="c_p5"): all_checked = False
+                if not st.checkbox("6. Semua tools JSA Wajib lengkap (MENGHINDARI REJECT PM DAN TEMUAN)", key="c_p6"): all_checked = False
+                st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
+            
+            if not (show_atas or show_bawah or show_pm):
+                if not st.checkbox("🤝 Saya BERKOMITMEN menyelesaikan pekerjaan ini dengan tuntas & bertanggung jawab.", key="c_def1"): all_checked = False
+            
+            st.markdown("</div>", unsafe_allow_html=True)
+            # --- TAMBAHAN CHECKLIST DINAMIS (SELESAI) ---
+
+            form_invalid = (nama == "" or cluster == "" or role == "-- Pilih Role --" or keperluan == "" or not base_tiket_clean)
+
+            if is_locked_user or len(tim_terkunci) > 0:
+                if is_locked_user: st.error(f"⛔ DILARANG REQUEST: Anda memiliki tiket pending atau ditolak!")
+                if len(tim_terkunci) > 0: st.error(f"⛔ DILARANG REQUEST: Tim bawaan Anda memiliki PJB pending!")
+            else:
+                if is_motor:
+                    motor_kebutuhan = sum([r['kebutuhan'] for r in sub_requests if r['tipe'] == 'Motor'])
+                    if (total_motor_this_month + motor_kebutuhan) > 500000:
+                        st.markdown("<div style='background-color:#FFE4E6; padding:20px; border-radius:10px; border-left: 5px solid #E11D48; margin-bottom: 25px;'>", unsafe_allow_html=True)
+                        safe_app_r = app_r[1:] if len(app_r) > 1 else []
+                        for r in reversed(safe_app_r):
+                            if len(r) > 5 and str(r[2]).strip().upper() == base_tiket_clean and r[3] == "Limit Motor":
+                                status_app_motor = str(r[5]).strip().upper()
+                                break
+                        if status_app_motor == "APPROVED": st.success("✅ Limit Motor disetujui Admin.")
+                        elif status_app_motor == "PENDING":
+                            st.warning("⏳ Menunggu verifikasi limit motor dari Admin.")
+                            motor_limit_lock = True
+                        elif status_app_motor == "REJECTED":
+                            st.error("❌ Limit DITOLAK.")
+                            motor_limit_lock = True
+                        else:
+                            st.error("🚨 Anda mencapai batas limit BBM Motor bulanan (>500k).")
+                            if st.button("🚨 Minta Approval Limit Motor", type="primary", use_container_width=True):
+                                append_data(SHEET_APP, [datetime.now().strftime("%d/%m/%Y %H:%M:%S"), nama, base_tiket_clean, "Limit Motor", motor_kebutuhan, "PENDING", f"Bulan ini: Rp {total_motor_this_month:,.0f}"], target_ss)
+                                st.success("Terkirim!"); time.sleep(2.5); st.rerun()
+                            motor_limit_lock = True
+                        st.markdown("</div>", unsafe_allow_html=True)
+            
+                if motor_limit_lock:
+                    st.error("🚨 Selesaikan status Limit Motor di atas sebelum Anda dapat men-submit request ini.")
+                else:
+                    if not all_checked:
+                        st.warning("⚠️ Silakan centang 3 Checklist Persiapan di atas agar Tombol Submit terbuka.")
+                
+                    # Fitur 'disabled' akan membuat tombol tetap TAMPIL tapi tidak bisa diklik jika belum dicentang
+                    if st.button("📤 Submit Request Dana", type="primary", use_container_width=True, disabled=not all_checked):
+                    
+                        # BLOKADE KHUSUS PENGIRIMAN MATERIAL
+                        if is_kirim_mat and (not mat_module or not mat_site):
+                            st.error("❌ PENGIRIMAN DITOLAK: Anda mencentang Pengiriman Material, WAJIB mengisi Nama Module dan Site ID Tujuan di bagian atas!")
+                            st.stop()
+                    
+                        if form_invalid or not sub_requests or nominal_tf <= 0:
+                            st.error("❌ Mohon lengkapi formulir (Rincian Dana, Nominal, dan Tiket wajib diisi)!")
+                            st.stop()
                         
-                        if sukses_simpan:
-                            if pm_selected_list: update_pm_ticket_status(target_ss, pm_selected_list, "REQUESTED")
+                        for req in sub_requests:
+                            if req['tipe'] in ['UM', 'Inap']:
+                                if invalid_coords:
+                                    st.error("❌ Peta belum valid. Pastikan Lat & Long tidak 0.")
+                                    st.stop()
+                                if jarak_km_pp < 80:
+                                    st.error(f"❌ Jarak {jarak_km_pp:.1f} KM tidak memenuhi syarat akomodasi (Minimal 80 KM).")
+                                    st.stop()
+                            elif req['tipe'] in ['Mobil', 'Motor', 'Genset']:
+                                if req['indikator'] <= 0 or req['indikator'] < req['last_ind']:
+                                    st.error(f"❌ KM/RH Awal pada {req['tipe']} bermasalah (0 atau lebih kecil dari histori {req['last_ind']}).")
+                                    st.stop()
+                    
+                        with st.spinner("🚀 Memecah data & Mengirim ke Server (Mohon tunggu)..."):
+                            url_km = upload_foto(foto_km)
+                            url_evidance = upload_foto(foto_evidance)
+                            ts_now = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+                            tgl_str = tanggal.strftime("%d/%m/%Y")
+                        
+                            rincian_wa_items = []
+                            batch_data_req = [] # <-- WADAH KOTAK UNTUK SISTEM BATCH
+                        
+                            for idx_r, req in enumerate(sub_requests, 1):
+                                desc_final = deskripsi
+                                if tim_bareng: desc_final += f"\n\n[Tim: {', '.join(tim_bareng)}]"
+                                if req['tipe'] == 'UM': desc_final += f"\n\n[REQ AKOMODASI: {req['hari']} Hari @ Rp {req['nom_um']:,.0f}/hari = Rp {req['kebutuhan']:,.0f}]"
+                                elif req['tipe'] == 'Inap': desc_final += f"\n\n[REQ PENGINAPAN: {req['hari']} Malam @ Rp {req['nom_inap']:,.0f}/malam = Rp {req['kebutuhan']:,.0f}]"
+                            
+                                data_req = [
+                                    ts_now, tgl_str, nop, req['tiket'], cluster, nama, role, site_id, keperluan, 
+                                    req['kebutuhan'], req['kategori'], desc_final, str(req['indikator']), 
+                                    jarak_final_text, lat_berangkat, long_berangkat, req['plat'], 
+                                    rek_penerima, no_rek, nominal_tf, url_km, url_evidance, lat_tujuan, long_tujuan
+                                ]
+                                # Masukkan semua tiket ke dalam wadah (belum dikirim)
+                                batch_data_req.append(data_req)
+                            
+                                if req['plat'] and req['plat'] not in list_nopol_bersih: save_new_nopol_to_csv(req['plat'])
+
+                                # Rangkum rincian item untuk WA TANPA NOMINAL UANG
+                                detail_item = f"{idx_r}. *{req['tiket']}* — {req['kategori']}"
+                                if req['plat']:
+                                    detail_item += f" | Nopol/ID: {req['plat']}"
+                                if req['tipe'] in ['Mobil', 'Motor', 'Genset']:
+                                    label_ind = "RH Awal" if req['tipe'] == 'Genset' else "KM Awal"
+                                    detail_item += f" | {label_ind}: {req['indikator']}"
+                                elif req['tipe'] == 'UM':
+                                    detail_item += f" | Durasi: {req['hari']} Hari"
+                                elif req['tipe'] == 'Inap':
+                                    detail_item += f" | Durasi: {req['hari']} Malam"
+                                rincian_wa_items.append(detail_item)
                                 
-                            # GENERATE TEKS WA PENGAJUAN REQUEST (TANPA NOMINAL UANG)
-                            tim_str = ", ".join(tim_bareng) if tim_bareng else "-"
-                            rincian_str = "\n".join(rincian_wa_items)
-                            wa_req_text = (
-                                f"*PENGAJUAN REQUEST DANA OPERASIONAL (SiRAPI)*\n"
-                                f"📅 Tanggal : {tgl_str} ({ts_now.split(' ')[1]})\n"
-                                f"🌐 Wilayah : NOP {nop} ({cluster})\n"
-                                f"👤 Nama PIC : {nama} ({role})\n"
-                                f"👥 Rekan Tim : {tim_str}\n"
-                                f"🎫 Tiket Pokok : {base_tiket_clean}\n"
-                                f"📍 Site ID : {site_id if site_id else '-'}\n"
-                                f"🛠️ Keperluan : {keperluan}\n"
-                                f"🛣️ Estimasi Rute : {jarak_final_text if jarak_final_text else '-'}\n\n"
-                                f"*📋 Detail Pekerjaan:*\n{deskripsi if deskripsi else '-'}\n\n"
-                                f"*🛒 Rincian Kebutuhan (Sub-Tiket):*\n{rincian_str}\n\n"
-                                f"*🏦 Rekening Penerima:*\n{rek_penerima} - {no_rek}\n\n"
-                                f"*📸 Lampiran Foto Evidance:*\n"
-                                f"• Foto KM/RH Awal : {url_km if url_km else '-'}\n"
-                                f"• Foto Evidance : {url_evidance if url_evidance else '-'}"
-                            )
-                            st.session_state.req_wa_ready = wa_req_text
-                            st.success(f"🎉 Berhasil menyimpan & memecah {len(sub_requests)} sub-tiket secara berurutan! Silakan salin laporan WhatsApp di bawah ini.")
+                            # PUSH SEMUA TIKET (BATCH) SEKALI JALAN KE GOOGLE SHEETS! (MENCEGAH OVERWRITE)
+                            sukses_simpan = append_data_multiple(SHEET_REQUEST, batch_data_req, target_ss)
+                        
+                            if sukses_simpan:
+                                if pm_selected_list: update_pm_ticket_status(target_ss, pm_selected_list, "REQUESTED")
+                                
+                                # GENERATE TEKS WA PENGAJUAN REQUEST (TANPA NOMINAL UANG)
+                                tim_str = ", ".join(tim_bareng) if tim_bareng else "-"
+                                rincian_str = "\n".join(rincian_wa_items)
+                                wa_req_text = (
+                                    f"*PENGAJUAN REQUEST DANA OPERASIONAL (SiRAPI)*\n"
+                                    f"📅 Tanggal : {tgl_str} ({ts_now.split(' ')[1]})\n"
+                                    f"🌐 Wilayah : NOP {nop} ({cluster})\n"
+                                    f"👤 Nama PIC : {nama} ({role})\n"
+                                    f"👥 Rekan Tim : {tim_str}\n"
+                                    f"🎫 Tiket Pokok : {base_tiket_clean}\n"
+                                    f"📍 Site ID : {site_id if site_id else '-'}\n"
+                                    f"🛠️ Keperluan : {keperluan}\n"
+                                    f"🛣️ Estimasi Rute : {jarak_final_text if jarak_final_text else '-'}\n\n"
+                                    f"*📋 Detail Pekerjaan:*\n{deskripsi if deskripsi else '-'}\n\n"
+                                    f"*🛒 Rincian Kebutuhan (Sub-Tiket):*\n{rincian_str}\n\n"
+                                    f"*🏦 Rekening Penerima:*\n{rek_penerima} - {no_rek}\n\n"
+                                    f"*📸 Lampiran Foto Evidance:*\n"
+                                    f"• Foto KM/RH Awal : {url_km if url_km else '-'}\n"
+                                    f"• Foto Evidance : {url_evidance if url_evidance else '-'}"
+                                )
+                                st.session_state.req_wa_ready = wa_req_text
+                                st.success(f"🎉 Berhasil menyimpan & memecah {len(sub_requests)} sub-tiket secara berurutan! Silakan salin laporan WhatsApp di bawah ini.")
 
         # TAMPILKAN GENERATOR WA SETELAH REQUEST DISUBMIT
-        if st.session_state.get("req_wa_ready"):
-            st.markdown("<hr style='margin: 25px 0;'>", unsafe_allow_html=True)
-            st.markdown("<div class='section-title'>📲 Laporan WhatsApp Pengajuan Request (Tanpa Nominal)</div>", unsafe_allow_html=True)
-            st.info("💡 Klik ikon **Copy** di pojok kanan atas kotak teks di bawah ini, atau klik tombol **Kirim ke WhatsApp**.")
-            st.code(st.session_state.req_wa_ready, language="markdown")
+        with _wz_box("wz6_b"):
+            if st.session_state.get("req_wa_ready"):
+                st.markdown("<hr style='margin: 25px 0;'>", unsafe_allow_html=True)
+                st.markdown("<div class='section-title'>📲 Laporan WhatsApp Pengajuan Request (Tanpa Nominal)</div>", unsafe_allow_html=True)
+                st.info("💡 Klik ikon **Copy** di pojok kanan atas kotak teks di bawah ini, atau klik tombol **Kirim ke WhatsApp**.")
+                st.code(st.session_state.req_wa_ready, language="markdown")
             
-            wa_encoded = quote(st.session_state.req_wa_ready)
-            c_wa1, c_wa2 = st.columns(2)
-            with c_wa1:
-                st.markdown(
-                    f'<a href="https://wa.me/?text={wa_encoded}" target="_blank" class="btn-sidata-blue" style="background: linear-gradient(135deg, #22C55E 0%, #16A34A 100%) !important;">📲 BUKA & KIRIM KE WHATSAPP</a>',
-                    unsafe_allow_html=True
-                )
-            with c_wa2:
-                if st.button("✅ Selesai & Kembali ke Beranda Utama", type="primary", use_container_width=True):
-                    st.session_state.req_wa_ready = ""
-                    st.session_state.page = "🏠 Hub Menu Utama"
-                    st.rerun()
+                wa_encoded = quote(st.session_state.req_wa_ready)
+                c_wa1, c_wa2 = st.columns(2)
+                with c_wa1:
+                    st.markdown(
+                        f'<a href="https://wa.me/?text={wa_encoded}" target="_blank" class="btn-sidata-blue" style="background: linear-gradient(135deg, #22C55E 0%, #16A34A 100%) !important;">📲 BUKA & KIRIM KE WHATSAPP</a>',
+                        unsafe_allow_html=True
+                    )
+                with c_wa2:
+                    if st.button("✅ Selesai & Kembali ke Beranda Utama", type="primary", use_container_width=True):
+                        st.session_state.req_wa_ready = ""
+                        st.session_state.wz_step = 1
+                        st.session_state.page = "🏠 Hub Menu Utama"
+                        st.rerun()
 
 # ==========================================
 # PAGE 2: FORM PJB OPERASIONAL 
