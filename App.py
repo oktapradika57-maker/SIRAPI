@@ -1266,11 +1266,11 @@ def get_local_img_base64(filepath):
 
 def append_data(sheet_name, data, spreadsheet_id):
     try:
-        # Menggunakan koneksi database asli bawaan aplikasi Anda yang sudah stabil!
         client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
         ws = client.worksheet(sheet_name)
         safe_data = [str(x) if x is not None else "" for x in data]
-        ws.append_row(safe_data, value_input_option="USER_ENTERED", table_range="A1")
+        # 🚀 TAMBAHAN SAKTI: Memaksa Google Sheets membuat baris baru (Anti-Overwrite)
+        ws.append_row(safe_data, value_input_option="USER_ENTERED", table_range="A1", insert_data_option="INSERT_ROWS")
         fetch_spreadsheet_data.clear()
         return True
     except Exception as e:
@@ -1278,15 +1278,15 @@ def append_data(sheet_name, data, spreadsheet_id):
         return False
 
 def append_data_multiple(sheet_name, list_of_data, spreadsheet_id):
-    # FUNGSI INI AKAN MENGIRIM SEMUA TIKET SEKALIGUS DALAM 1X KLIK TANPA TUMPANG TINDIH
     try:
-        # Menggunakan koneksi database asli bawaan aplikasi Anda yang sudah stabil!
         client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
         ws = client.worksheet(sheet_name)
-        safe_list = []
+        # 🚀 UBAH STRATEGI: Kirim berurutan 1 per 1 dengan jeda agar Google Sheets tidak bingung
         for data in list_of_data:
-            safe_list.append([str(x) if x is not None else "" for x in data])
-        ws.append_rows(safe_list, value_input_option="USER_ENTERED")
+            safe_data = [str(x) if x is not None else "" for x in data]
+            ws.append_row(safe_data, value_input_option="USER_ENTERED", table_range="A1", insert_data_option="INSERT_ROWS")
+            time.sleep(1.5) # Beri nafas 1.5 detik ke Google Sheets sebelum mengirim tiket berikutnya
+            
         fetch_spreadsheet_data.clear()
         return True
     except Exception as e:
