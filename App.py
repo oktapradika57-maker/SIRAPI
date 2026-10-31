@@ -986,7 +986,7 @@ def get_credentials():
     with open("credentials.json", "w") as f: f.write(st.secrets["gcp_json"])
     return Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
 
-@st.cache_data(ttl=10, max_entries=5, show_spinner=False)
+@st.cache_data(ttl=60, max_entries=2, show_spinner=False)
 def fetch_spreadsheet_data(spreadsheet_id):
     client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
     ws_names = [SHEET_REQUEST, SHEET_PJB, SHEET_UM, SHEET_DISTRIBUSI, SHEET_APP, "Rekap PJB", SHEET_TIKET_PM, SHEET_ABSENSI]
