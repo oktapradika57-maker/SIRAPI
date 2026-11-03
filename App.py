@@ -3951,22 +3951,27 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
             tot_req_daily = 0
             for r in req_r[1:]:
                 if len(r) > 13:
-                    # 🚀 BACA TANGGAL SECARA PINTAR (KEBAL FORMAT GOOGLE)
+                    # 🚀 BACA TANGGAL SECARA PINTAR
                     tgl_req_sheet = parse_date(str(r[1]).strip(), str(r[0]).strip())
+                    
+                    # PASTIKAN SEMUA KODE DI BAWAH INI MENJOROK KE DALAM (DI BAWAH 'IF')
                     if tgl_req_sheet == filter_date:
                         tiket_req = str(r[3]).strip().upper()
-                    if tiket_req in processed_tickets: continue
-                    nom = clean_nominal(r[9])
-                    tot_req_daily += nom
-                    
-                    bank_info = str(r[17]).strip() if len(r) > 17 else "-"
-                    norek_info = str(r[18]).strip() if len(r) > 18 else "-"
-                    
-                    daily_req.append({
-                        "Waktu": r[0], "Nama": r[5], "Sub-Tiket (Split)": r[3], "Role": r[6],
-                        "Keperluan": r[8], "Kategori Item": r[10], 
-                        "Jarak/Info": r[13], "Rekening Tim": f"{bank_info} - {norek_info}", "Nominal Request": nom
-                    })
+                        
+                        if tiket_req in processed_tickets: 
+                            continue
+                            
+                        nom = clean_nominal(r[9])
+                        tot_req_daily += nom
+                        
+                        bank_info = str(r[17]).strip() if len(r) > 17 else "-"
+                        norek_info = str(r[18]).strip() if len(r) > 18 else "-"
+                        
+                        daily_req.append({
+                            "Waktu": r[0], "Nama": r[5], "Sub-Tiket (Split)": r[3], "Role": r[6],
+                            "Keperluan": r[8], "Kategori Item": r[10], 
+                            "Jarak/Info": r[13], "Rekening Tim": f"{bank_info} - {norek_info}", "Nominal Request": nom
+                        })
             
             if daily_req:
                 df_dreq = pd.DataFrame(daily_req)
@@ -4057,14 +4062,15 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
                 if len(r) > 24:
                     # 🚀 BACA TANGGAL PJB SECARA PINTAR
                     tgl_pjb_sheet = parse_date(str(r[1]).strip(), str(r[0]).strip())
+                    
                     if tgl_pjb_sheet == filter_date:
                         nom = clean_nominal(r[11])
-                    tot_pjb_daily += nom
-                    tk_info = r[36] if len(r) > 36 and r[36].strip() else r[21]
-                    daily_pjb.append({
-                        "Waktu Submit": r[0], "Nama": r[4], "Sub-Tiket PJB": tk_info, "Role": r[5],
-                        "Kategori Item": r[8], "Jarak Tempuh Trip": f"{r[24]} KM", "Nominal PJB": nom
-                    })
+                        tot_pjb_daily += nom
+                        tk_info = r[36] if len(r) > 36 and r[36].strip() else r[21]
+                        daily_pjb.append({
+                            "Waktu Submit": r[0], "Nama": r[4], "Sub-Tiket PJB": tk_info, "Role": r[5],
+                            "Kategori Item": r[8], "Jarak Tempuh Trip": f"{r[24]} KM", "Nominal PJB": nom
+                        })
             
             if daily_pjb:
                 df_dpjb = pd.DataFrame(daily_pjb)
