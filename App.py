@@ -1701,7 +1701,16 @@ elif st.session_state.page == "📝 Form Request Dana":
 
         with col2:
             with _wz_box("wz1_b"):
-                keperluan = st.selectbox("Klasifikasi Keperluan Dana", LIST_KEPERLUAN)
+            # 🚀 KHUSUS PANGKALAN BUN: Tambah Opsi 'Lainnya'
+            opsi_keperluan = LIST_KEPERLUAN.copy()
+            if nop == "Pangkalanbun" and "Lainnya" not in opsi_keperluan:
+                opsi_keperluan.append("Lainnya")
+                
+            pilihan_kep = st.selectbox("Klasifikasi Keperluan Dana", opsi_keperluan)
+            if pilihan_kep == "Lainnya":
+                keperluan = st.text_input("Ketik Keperluan Secara Manual (Wajib):")
+            else:
+                keperluan = pilihan_kep
             
                 pm_selected_list = []
                 if keperluan == "PM":
@@ -3941,8 +3950,11 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
             daily_req = []
             tot_req_daily = 0
             for r in req_r[1:]:
-                if len(r) > 13 and str(r[1]).strip() == filter_date_str:
-                    tiket_req = str(r[3]).strip().upper()
+                if len(r) > 13:
+                    # 🚀 BACA TANGGAL SECARA PINTAR (KEBAL FORMAT GOOGLE)
+                    tgl_req_sheet = parse_date(str(r[1]).strip(), str(r[0]).strip())
+                    if tgl_req_sheet == filter_date:
+                        tiket_req = str(r[3]).strip().upper()
                     if tiket_req in processed_tickets: continue
                     nom = clean_nominal(r[9])
                     tot_req_daily += nom
@@ -4042,8 +4054,11 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
             daily_pjb = []
             tot_pjb_daily = 0
             for r in pjb_r[1:]:
-                if len(r) > 24 and str(r[1]).strip() == filter_date_str:
-                    nom = clean_nominal(r[11])
+                if len(r) > 24:
+                    # 🚀 BACA TANGGAL PJB SECARA PINTAR
+                    tgl_pjb_sheet = parse_date(str(r[1]).strip(), str(r[0]).strip())
+                    if tgl_pjb_sheet == filter_date:
+                        nom = clean_nominal(r[11])
                     tot_pjb_daily += nom
                     tk_info = r[36] if len(r) > 36 and r[36].strip() else r[21]
                     daily_pjb.append({
