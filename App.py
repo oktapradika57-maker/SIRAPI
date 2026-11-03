@@ -33,7 +33,7 @@ except Exception:
 # ==========================================
 # 0. KONFIGURASI HALAMAN (WAJIB BARIS PERTAMA!)
 # ==========================================
-st.set_page_config(page_title="SiRAPI NOP PLK & PBU Dashboard", page_icon="💸", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SiRAPI NOP PLK & PBU Dashboard", page_icon="🦺", layout="wide", initial_sidebar_state="collapsed")
 
 # =================================================================
 # 🎨 SUNTIKAN UI/UX: PERSIS SiDATA (TANPA MENU BAR ATAS & LOGO PRESISI)
