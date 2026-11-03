@@ -893,7 +893,7 @@ MASTER_DATA = {
     "Tarakan": {"spreadsheet_id": "1lRj1YdZGQwY5vHg8P4wudK9V1O_lJuEYjdyHkXoB-Wg", "clusters": ["Tarakan Inner", "Tarakan Outer"], "names": ["HENDRA WIRTASI SIMANULLANG", "ARIZONA ROSADI", "KUKUH BHASKARA", "NATAL SIMBOLON", "HERMAWAN", "IRVAN DINATA VANDITYAWAN", "ENDRAS SAPTA", "AHMADI", "EDI PANJI ERMAYANA", "HANS RISKY RONI TUAH GIRSANG", "IRMANSYAH B. SANGAJI", "REMO REMOLDUS MANALU", "MOHAMMAD RAFAI", "FIRMAN SYAHRUL", "AZMIR", "PETRUS RESI KELORE", "ANIR REZKY", "AHDAN", "PARJON SIMANULLANG", "RUSDI", "HASRIADI", "PURO SUGONDO", "ALIMUDIN M. SAER", "KORNELIUS USI KELORE", "RUSDIANSYAH", "JONTES YUSDA SIMANULLANG", "NANI SETIANINGSIH", "UNGGUL NUGRAHA", "YOGABITA INDOTENO", "JHON KENNEDI SIMANULLANG", "RAFI MUHAMAD SYARIF", "AGRIVA", "SEPTIAN ALVITO", "M. DEDI RIZALDI", "SAHARUDDIN.", "MUHAMMAD RASYID", "SUPRIADI", "JULIMAT SIHITE", "EFNI NURYADIN", "ERWIN SAPUTRA ARIANSYAH", "ALVEUS", "SUPRIADI BANDANGAN"]},
     "Pontianak": {"spreadsheet_id": "1VmoWPImNFMjnaIQpBXEVYdMiTEzsz3P4tpmzfA0EMDE", "clusters": ["Sintang", "Singkawang", "Pontianak"], "names": ["ALOYSIUS", "RUDI", "RONIYANTO", "SUKADI", "HAIRIL", "AZMI ASHADIQI", "SUYADI", "ARIEF DARUL IKHWAN", "MUHAMMAD AL FATAH", "YUDIANSYAH", "RAHMAD INDRA IRAWAN", "MATIUS MARTIN", "RYVAEEL DEWANGGA", "AMIRDA ANGGA SAPUTRA", "IZHARUDDIN", "VINSENSIUS YOGI", "GUSTI ARIZAL", "MUHAMMAD MIFTAHUDIN, A.MD", "BAYU ANGGARA PUTRA", "YONI IRAWAN", "SUGANDI", "IRVAN ANDRIYANA", "ALDIANSYAH", "ABANG HAMDANI", "ABANG KUSDIANSYAH", "SUMAN", "SANGGARA ISMARAWARI", "IBIN", "VALENTINUS PETRO", "DWI KURNIAWAN ISMANTO", "ARISAFRIADI", "DONATUS DONI", "NUR AHMAD KARDIYANTO", "AGRI PERDANA", "AKHSANUL FIKI", "ALI ALAMSYAH", "MUHAMMAD FIRZHA GIANNI HARSYA", "RICKY ARDILAY", "FAISAL", "WIJI SANTOSO", "HISYAM MUTHOYIB", "ARIF RAHMAN NUGROHO", "TOTOK SUGIARTO", "PURWANDI SETIAWAN", "JULIANTO BHAKTI PUTRO, SH", "ILHAMMUDIN", "AGUNG", "ROSIDI", "ABRAR ELZAH FATHALIF", "HENDRI YULIANSYAH", "JAMIL", "GORO SUKARTONO", "OKTAPIANUS JUMIN", "ONNIE SYAEFUDDIN", "BUDI", "ULUL AMRY", "RUHIAT, A.MD", "SUPIANDI", "WAHYUDI", "SUHENDRIK", "M. ARKAM", "SYAFRI APRIJAL", "ARIANTO SUMANTRI", "TUTU AGE ANDIKA", "VIRANDA SAPTA, A.MD", "TOTO HERMANSYAH", "KURNIAWAN", "ROBI ISKANDAR MASDIANSYAH", "MUTIIN CHANDRA", "MISJANI", "KHAIRUL FARISD", "ANDRA", "DODI RATMAYANTO", "WAWAN DARYANA", "MISWARDI", "JUPRILIAUS PICO", "DEDY PURNOMO", "EDI KURNIAWAN", "DEDE GUNAWAN", "WANDALA JAGOARDI PANDALO", "KARIYADI", "REZQI AL BARQAH", "FIRMANSYAH, SP"]}
 }
-LIST_KEPERLUAN = ["", "Tshoot", "Backup", "Support", "PM", "Program BCP", "Program Quikwin", "Program G348T", "Pengiriman Material SPMS", "Pembelian Material","Transportasi Air"]
+LIST_KEPERLUAN = ["", "Tshoot", "Backup", "Support", "PM", "Program BCP", "Program Quikwin", "Program G348T", "Pengiriman Material SPMS", "Pembelian Material", "Transportasi Air", "Lainnya (Ketik Manual)"]
 
 # ==========================================
 # 2. FUNGSI INTI & CACHING (AKURAT & HEMAT RAM)
@@ -1701,17 +1701,13 @@ elif st.session_state.page == "📝 Form Request Dana":
 
         with col2:
             with _wz_box("wz1_b"):
-                # 🚀 KHUSUS PANGKALAN BUN: Tambah Opsi 'Lainnya'
-                opsi_keperluan = LIST_KEPERLUAN.copy()
-                if nop == "Pangkalanbun" and "Lainnya" not in opsi_keperluan:
-                    opsi_keperluan.append("Lainnya")
-                    
-                pilihan_kep = st.selectbox("Klasifikasi Keperluan Dana", opsi_keperluan)
-                if pilihan_kep == "Lainnya":
+                pilihan_kep = st.selectbox("Klasifikasi Keperluan Dana", LIST_KEPERLUAN)
+                
+                if pilihan_kep == "Lainnya (Ketik Manual)":
                     keperluan = st.text_input("Ketik Keperluan Secara Manual (Wajib):")
                 else:
                     keperluan = pilihan_kep
-            
+                
                 pm_selected_list = []
                 if keperluan == "PM":
                     st.markdown("<div style='background-color:#F0F9FF; padding:15px; border-radius:10px; border-left: 5px solid #0EA5E9; margin-bottom: 15px;'><b>🎫 Fitur Multi-Select Tiket PM</b><br><small>Silakan pilih sebanyak mungkin tiket yang akan dikerjakan dalam 1x pencairan dana ini.</small></div>", unsafe_allow_html=True)
@@ -3951,10 +3947,9 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
             tot_req_daily = 0
             for r in req_r[1:]:
                 if len(r) > 13:
-                    # 🚀 BACA TANGGAL SECARA PINTAR
+                    # Sistem pintar yang seragam untuk PLK & PBU
                     tgl_req_sheet = parse_date(str(r[1]).strip(), str(r[0]).strip())
                     
-                    # PASTIKAN SEMUA KODE DI BAWAH INI MENJOROK KE DALAM (DI BAWAH 'IF')
                     if tgl_req_sheet == filter_date:
                         tiket_req = str(r[3]).strip().upper()
                         
@@ -4060,7 +4055,7 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
             tot_pjb_daily = 0
             for r in pjb_r[1:]:
                 if len(r) > 24:
-                    # 🚀 BACA TANGGAL PJB SECARA PINTAR
+                    # Sistem pintar yang seragam untuk PLK & PBU
                     tgl_pjb_sheet = parse_date(str(r[1]).strip(), str(r[0]).strip())
                     
                     if tgl_pjb_sheet == filter_date:
