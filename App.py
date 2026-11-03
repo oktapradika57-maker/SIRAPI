@@ -3932,7 +3932,6 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
             with col_d1: filter_date = st.date_input("Pilih Tanggal Pantau", datetime.now().date())
             
             filter_date_str = filter_date.strftime("%d/%m/%Y")
-            
             # --- DAILY REQUEST ---
             st.markdown(f"#### 💸 Request Dana Masuk (Menunggu Diproses) - {filter_date_str}")
             
@@ -3945,12 +3944,19 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
 
             daily_req = []
             tot_req_daily = 0
+            
+            # 🚀 JURUS ANTI-ERROR TANGGAL GOOGLE SHEETS (SAYA KEMBALIKAN KE SINI)
+            d1 = filter_date.strftime("%d/%m/%Y")
+            d2 = filter_date.strftime("%m/%d/%Y")
+            d3 = filter_date.strftime("%Y-%m-%d")
+            
             for r in req_r[1:]:
                 if len(r) > 13:
-                    # Sistem pintar yang seragam untuk PLK & PBU
-                    tgl_req_sheet = parse_date(str(r[1]).strip(), str(r[0]).strip())
+                    raw_ts = str(r[0]).strip()
+                    raw_tgl = str(r[1]).strip()
                     
-                    if tgl_req_sheet == filter_date:
+                    # Cek kecocokan teks tanggal dari berbagai format (Kebal Locale)
+                    if (d1 in raw_ts or d2 in raw_ts or d3 in raw_ts) or (d1 in raw_tgl or d2 in raw_tgl or d3 in raw_tgl):
                         tiket_req = str(r[3]).strip().upper()
                         
                         if tiket_req in processed_tickets: 
@@ -3968,85 +3974,90 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
                             "Jarak/Info": r[13], "Rekening Tim": f"{bank_info} - {norek_info}", "Nominal Request": nom
                         })
             
+            # TAMPILKAN TABEL JIKA ADA REQUEST
             if daily_req:
                 df_dreq = pd.DataFrame(daily_req)
                 df_dreq["Nominal Request"] = df_dreq["Nominal Request"].apply(lambda x: f"Rp {x:,.0f}")
                 st.dataframe(df_dreq, hide_index=True, use_container_width=True)
                 st.markdown(f"<div style='text-align:right; font-size:1.2em; color:#0ea5e9; font-weight:bold;'>Total Request: Rp {tot_req_daily:,.0f}</div>", unsafe_allow_html=True)
+            else:
+                st.success("Belum ada request dana (atau semua tiket hari ini sudah selesai Anda proses).")
                 
-                st.markdown("##### 🚀 Approval & Pencairan Cepat (Distribusi Tim)")
-                um_r_dist = data_all.get(SHEET_UM, [])
-                valid_batches = sorted(list(set([r[2].strip() for r in um_r_dist[1:] if len(r) > 2 and r[2].strip() != ""])))
-                
-                cd1, cd2, cd3 = st.columns(3)
-                with cd1:
-                    tiket_to_app = st.selectbox("Pilih Tiket (Support):", ["-- Pilih Tiket --"] + [req['Sub-Tiket (Split)'] for req in daily_req])
-                
-                auto_nom = 0
-                if tiket_to_app != "-- Pilih Tiket --":
-                    auto_nom = next((req['Nominal Request'] for req in daily_req if req['Sub-Tiket (Split)'] == tiket_to_app), 0)
-                    
-                with cd2:
-                    sumber_dana_app = st.selectbox("Sumber Dana (Budget)", ["-- Pilih Dana --"] + valid_batches)
-                with cd3:
-                    nom_dist_app = st.number_input("Nominal Transfer (Rp) [Auto]", min_value=0, step=1000, value=int(auto_nom))
-                
-                c_act1, c_act2 = st.columns(2)
-                with c_act1:
-                    btn_approve = st.button("✅ Approve & Support (Catat ke Distribusi)", type="primary", use_container_width=True)
-                with c_act2:
-                    btn_reject = st.button("❌ Reject Request", use_container_width=True)
-                
-                if btn_approve:
-                    if tiket_to_app != "-- Pilih Tiket --" and sumber_dana_app != "-- Pilih Dana --" and nom_dist_app > 0:
-                        nama_penerima = next((r['Nama'] for r in daily_req if r['Sub-Tiket (Split)'] == tiket_to_app), "")
-                        
-                        append_data(SHEET_DISTRIBUSI, [
-                            datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
-                            datetime.now().strftime("%d/%m/%Y"),
-                            sumber_dana_app,
-                            nama_penerima,
-                            nom_dist_app,
-                            f"AUTO-SUPPORT: {tiket_to_app}" 
-                        ], target_ss)
-                        
-                        append_data(SHEET_APP, [
-                            datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
-                            nama_penerima,
-                            tiket_to_app,
-                            "Request Dana",
-                            nom_dist_app,
-                            "APPROVED",
-                            "Telah didistribusikan"
-                        ], target_ss)
-                        
-                        st.success(f"✅ Berhasil! Dana untuk {tiket_to_app} sebesar Rp {nom_dist_app:,.0f} telah disetujui dan dicatat di Distribusi Tim.")
-                        time.sleep(2)
-                        st.rerun()
-                    else:
-                        st.error("Pilih Tiket, Sumber Dana, dan pastikan Nominal Transfer lebih dari 0!")
-                        
-                if btn_reject:
-                    if tiket_to_app != "-- Pilih Tiket --":
-                        nama_penerima = next((r['Nama'] for r in daily_req if r['Sub-Tiket (Split)'] == tiket_to_app), "")
-                        
-                        append_data(SHEET_APP, [
-                            datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
-                            nama_penerima,
-                            tiket_to_app,
-                            "Request Dana",
-                            nom_dist_app,
-                            "REJECTED",
-                            "Ditolak Admin (Data tidak sesuai)"
-                        ], target_ss)
-                        
-                        st.success(f"❌ Request {tiket_to_app} berhasil di-REJECT. Sistem pemblokiran pada tim telah dilepas, mereka dapat mengajukan ulang.")
-                        time.sleep(2)
-                        st.rerun()
-                    else:
-                        st.error("Silakan pilih tiket yang akan di-reject!")
-            else: st.success("Belum ada request dana hari ini.")
+            # ========================================================
+            # 🚀 KELUARKAN MENU APPROVAL AGAR SELALU TAMPIL (STANDBY)
+            # ========================================================
+            st.markdown("##### 🚀 Approval & Pencairan Cepat (Distribusi Tim)")
+            um_r_dist = data_all.get(SHEET_UM, [])
+            valid_batches = sorted(list(set([r[2].strip() for r in um_r_dist[1:] if len(r) > 2 and r[2].strip() != ""])))
             
+            cd1, cd2, cd3 = st.columns(3)
+            with cd1:
+                tiket_to_app = st.selectbox("Pilih Tiket (Support):", ["-- Pilih Tiket --"] + [req['Sub-Tiket (Split)'] for req in daily_req])
+            
+            auto_nom = 0
+            if tiket_to_app != "-- Pilih Tiket --":
+                auto_nom = next((req['Nominal Request'] for req in daily_req if req['Sub-Tiket (Split)'] == tiket_to_app), 0)
+                
+            with cd2:
+                sumber_dana_app = st.selectbox("Sumber Dana (Budget)", ["-- Pilih Dana --"] + valid_batches)
+            with cd3:
+                nom_dist_app = st.number_input("Nominal Transfer (Rp) [Auto]", min_value=0, step=1000, value=int(auto_nom))
+            
+            c_act1, c_act2 = st.columns(2)
+            with c_act1:
+                btn_approve = st.button("✅ Approve & Support (Catat ke Distribusi)", type="primary", use_container_width=True)
+            with c_act2:
+                btn_reject = st.button("❌ Reject Request", use_container_width=True)
+            
+            if btn_approve:
+                if tiket_to_app != "-- Pilih Tiket --" and sumber_dana_app != "-- Pilih Dana --" and nom_dist_app > 0:
+                    nama_penerima = next((r['Nama'] for r in daily_req if r['Sub-Tiket (Split)'] == tiket_to_app), "")
+                    
+                    append_data(SHEET_DISTRIBUSI, [
+                        datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                        datetime.now().strftime("%d/%m/%Y"),
+                        sumber_dana_app,
+                        nama_penerima,
+                        nom_dist_app,
+                        f"AUTO-SUPPORT: {tiket_to_app}" 
+                    ], target_ss)
+                    
+                    append_data(SHEET_APP, [
+                        datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                        nama_penerima,
+                        tiket_to_app,
+                        "Request Dana",
+                        nom_dist_app,
+                        "APPROVED",
+                        "Telah didistribusikan"
+                    ], target_ss)
+                    
+                    st.success(f"✅ Berhasil! Dana untuk {tiket_to_app} sebesar Rp {nom_dist_app:,.0f} telah disetujui dan dicatat di Distribusi Tim.")
+                    time.sleep(2)
+                    st.rerun()
+                else:
+                    st.error("Pilih Tiket, Sumber Dana, dan pastikan Nominal Transfer lebih dari 0!")
+                    
+            if btn_reject:
+                if tiket_to_app != "-- Pilih Tiket --":
+                    nama_penerima = next((r['Nama'] for r in daily_req if r['Sub-Tiket (Split)'] == tiket_to_app), "")
+                    
+                    append_data(SHEET_APP, [
+                        datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                        nama_penerima,
+                        tiket_to_app,
+                        "Request Dana",
+                        nom_dist_app,
+                        "REJECTED",
+                        "Ditolak Admin (Data tidak sesuai)"
+                    ], target_ss)
+                    
+                    st.success(f"❌ Request {tiket_to_app} berhasil di-REJECT. Sistem pemblokiran pada tim telah dilepas, mereka dapat mengajukan ulang.")
+                    time.sleep(2)
+                    st.rerun()
+                else:
+                    st.error("Silakan pilih tiket yang akan di-reject!")
+
             st.markdown("<hr>", unsafe_allow_html=True)
             
             # --- DAILY PJB ---
@@ -4055,10 +4066,11 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
             tot_pjb_daily = 0
             for r in pjb_r[1:]:
                 if len(r) > 24:
-                    # Sistem pintar yang seragam untuk PLK & PBU
-                    tgl_pjb_sheet = parse_date(str(r[1]).strip(), str(r[0]).strip())
+                    raw_ts = str(r[0]).strip()
+                    raw_tgl = str(r[1]).strip()
                     
-                    if tgl_pjb_sheet == filter_date:
+                    # 🚀 BACA TANGGAL PJB SECARA PINTAR
+                    if (d1 in raw_ts or d2 in raw_ts or d3 in raw_ts) or (d1 in raw_tgl or d2 in raw_tgl or d3 in raw_tgl):
                         nom = clean_nominal(r[11])
                         tot_pjb_daily += nom
                         tk_info = r[36] if len(r) > 36 and r[36].strip() else r[21]
