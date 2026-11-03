@@ -1701,16 +1701,16 @@ elif st.session_state.page == "📝 Form Request Dana":
 
         with col2:
             with _wz_box("wz1_b"):
-            # 🚀 KHUSUS PANGKALAN BUN: Tambah Opsi 'Lainnya'
-            opsi_keperluan = LIST_KEPERLUAN.copy()
-            if nop == "Pangkalanbun" and "Lainnya" not in opsi_keperluan:
-                opsi_keperluan.append("Lainnya")
-                
-            pilihan_kep = st.selectbox("Klasifikasi Keperluan Dana", opsi_keperluan)
-            if pilihan_kep == "Lainnya":
-                keperluan = st.text_input("Ketik Keperluan Secara Manual (Wajib):")
-            else:
-                keperluan = pilihan_kep
+                # 🚀 KHUSUS PANGKALAN BUN: Tambah Opsi 'Lainnya'
+                opsi_keperluan = LIST_KEPERLUAN.copy()
+                if nop == "Pangkalanbun" and "Lainnya" not in opsi_keperluan:
+                    opsi_keperluan.append("Lainnya")
+                    
+                pilihan_kep = st.selectbox("Klasifikasi Keperluan Dana", opsi_keperluan)
+                if pilihan_kep == "Lainnya":
+                    keperluan = st.text_input("Ketik Keperluan Secara Manual (Wajib):")
+                else:
+                    keperluan = pilihan_kep
             
                 pm_selected_list = []
                 if keperluan == "PM":
