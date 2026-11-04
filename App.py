@@ -3570,22 +3570,64 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                                 for part in raw_photos_str.split("|"):
                                     if "::" in part:
                                         lbl, u = part.split("::", 1)
-                                        if u.strip().startswith("http"): valid_photos.append((lbl.strip(), u.strip()))
+                                        if u.strip().startswith("http"):
+                                            valid_photos.append((lbl.strip(), u.strip()))
                             
-                            box_width = "100%" if len(valid_photos) == 1 else "48%"
+                            jml_foto = len(valid_photos)
+                            # Smart Grid A4 Portrait: sesuaikan kolom & tinggi foto agar 1 tiket = 1 halaman
+                            if jml_foto == 1:
+                                grid_cols = "1fr"
+                                img_height = "460px"
+                            elif jml_foto == 2:
+                                grid_cols = "1fr 1fr"
+                                img_height = "380px"
+                            elif jml_foto in [3, 4]:
+                                grid_cols = "1fr 1fr"
+                                img_height = "265px"
+                            else:
+                                grid_cols = "1fr 1fr 1fr"
+                                img_height = "225px"
+
                             html_content += f"""
                             <div class='ticket-card'>
-                                <div class='ticket-header'>🎫 SUB-TIKET: {erow.get("No Tiket", "-")} &nbsp;|&nbsp; 📦 KATEGORI: {erow.get("Kategori", "-")}</div>
-                                <table>
-                                    <tr><td width='15%'><b>Tanggal</b></td><td width='35%'>: {erow.get("Tanggal", "-")}</td><td width='15%'><b>Periode</b></td><td>: {erow.get("Periode", "-")}</td></tr>
-                                    <tr><td><b>Nama</b></td><td>: {erow.get("Nama", "-")}</td><td><b>Nominal</b></td><td>: <span style='color:#059669; font-weight:bold;'>Rp {clean_nominal(erow.get("Nominal", 0)):,.0f}</span></td></tr>
-                                    <tr><td><b>Role/Jabatan</b></td><td>: {erow.get("Role", "-")}</td><td><b>Keperluan</b></td><td>: {erow.get("Keperluan", "-")}</td></tr>
-                                    <tr><td valign='top'><b>Deskripsi</b></td><td colspan='3'>: {erow.get("Deskripsi", "-")}</td></tr>
+                                <div class='report-top-bar'>
+                                    <span>LAPORAN PERTANGGUNGJAWABAN (PJB) — NOP {nop_report.upper()}</span>
+                                    <span>Hal. {count_match}</span>
+                                </div>
+                                <div class='ticket-header'>
+                                    <span>🎫 SUB-TIKET: {erow.get("No Tiket", "-")}</span>
+                                    <span>📦 KATEGORI: {erow.get("Kategori", "-")}</span>
+                                </div>
+                                <table class='info-table'>
+                                    <tr>
+                                        <td width='14%'><b>Tanggal</b></td><td width='36%'>: {erow.get("Tanggal", "-")}</td>
+                                        <td width='14%'><b>Periode</b></td><td width='36%'>: {erow.get("Periode", "-")}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><b>Nama PIC</b></td><td>: {erow.get("Nama", "-")}</td>
+                                        <td><b>Nominal PJB</b></td><td>: <span style='color:#059669; font-weight:800;'>Rp {clean_nominal(erow.get("Nominal", 0)):,.0f}</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td><b>Role/Jabatan</b></td><td>: {erow.get("Role", "-")}</td>
+                                        <td><b>Keperluan</b></td><td>: {erow.get("Keperluan", "-")}</td>
+                                    </tr>
+                                    <tr>
+                                        <td valign='top'><b>Deskripsi</b></td><td colspan='3'>: {erow.get("Deskripsi", "-")}</td>
+                                    </tr>
                                 </table>
-                                <div class='photo-container'>
+                                <div class='photo-grid' style='grid-template-columns: {grid_cols};'>
                             """
-                            for lbl_foto, url_foto in valid_photos:
-                                html_content += f"<div class='photo-box' style='width: {box_width};'><img src='{url_foto}' alt='{lbl_foto}'><div class='photo-caption'>📸 {lbl_foto}</div></div>"
+                            for idx_f, (lbl_foto, url_foto) in enumerate(valid_photos, 1):
+                                # Jika jumlah foto ganjil (3 foto), foto ke-3 ditaruh rapi di tengah
+                                span_style = "grid-column: span 2; width: 65%; margin: 0 auto;" if (jml_foto == 3 and idx_f == 3) else ""
+                                html_content += f"""
+                                    <div class='photo-box' style='{span_style}'>
+                                        <div class='img-wrapper' style='height: {img_height};'>
+                                            <img src='{url_foto}' alt='{lbl_foto}'>
+                                        </div>
+                                        <div class='photo-caption'>📸 {lbl_foto}</div>
+                                    </div>
+                                """
                             html_content += "</div></div>"
 
                         if count_match > 0:
@@ -3596,26 +3638,135 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                                 <meta charset="UTF-8">
                                 <title>Laporan Auto PJB - {nop_report}</title>
                                 <style>
-                                    @page {{ size: A4 portrait; margin: 12mm; }}
-                                    body {{ font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #1E293B; margin: 0; padding: 0; background: #fff; }}
-                                    h1 {{ text-align: center; color: #0F172A; border-bottom: 3px solid #007BFF; padding-bottom: 10px; margin-top: 10px; }}
-                                    .ticket-card {{ width: 100%; border: 2px solid #0F172A; padding: 12mm; box-sizing: border-box; margin-bottom: 20px; border-radius: 10px; page-break-inside: avoid; }}
-                                    .ticket-header {{ background-color: #F1F5F9; padding: 10px 14px; font-weight: bold; font-size: 1.1em; border-bottom: 2px solid #007BFF; margin-bottom: 15px; border-radius: 6px; }}
-                                    table {{ width: 100%; border-collapse: collapse; margin-bottom: 18px; font-size: 0.95em; }}
-                                    td {{ padding: 7px 8px; border-bottom: 1px solid #E2E8F0; }}
-                                    .photo-container {{ display: flex; flex-wrap: wrap; gap: 2%; justify-content: center; align-items: stretch; }}
-                                    .photo-box {{ text-align: center; font-size: 0.9em; font-weight: bold; border: 1.5px solid #CBD5E1; border-radius: 8px; margin-bottom: 15px; padding: 10px; box-sizing: border-box; background: #F8FAFC; page-break-inside: avoid; }}
-                                    .photo-box img {{ width: 100%; height: auto; max-height: 460px; object-fit: contain; border-radius: 6px; margin-bottom: 8px; display: block; margin-left: auto; margin-right: auto; background: #FFFFFF; }}
-                                    .photo-caption {{ color: #0F172A; padding-top: 4px; font-size: 0.92em; }}
+                                    @page {{
+                                        size: A4 portrait;
+                                        margin: 8mm 10mm;
+                                    }}
+                                    * {{
+                                        box-sizing: border-box;
+                                        -webkit-print-color-adjust: exact !important;
+                                        print-color-adjust: exact !important;
+                                    }}
+                                    body {{
+                                        font-family: 'Segoe UI', Helvetica, Arial, sans-serif;
+                                        color: #0F172A;
+                                        margin: 0;
+                                        padding: 0;
+                                        background: #FFFFFF;
+                                    }}
+                                    .ticket-card {{
+                                        width: 100%;
+                                        height: 277mm;
+                                        max-height: 277mm;
+                                        border: 1.5px solid #1E293B;
+                                        padding: 10px 14px;
+                                        border-radius: 8px;
+                                        display: flex;
+                                        flex-direction: column;
+                                        justify-content: flex-start;
+                                        page-break-inside: avoid;
+                                        page-break-after: always;
+                                        overflow: hidden;
+                                        margin-bottom: 12px;
+                                    }}
+                                    .ticket-card:last-child {{
+                                        page-break-after: auto;
+                                    }}
+                                    .report-top-bar {{
+                                        display: flex;
+                                        justify-content: space-between;
+                                        align-items: center;
+                                        background: #0F172A;
+                                        color: #FFFFFF;
+                                        font-size: 9pt;
+                                        font-weight: 700;
+                                        padding: 5px 12px;
+                                        border-radius: 5px 5px 0 0;
+                                        letter-spacing: 0.4px;
+                                    }}
+                                    .ticket-header {{
+                                        display: flex;
+                                        justify-content: space-between;
+                                        background-color: #EFF6FF;
+                                        color: #1E3A8A;
+                                        padding: 7px 12px;
+                                        font-weight: 800;
+                                        font-size: 10pt;
+                                        border-bottom: 2px solid #2563EB;
+                                        margin-bottom: 8px;
+                                        border-radius: 0 0 5px 5px;
+                                    }}
+                                    .info-table {{
+                                        width: 100%;
+                                        border-collapse: collapse;
+                                        margin-bottom: 10px;
+                                        font-size: 9pt;
+                                    }}
+                                    .info-table td {{
+                                        padding: 4px 6px;
+                                        border-bottom: 1px solid #E2E8F0;
+                                        line-height: 1.3;
+                                    }}
+                                    .photo-grid {{
+                                        display: grid;
+                                        gap: 10px;
+                                        width: 100%;
+                                        align-items: stretch;
+                                    }}
+                                    .photo-box {{
+                                        border: 1px solid #CBD5E1;
+                                        border-radius: 6px;
+                                        padding: 6px;
+                                        background: #F8FAFC;
+                                        display: flex;
+                                        flex-direction: column;
+                                        justify-content: space-between;
+                                        text-align: center;
+                                    }}
+                                    .img-wrapper {{
+                                        width: 100%;
+                                        display: flex;
+                                        align-items: center;
+                                        justify-content: center;
+                                        background: #FFFFFF;
+                                        border-radius: 4px;
+                                        overflow: hidden;
+                                    }}
+                                    .img-wrapper img {{
+                                        max-width: 100%;
+                                        max-height: 100%;
+                                        width: auto;
+                                        height: auto;
+                                        object-fit: contain;
+                                        display: block;
+                                    }}
+                                    .photo-caption {{
+                                        color: #0F172A;
+                                        font-weight: 700;
+                                        font-size: 8.5pt;
+                                        padding-top: 5px;
+                                        margin-top: 4px;
+                                        border-top: 1px dashed #E2E8F0;
+                                        white-space: nowrap;
+                                        overflow: hidden;
+                                        text-overflow: ellipsis;
+                                    }}
+                                    @media screen {{
+                                        .ticket-card {{
+                                            height: auto;
+                                            max-height: none;
+                                            margin-bottom: 24px;
+                                            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+                                        }}
+                                    }}
                                 </style>
                             </head>
                             <body>
-                                <h1>Laporan Lumpsum & PJB - NOP {nop_report}</h1>
                                 {html_content}
                             </body>
                             </html>
                             """
-                            st.success(f"✅ Berhasil men-generate **{count_match}** sub-tiket (Hanya melampirkan foto yang benar-benar ada).")
+                            st.success(f"✅ Berhasil men-generate **{count_match}** halaman A4 Portrait (1 Sub-Tiket = 1 Halaman Rapi).")
                             b64_html = base64.b64encode(full_html.encode("utf-8")).decode()
                             st.markdown(f'<a href="data:text/html;base64,{b64_html}" download="Laporan_PJB_{nop_report}.html" style="display: block; text-align: center; background-color: #007BFF; color: white !important; padding: 15px 20px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 1.05em;">📥 Download Laporan HTML Siap Cetak PDF (Tekan CTRL+P -> Save as PDF)</a>', unsafe_allow_html=True)
                             st.markdown("<hr>", unsafe_allow_html=True)
