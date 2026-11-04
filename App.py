@@ -2060,8 +2060,10 @@ elif st.session_state.page == "📝 Form Request Dana":
             
             if "Material" in kebutuhan_dana_list:
                 with st.expander("📦 Detail Material", expanded=True):
+                    nama_brg_mat = st.text_input("Bentuk / Nama Barang & Jumlah (Contoh: MCB 32A 1 pcs, Isolasi 2 bh):", key="brg_mat")
                     keb_mat = st.number_input("Estimasi Dana Material (Rp)", min_value=0, step=1000)
-                    sub_requests.append({"tiket": f"{base_tiket_clean} [MATERIAL]", "kategori": "Material", "kebutuhan": keb_mat, "plat": "", "indikator": 0.0, "last_ind": 0.0, "tipe": "Material"})
+                    kat_mat_label = f"Material ({nama_brg_mat})" if nama_brg_mat.strip() else "Material"
+                    sub_requests.append({"tiket": f"{base_tiket_clean} [MATERIAL]", "kategori": kat_mat_label, "kebutuhan": keb_mat, "plat": "", "indikator": 0.0, "last_ind": 0.0, "tipe": "Material"})
                 
             if "Support" in kebutuhan_dana_list:
                 with st.expander("🤝 Detail Support", expanded=True):
@@ -4096,7 +4098,7 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
             daily_req = []
             tot_req_daily = 0
             
-            # 🚀 JURUS ANTI-ERROR TANGGAL GOOGLE SHEETS (SAYA KEMBALIKAN KE SINI)
+            # Format pencocokan tanggal anti-error
             d1 = filter_date.strftime("%d/%m/%Y")
             d2 = filter_date.strftime("%m/%d/%Y")
             d3 = filter_date.strftime("%Y-%m-%d")
@@ -4106,7 +4108,6 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
                     raw_ts = str(r[0]).strip()
                     raw_tgl = str(r[1]).strip()
                     
-                    # Cek kecocokan teks tanggal dari berbagai format (Kebal Locale)
                     if (d1 in raw_ts or d2 in raw_ts or d3 in raw_ts) or (d1 in raw_tgl or d2 in raw_tgl or d3 in raw_tgl):
                         tiket_req = str(r[3]).strip().upper()
                         
@@ -4116,26 +4117,67 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
                         nom = clean_nominal(r[9])
                         tot_req_daily += nom
                         
+                        tgl_tampil = raw_tgl if raw_tgl else raw_ts.split(" ")[0]
+                        kep_item = str(r[8]).strip() if len(r) > 8 else "-"
+                        kat_item = str(r[10]).strip() if len(r) > 10 else "-"
+                        desc_raw = str(r[11]).strip() if len(r) > 11 else "-"
+                        plat_info = str(r[16]).strip() if len(r) > 16 and str(r[16]).strip() else ""
                         bank_info = str(r[17]).strip() if len(r) > 17 else "-"
                         norek_info = str(r[18]).strip() if len(r) > 18 else "-"
                         
+                        # Rapikan deskripsi / bentuk barang menjadi 1 baris bersih
+                        desc_clean = " | ".join([line.strip() for line in desc_raw.splitlines() if line.strip()])
+                        if not desc_clean:
+                            desc_clean = "-"
+                            
+                        # Deteksi otomatis Jumlah Liter (BBM) atau Bentuk Barang (Material/UM/Support)
+                        kat_lower = kat_item.lower()
+                        if any(k in kat_lower for k in ["mobil", "motor", "genset", "pertalite", "pertamax", "dexlite", "solar"]):
+                            if "pertamax" in kat_lower:
+                                hrg_est = 12500
+                            elif "dexlite" in kat_lower or "dex" in kat_lower:
+                                hrg_est = 14500
+                            elif "solar" in kat_lower:
+                                hrg_est = 6800
+                            else:
+                                hrg_est = 10000
+                            jml_liter = round(nom / hrg_est, 1) if nom > 0 else 0
+                            info_plat = f" [{plat_info}]" if plat_info else ""
+                            detail_barang_liter = f"⛽ ± {jml_liter} Liter{info_plat} — {desc_clean}"
+                        elif "material" in kat_lower or "pembelian" in kep_item.lower() or "pengiriman" in kep_item.lower():
+                            detail_barang_liter = f"📦 Barang/Material: {desc_clean}"
+                        elif "uang makan" in kat_lower or "penginapan" in kat_lower:
+                            detail_barang_liter = f"🍽️ Akomodasi: {desc_clean}"
+                        else:
+                            detail_barang_liter = f"🛠️ Detail: {desc_clean}"
+                        
                         daily_req.append({
-                            "Waktu": r[0], "Nama": r[5], "Sub-Tiket (Split)": r[3], "Role": r[6],
-                            "Keperluan": r[8], "Kategori Item": r[10], 
-                            "Jarak/Info": r[13], "Rekening Tim": f"{bank_info} - {norek_info}", "Nominal Request": nom
+                            "Tanggal": tgl_tampil,
+                            "Nama": r[5],
+                            "Tipe Request": f"{kep_item} — {kat_item}",
+                            "Jml Liter / Bentuk Barang": detail_barang_liter,
+                            "Nominal Request": nom,
+                            "Rekening Tim": f"{bank_info} - {norek_info}",
+                            "Jarak/Info": r[13],
+                            "Sub-Tiket (Split)": r[3],
+                            "Waktu": r[0]
                         })
             
             # TAMPILKAN TABEL JIKA ADA REQUEST
             if daily_req:
                 df_dreq = pd.DataFrame(daily_req)
                 df_dreq["Nominal Request"] = df_dreq["Nominal Request"].apply(lambda x: f"Rp {x:,.0f}")
-                st.dataframe(df_dreq, hide_index=True, use_container_width=True)
+                st.dataframe(
+                    df_dreq[["Tanggal", "Nama", "Tipe Request", "Jml Liter / Bentuk Barang", "Nominal Request", "Rekening Tim", "Jarak/Info", "Sub-Tiket (Split)"]],
+                    hide_index=True,
+                    use_container_width=True
+                )
                 st.markdown(f"<div style='text-align:right; font-size:1.2em; color:#0ea5e9; font-weight:bold;'>Total Request: Rp {tot_req_daily:,.0f}</div>", unsafe_allow_html=True)
             else:
                 st.success("Belum ada request dana (atau semua tiket hari ini sudah selesai Anda proses).")
                 
             # ========================================================
-            # 🚀 KELUARKAN MENU APPROVAL AGAR SELALU TAMPIL (STANDBY)
+            # 🚀 MENU APPROVAL & PENCAIRAN CEPAT (DENGAN RINGKASAN DETAIL)
             # ========================================================
             st.markdown("##### 🚀 Approval & Pencairan Cepat (Distribusi Tim)")
             um_r_dist = data_all.get(SHEET_UM, [])
@@ -4145,14 +4187,23 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
             with cd1:
                 tiket_to_app = st.selectbox("Pilih Tiket (Support):", ["-- Pilih Tiket --"] + [req['Sub-Tiket (Split)'] for req in daily_req])
             
-            auto_nom = 0
-            if tiket_to_app != "-- Pilih Tiket --":
-                auto_nom = next((req['Nominal Request'] for req in daily_req if req['Sub-Tiket (Split)'] == tiket_to_app), 0)
+            selected_req_obj = next((req for req in daily_req if req['Sub-Tiket (Split)'] == tiket_to_app), None)
+            auto_nom = selected_req_obj['Nominal Request'] if selected_req_obj else 0
                 
             with cd2:
                 sumber_dana_app = st.selectbox("Sumber Dana (Budget)", ["-- Pilih Dana --"] + valid_batches)
             with cd3:
                 nom_dist_app = st.number_input("Nominal Transfer (Rp) [Auto]", min_value=0, step=1000, value=int(auto_nom))
+            
+            # TAMPILKAN KARTU RINGKASAN SAAT TIKET DIPILIH AGAR ADMIN MUDAH APPROVE
+            if selected_req_obj:
+                st.info(
+                    f"📋 **Ringkasan Tiket Terpilih:**\n"
+                    f"- **Tanggal & Petugas:** {selected_req_obj['Tanggal']} | **{selected_req_obj['Nama']}**\n"
+                    f"- **Tipe Request:** {selected_req_obj['Tipe Request']}\n"
+                    f"- **Jumlah Liter / Bentuk Barang:** {selected_req_obj['Jml Liter / Bentuk Barang']}\n"
+                    f"- **Nilai Request & Rekening:** **Rp {selected_req_obj['Nominal Request']:,.0f}** ({selected_req_obj['Rekening Tim']})"
+                )
             
             c_act1, c_act2 = st.columns(2)
             with c_act1:
@@ -4162,7 +4213,7 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
             
             if btn_approve:
                 if tiket_to_app != "-- Pilih Tiket --" and sumber_dana_app != "-- Pilih Dana --" and nom_dist_app > 0:
-                    nama_penerima = next((r['Nama'] for r in daily_req if r['Sub-Tiket (Split)'] == tiket_to_app), "")
+                    nama_penerima = selected_req_obj['Nama'] if selected_req_obj else ""
                     
                     append_data(SHEET_DISTRIBUSI, [
                         datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
@@ -4191,7 +4242,7 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
                     
             if btn_reject:
                 if tiket_to_app != "-- Pilih Tiket --":
-                    nama_penerima = next((r['Nama'] for r in daily_req if r['Sub-Tiket (Split)'] == tiket_to_app), "")
+                    nama_penerima = selected_req_obj['Nama'] if selected_req_obj else ""
                     
                     append_data(SHEET_APP, [
                         datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
@@ -4208,8 +4259,6 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
                     st.rerun()
                 else:
                     st.error("Silakan pilih tiket yang akan di-reject!")
-
-            st.markdown("<hr>", unsafe_allow_html=True)
             
             # --- DAILY PJB ---
             st.markdown(f"#### ✅ PJB Disubmit ({filter_date_str})")
