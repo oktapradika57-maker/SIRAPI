@@ -1869,13 +1869,14 @@ elif st.session_state.page == "📝 Form Request Dana":
             is_mobil = is_motor = is_genset = False
             total_motor_this_month = 0
         
+            # =========================================================
+            # A. LOGIKA BBM (DENGAN KOMPARASI HARGA, LITER & JARAK)
+            # =========================================================
             if "BBM" in kebutuhan_dana_list:
                 st.markdown("<div style='background-color:#F8FAFC; padding:15px; border-radius:10px; border-left: 5px solid #3B82F6; margin-bottom: 15px; box-shadow: 2px 2px 5px rgba(0,0,0,0.05);'>", unsafe_allow_html=True)
                 jns_bbm_list = st.multiselect("BBM untuk Kendaraan/Peralatan apa saja?", ["Mobil", "Motor", "Genset"])
             
-                # ---------------------------------------------------------
-                # 1. LOGIKA MOBIL (INPUT HARGA, LITER, TOTAL & KOMPARASI JARAK)
-                # ---------------------------------------------------------
+                # 1. LOGIKA MOBIL
                 if "Mobil" in jns_bbm_list:
                     is_mobil = True
                     with st.expander("🚙 Input Nominal, Liter & Komparasi BBM Mobil", expanded=True):
@@ -1900,7 +1901,6 @@ elif st.session_state.page == "📝 Form Request Dana":
                                 keb_mobil_2 = int(round(l_mob_2 * h_satuan_mob))
                                 keb_mobil = keb_mobil_1 + keb_mobil_2
 
-                            # Kalkulasi Komparasi Otomatis (Request Tim vs Standar Jarak 1:9 KM/L)
                             std_biaya_mob = int(round(est_liter_mob * h_satuan_mob))
                             selisih_l_mob = round(l_mob_req - est_liter_mob, 1)
                             selisih_rp_mob = keb_mobil - std_biaya_mob
@@ -1948,9 +1948,7 @@ elif st.session_state.page == "📝 Form Request Dana":
                             sub_requests.append({"tiket": f"{base_tiket_clean} [MOBIL-1]", "kategori": f"Mobil - {jb_mobil} (Isi 1)", "kebutuhan": keb_mobil_1, "plat": plat_mobil, "indikator": km_awal_mob, "last_ind": last_km_mob, "tipe": "Mobil", "info_bbm": info_bbm_mob1})
                             sub_requests.append({"tiket": f"{base_tiket_clean} [MOBIL-2]", "kategori": f"Mobil - {jb_mobil} (Isi 2)", "kebutuhan": keb_mobil_2, "plat": plat_mobil, "indikator": km_awal_mob, "last_ind": last_km_mob, "tipe": "Mobil", "info_bbm": info_bbm_mob2})
 
-                # ---------------------------------------------------------
-                # 2. LOGIKA MOTOR (INPUT HARGA, LITER, TOTAL & KOMPARASI JARAK)
-                # ---------------------------------------------------------
+                # 2. LOGIKA MOTOR
                 if "Motor" in jns_bbm_list:
                     is_motor = True
                     with st.expander("🏍️ Input Nominal, Liter & Komparasi BBM Motor", expanded=True):
@@ -1984,7 +1982,6 @@ elif st.session_state.page == "📝 Form Request Dana":
                                     st.error("🚨 Setiap pengisian per-tahap tidak boleh melebihi kapasitas tangki!")
                                     motor_limit_lock = True
 
-                            # Kalkulasi Komparasi Otomatis Motor (1:35 KM/L)
                             std_biaya_mot = int(round(est_l_mot * h_satuan))
                             selisih_l_mot = round(l_butuh - est_l_mot, 1)
                             selisih_rp_mot = keb_motor - std_biaya_mot
@@ -2042,9 +2039,7 @@ elif st.session_state.page == "📝 Form Request Dana":
                                         if "motor" in str(r[10]).lower(): total_motor_this_month += clean_nominal(r[9])
                                 except: pass
                             
-                # ---------------------------------------------------------
-                # 3. LOGIKA GENSET / SOLAR (INPUT HARGA, LITER, TOTAL & KOMPARASI)
-                # ---------------------------------------------------------
+                # 3. LOGIKA GENSET
                 if "Genset" in jns_bbm_list:
                     is_genset = True
                     with st.expander("⚡ Input Nominal, Liter & Komparasi BBM Genset (Solar/BBM)", expanded=True):
@@ -2054,7 +2049,7 @@ elif st.session_state.page == "📝 Form Request Dana":
                             def_harga_gen = 14500 if "Dexlite" in jb_genset else (6800 if "Solar" in jb_genset else 10000)
                             
                             est_jam_gen = st.number_input("Estimasi Durasi Running / Backup (Jam)", min_value=1.0, step=0.5, value=5.0, key="jam_gen")
-                            est_liter_gen = round(est_jam_gen * 2.5, 1) # Standar konsumsi rata-rata Genset ± 2.5 Liter/Jam
+                            est_liter_gen = round(est_jam_gen * 2.5, 1)
                             
                             h_satuan_gen = st.number_input("Harga Satuan BBM Genset (Rp/Liter)", min_value=0, step=100, value=int(def_harga_gen), key="hs_gen")
                             l_gen_req = st.number_input("Total Liter BBM Genset Diperlukan (Liter)", min_value=0.5, step=0.5, value=float(est_liter_gen), key="l_gen")
@@ -2101,6 +2096,76 @@ elif st.session_state.page == "📝 Form Request Dana":
                         sub_requests.append({"tiket": f"{base_tiket_clean} [GENSET]", "kategori": f"Genset - {jb_genset}", "kebutuhan": keb_genset, "plat": plat_genset, "indikator": rh_awal_gen, "last_ind": last_rh_gen, "tipe": "Genset", "info_bbm": info_bbm_gen})
                 st.markdown("</div>", unsafe_allow_html=True)
             
+            # =========================================================
+            # B. LOGIKA ASLI UANG MAKAN & PENGINAPAN (100% TETAP SAMA)
+            # =========================================================
+            if "Uang Makan" in kebutuhan_dana_list or "Penginapan" in kebutuhan_dana_list:
+                st.markdown("<div style='background-color:#E0F2FE; padding:15px; border-radius:10px; border-left: 5px solid #0284C7; margin-bottom: 15px;'>", unsafe_allow_html=True)
+            
+                c_um1, c_um2 = st.columns(2)
+                with c_um1:
+                    hari_req = st.number_input("Rencana Berapa Hari (Durasi Kerja)?", min_value=1, step=1, value=1)
+                    jml_org = 1 + len(tim_bareng)
+                
+                if "Uang Makan" in kebutuhan_dana_list:
+                    st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
+                
+                    # Blokir jika belum memilih kategori pekerjaan
+                    if not val_atas and not val_bawah and not is_kirim_mat:
+                        st.error("❌ SISTEM MENOLAK: Anda memilih Uang Makan tapi belum menentukan jenis pekerjaan (Atas/Bawah/Material) di atas!")
+                        _wz_clamp(4)
+                        st.stop()
+                    
+                    # Logika Sistem Cerdas (Berat = 60k, Ringan = 30k)
+                    is_berat = False
+                    if val_atas or is_kirim_mat: is_berat = True
+                    if val_bawah:
+                        for item in val_bawah:
+                            # Jika ada pilihan SELAIN MCB dan BCP, otomatis dianggap kerja berat
+                            if item not in ["Pengecekan MCB", "BCP"]: 
+                                is_berat = True
+                            
+                    if jarak_km_pp < 80:
+                        st.error(f"❌ JARAK TIDAK MEMENUHI SYARAT: Jarak tempuh Peta hanya {jarak_km_pp:.1f} KM. Syarat minimal Uang Makan adalah >80 KM. Nominal dikunci ke 0.")
+                        base_um = 0
+                        nom_req_um = 0
+                    else:
+                        if is_berat:
+                            base_um = 60000
+                            alasan = f"✅ **Kategori Pekerjaan Berat:** Jarak {jarak_km_pp:.1f} KM (>80 KM) tercapai. Tim berhak mendapatkan **Rp 60.000/orang**."
+                        else:
+                            base_um = 30000
+                            alasan = f"⚠️ **Kategori Pekerjaan Ringan:** Jarak {jarak_km_pp:.1f} KM (>80 KM) namun pekerjaan ringan. Tim berhak mendapatkan **Rp 30.000/orang**."
+                        st.info(alasan)
+                
+                    st.warning("🔒 **SYSTEM LOCK AKTIF:** Nominal tidak bisa diubah manual agar tertib. Hubungi Admin / Boss jika butuh approval khusus.")
+                
+                    with c_um2:
+                        max_um_nominal = base_um * jml_org
+                        # FITUR DISABLED=TRUE akan mengunci kolom agar tidak bisa diketik tim
+                        nom_req_um = st.number_input(f"Nominal UM/Hari (TERKUNCI)", min_value=0, max_value=max_um_nominal if max_um_nominal > 0 else 100, value=max_um_nominal, step=5000, disabled=True)
+                    
+                    tot_um = hari_req * nom_req_um
+                    if tot_um > 0:
+                        st.success(f"💰 Total Estimasi Uang Makan: **Rp {tot_um:,.0f}**")
+                        kategori_teks = "Uang Makan (Pekerjaan Berat)" if is_berat else "Uang Makan (Pekerjaan Ringan)"
+                        sub_requests.append({"tiket": f"{base_tiket_clean} [UM]", "kategori": kategori_teks, "kebutuhan": tot_um, "plat": "", "indikator": 0.0, "last_ind": 0.0, "tipe": "UM", "hari": hari_req, "nom_um": nom_req_um})
+                
+                if "Penginapan" in kebutuhan_dana_list:
+                    with c_um1:
+                        malam_inap = st.number_input("Berapa Malam Menginap?", min_value=1, step=1, value=hari_req if hari_req == 1 else hari_req - 1)
+                    with c_um2:
+                        max_inap_nominal = 150000 * jml_org
+                        nom_req_inap = st.number_input(f"Nominal Inap/Malam (Maks Rp 150.000 x {jml_org} org)", min_value=0, max_value=max_inap_nominal, step=10000, value=max_inap_nominal)
+                    
+                    tot_inap = malam_inap * nom_req_inap
+                    st.success(f"🛏️ Total Estimasi Penginapan: **Rp {tot_inap:,.0f}**")
+                    sub_requests.append({"tiket": f"{base_tiket_clean} [INAP]", "kategori": "Penginapan", "kebutuhan": tot_inap, "plat": "", "indikator": 0.0, "last_ind": 0.0, "tipe": "Inap", "hari": malam_inap, "nom_inap": nom_req_inap})
+                st.markdown("</div>", unsafe_allow_html=True)
+            
+            # =========================================================
+            # C. LOGIKA ASLI MATERIAL, SUPPORT, FERY & KLOTOK
+            # =========================================================
             if "Material" in kebutuhan_dana_list:
                 with st.expander("📦 Detail Material", expanded=True):
                     nama_brg_mat = st.text_input("Bentuk / Nama Barang & Jumlah (Contoh: MCB 32A 1 pcs, Isolasi 2 bh):", key="brg_mat")
@@ -2125,7 +2190,6 @@ elif st.session_state.page == "📝 Form Request Dana":
 
             total_kebutuhan_all = sum([r['kebutuhan'] for r in sub_requests])
             if sub_requests: st.markdown(f"<div class='metric-3d' style='border-top: 6px solid #10B981;'><div class='metric-title'>Total Kalkulasi Kebutuhan Dana</div><div class='metric-value'>Rp {total_kebutuhan_all:,.0f}</div></div>", unsafe_allow_html=True)
-
         with _wz_box("wz5_a"):
             st.markdown("<div class='section-title'>🏦 5. Pembayaran & Lampiran</div>", unsafe_allow_html=True)
             col_pay1, col_pay2 = st.columns(2)
