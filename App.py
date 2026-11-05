@@ -967,6 +967,7 @@ def decode_polyline(polyline_str):
         coordinates.append([lng / 100000.0, lat / 100000.0])
     return coordinates
 
+@st.cache_data(ttl=86400, max_entries=200, show_spinner=False)
 def get_route_and_distance(lon1, lat1, lon2, lat2):
     try:
         url = f"http://router.project-osrm.org/route/v1/driving/{lon1},{lat1};{lon2},{lat2}?overview=simplified"
@@ -976,32 +977,46 @@ def get_route_and_distance(lon1, lat1, lon2, lat2):
             durasi_sec = res["routes"][0]["duration"]
             poly = decode_polyline(res["routes"][0]["geometry"])
             return dist_km, poly, durasi_sec
-    except: pass
+    except Exception:
+        pass
     dist_km = haversine(lat1, lon1, lat2, lon2) * 1.3 
     durasi_sec = (dist_km / 40.0) * 3600
     return dist_km, [[lon1, lat1], [lon2, lat2]], durasi_sec
 
 @st.cache_resource
 def get_credentials():
-    with open("credentials.json", "w") as f: f.write(st.secrets["gcp_json"])
+    if "gcp_json" in st.secrets:
+        import json
+        creds_info = json.loads(st.secrets["gcp_json"], strict=False)
+        return Credentials.from_service_account_info(creds_info, scopes=SCOPES)
     return Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
 
-@st.cache_data(ttl=60, max_entries=2, show_spinner=False)
+@st.cache_data(ttl=180, max_entries=6, show_spinner=False)
 def fetch_spreadsheet_data(spreadsheet_id):
-    client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
     ws_names = [SHEET_REQUEST, SHEET_PJB, SHEET_UM, SHEET_DISTRIBUSI, SHEET_APP, "Rekap PJB", SHEET_TIKET_PM, SHEET_ABSENSI]
-    data = {}
-    for name in ws_names:
+    data = {name: [] for name in ws_names}
+    
+    # Sistem Auto-Retry: Jika Google Sheets sedang sibuk (Error 429), tunggu & coba lagi otomatis hingga 4x
+    for attempt in range(4):
         try:
-            raw_rows = client.worksheet(name).get_all_values()
-            clean_rows = [r[:40] for r in raw_rows if any(str(cell).strip() != "" for cell in r)]
-            data[name] = clean_rows
-            del raw_rows
+            client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
+            for name in ws_names:
+                try:
+                    raw_rows = client.worksheet(name).get_all_values()
+                    clean_rows = [r[:40] for r in raw_rows if any(str(cell).strip() != "" for cell in r)]
+                    data[name] = clean_rows
+                    del raw_rows
+                except Exception:
+                    data[name] = []
+            gc.collect()
+            return data
         except Exception:
-            data[name] = []
+            if attempt < 3:
+                time.sleep(2.5 * (attempt + 1))
+            else:
+                break
     gc.collect()
     return data
-
 def update_pm_ticket_status(spreadsheet_id, tickets_to_update, new_status):
     try:
         client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
@@ -1265,33 +1280,43 @@ def get_local_img_base64(filepath):
         return ""
 
 def append_data(sheet_name, data, spreadsheet_id):
-    try:
-        client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
-        ws = client.worksheet(sheet_name)
-        safe_data = [str(x) if x is not None else "" for x in data]
-        # 🚀 TAMBAHAN SAKTI: Memaksa Google Sheets membuat baris baru (Anti-Overwrite)
-        ws.append_row(safe_data, value_input_option="USER_ENTERED", table_range="A1", insert_data_option="INSERT_ROWS")
-        fetch_spreadsheet_data.clear()
-        return True
-    except Exception as e:
-        st.error(f"⚠️ Gagal menyimpan ke Spreadsheet ({sheet_name}). Error: {e}")
-        return False
+    safe_data = [str(x) if x is not None else "" for x in data]
+    # Coba otomatis hingga 4 kali jika koneksi Google sedang antre
+    for attempt in range(4):
+        try:
+            client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
+            ws = client.worksheet(sheet_name)
+            ws.append_row(safe_data, value_input_option="USER_ENTERED", table_range="A1", insert_data_option="INSERT_ROWS")
+            fetch_spreadsheet_data.clear()
+            return True
+        except Exception as e:
+            if attempt < 3:
+                time.sleep(2.5 * (attempt + 1))
+            else:
+                st.error(f"⚠️ Server Google sedang padat, silakan klik tombol Submit sekali lagi. Detail: {e}")
+                return False
 
 def append_data_multiple(sheet_name, list_of_data, spreadsheet_id):
-    try:
-        client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
-        ws = client.worksheet(sheet_name)
-        # 🚀 UBAH STRATEGI: Kirim berurutan 1 per 1 dengan jeda agar Google Sheets tidak bingung
-        for data in list_of_data:
-            safe_data = [str(x) if x is not None else "" for x in data]
-            ws.append_row(safe_data, value_input_option="USER_ENTERED", table_range="A1", insert_data_option="INSERT_ROWS")
-            time.sleep(1.5) # Beri nafas 1.5 detik ke Google Sheets sebelum mengirim tiket berikutnya
-            
-        fetch_spreadsheet_data.clear()
-        return True
-    except Exception as e:
-        st.error(f"⚠️ Gagal menyimpan Data Batch ke Spreadsheet. Error: {e}")
-        return False
+    safe_list = [[str(x) if x is not None else "" for x in data] for data in list_of_data]
+    # Coba otomatis hingga 4 kali & kirim dalam 1x paket (Hemat Kuota API & Anti-Tumpuk)
+    for attempt in range(4):
+        try:
+            client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
+            ws = client.worksheet(sheet_name)
+            try:
+                ws.append_rows(safe_list, value_input_option="USER_ENTERED", table_range="A1", insert_data_option="INSERT_ROWS")
+            except TypeError:
+                for row_data in safe_list:
+                    ws.append_row(row_data, value_input_option="USER_ENTERED", table_range="A1", insert_data_option="INSERT_ROWS")
+                    time.sleep(1.2)
+            fetch_spreadsheet_data.clear()
+            return True
+        except Exception as e:
+            if attempt < 3:
+                time.sleep(2.5 * (attempt + 1))
+            else:
+                st.error(f"⚠️ Server Google sedang padat, silakan klik tombol Submit sekali lagi. Detail: {e}")
+                return False
 def update_approval_status(spreadsheet_id, row_index, new_status, remark="-"):
     try:
         client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
