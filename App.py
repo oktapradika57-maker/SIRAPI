@@ -4625,84 +4625,149 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
             else: st.success("Belum ada PJB yang disubmit hari ini.")
             
         with tab_warning:
-            st.markdown("### 🚨 Peringatan Otomatis (Data Mulai Agustus 2026 dst)")
-            st.info("Sistem melacak siapa yang belum setor PJB lebih dari 3 hari, dan mencocokkan nilai **Sisa Dana (Request awal vs Laporan PJB)**.")
-            
-            pjb_dict = {}
-            pjb_tickets_all_set = set()
-            for r in pjb_r[1:]:
-                if len(r) > 21 and str(r[21]).strip() != "":
-                    tk = str(r[21]).strip().upper()
-                    if tk not in pjb_dict: pjb_dict[tk] = 0
-                    pjb_dict[tk] += clean_nominal(r[11]) if len(r)>11 else 0
-                    
-                    tk_str = r[36].strip() if (len(r) > 36 and r[36].strip()) else r[21].strip()
-                    pjb_tickets_all_set.update([t.strip().upper() for t in tk_str.split(",")])
-                    
-            req_reject_set = set()
-            for r in app_r[1:]:
-                if len(r) > 5 and r[3] == "Request Dana" and str(r[5]).strip().upper() == "REJECTED":
-                    req_reject_set.add(str(r[2]).strip().upper())
-                    
-            list_gantung = []
-            list_sisa = []
-            today_date = datetime.now().date()
-            
-            for r in req_r[1:]:
-                if len(r) > 9:
-                    tgl_req_str = str(r[1]).strip()
-                    req_date = parse_date(tgl_req_str)
-                    
-                    if req_date >= CUTOFF_DATE:
-                        req_tk_raw = str(r[3]).strip().upper()
-                        if not req_tk_raw or req_tk_raw in req_reject_set: continue
-                        
-                        req_tk_list = [t.strip() for t in req_tk_raw.split(",") if t.strip()]
-                        req_set = set(req_tk_list)
-                        
-                        nom_req = clean_nominal(r[9])
-                        if not req_set.issubset(pjb_tickets_all_set):
-                            aging = (today_date - req_date).days
-                            if aging > 3:
-                                list_gantung.append({
-                                    "Tanggal Request": tgl_req_str,
-                                    "Aging": f"{aging} Hari",
-                                    "Nama Petugas": str(r[5]),
-                                    "Sub-Tiket Gantung": req_tk_raw,
-                                    "Nominal Request": nom_req
-                                })
-                        else:
-                            nom_pjb = pjb_dict.get(req_tk_raw, 0)
-                            sisa = nom_req - nom_pjb
-                            if sisa > 0:
-                                list_sisa.append({
-                                    "Tanggal Request": tgl_req_str,
-                                    "Nama Petugas": str(r[5]),
-                                    "Sub-Tiket PJB": req_tk_raw,
-                                    "Nominal Request": nom_req,
-                                    "Nominal PJB Total": nom_pjb,
-                                    "Sisa Dana (Tarik)": sisa
-                                })
-                                
-            col_w1, col_w2 = st.columns(2)
-            with col_w1:
-                st.error(f"🔴 **PJB Gantung > 3 Hari ({len(list_gantung)} Tiket)**")
-                if list_gantung:
-                    df_gantung = pd.DataFrame(list_gantung)
-                    df_gantung["Nominal Request"] = df_gantung["Nominal Request"].apply(lambda x: f"Rp {x:,.0f}")
-                    st.dataframe(df_gantung, hide_index=True, use_container_width=True)
-                else: st.success("Aman! Tidak ada tiket gantung >3 hari.")
-                
-            with col_w2:
-                st.warning(f"⚠️ **Sisa Dana PJB ({len(list_sisa)} Tiket)**")
-                if list_sisa:
-                    df_sisa = pd.DataFrame(list_sisa)
-                    df_sisa["Nominal Request"] = df_sisa["Nominal Request"].apply(lambda x: f"Rp {x:,.0f}")
-                    df_sisa["Nominal PJB Total"] = df_sisa["Nominal PJB Total"].apply(lambda x: f"Rp {x:,.0f}")
-                    df_sisa["Sisa Dana (Tarik)"] = df_sisa["Sisa Dana (Tarik)"].apply(lambda x: f"Rp {x:,.0f}")
-                    st.dataframe(df_sisa, hide_index=True, use_container_width=True)
-                else: st.success("Aman! Semua pengajuan PM/Reguler nominalnya sesuai (Tidak ada sisa dana di tim).")
+            st.markdown("#### 🚨 Daftar Aging PJB & Monitoring Tiket Gantung (Belum PJB)")
+            st.info("💡 Menampilkan seluruh pengajuan dana (Request) yang **belum disubmit laporan PJB-nya** beserta umur keterlambatan (Aging).")
 
+            # 1. Kumpulkan tiket yang di-REJECT agar tidak ikut dihitung Aging
+            rejected_tickets = set()
+            approved_tickets = set()
+            for app in app_r[1:]:
+                app_pad = (app + [""] * 10)[:10]
+                if str(app_pad[3]).strip() == "Request Dana":
+                    st_app = str(app_pad[5]).strip().upper()
+                    tk_app = str(app_pad[2]).strip().upper()
+                    if tk_app:
+                        if st_app == "REJECTED":
+                            rejected_tickets.add(tk_app)
+                        elif st_app == "APPROVED":
+                            approved_tickets.add(tk_app)
+
+            # 2. Kumpulkan tiket yang SUDAH PJB (abaikan sel kosong agar tidak memblokir semua data)
+            pjb_done_tickets = set()
+            for p in pjb_r[1:]:
+                p_pad = (p + [""] * 40)[:40]
+                tk_sub_pjb = str(p_pad[36]).strip().upper()
+                tk_base_pjb = str(p_pad[21]).strip().upper()
+                if tk_sub_pjb and tk_sub_pjb not in ["-", "NAN", "NONE", "0"]:
+                    pjb_done_tickets.add(tk_sub_pjb)
+                if tk_base_pjb and tk_base_pjb not in ["-", "NAN", "NONE", "0"]:
+                    pjb_done_tickets.add(tk_base_pjb)
+
+            # 3. Fungsi pembaca tanggal cerdas khusus Aging (kebal format PLK & PBU)
+            today_dt = datetime.now().date()
+            def parse_aging_date(raw_tgl_str, raw_ts_str):
+                for val in [raw_tgl_str, raw_ts_str]:
+                    s = str(val).strip().split(" ")[0].strip()
+                    if not s or s.upper() in ["NAN", "NONE", "-"]:
+                        continue
+                    cands = []
+                    for fmt in ["%d/%m/%Y", "%m/%d/%Y", "%Y-%m-%d", "%d-%m-%Y", "%Y/%m/%d", "%d/%m/%y", "%m/%d/%y"]:
+                        try:
+                            d_obj = datetime.strptime(s, fmt).date()
+                            if d_obj not in cands:
+                                cands.append(d_obj)
+                        except ValueError:
+                            continue
+                    if cands:
+                        # Pilih tanggal yang tidak berada di masa depan & paling dekat dengan hari operasional
+                        valid_past = [d for d in cands if d <= today_dt]
+                        if valid_past:
+                            return min(valid_past, key=lambda x: abs((today_dt - x).days))
+                        return cands[0]
+                return today_dt
+
+            # 4. Tarik seluruh data Request Dana yang belum PJB
+            aging_list = []
+            tot_nominal_aging = 0
+            for r in req_r[1:]:
+                r_pad = (r + [""] * 40)[:40]
+                nama_pic = str(r_pad[5]).strip().upper()
+                tiket_sub = str(r_pad[3]).strip().upper()
+                tiket_base = str(r_pad[2]).strip().upper()
+                tiket_cek = tiket_sub if tiket_sub else tiket_base
+
+                # Lewati baris kosong
+                if not nama_pic and not tiket_cek:
+                    continue
+
+                # Lewati jika sudah di-Reject atau sudah selesai PJB
+                if tiket_cek in rejected_tickets or tiket_cek in pjb_done_tickets:
+                    continue
+
+                nom_req_ag = clean_nominal(r_pad[9])
+                tgl_obj = parse_aging_date(r_pad[1], r_pad[0])
+                aging_days = max(0, (today_dt - tgl_obj).days)
+
+                if aging_days == 0:
+                    kat_aging = "🟢 Hari Ini (0 Hari)"
+                elif aging_days <= 3:
+                    kat_aging = f"🟡 1-3 Hari ({aging_days} Hari)"
+                elif aging_days <= 7:
+                    kat_aging = f"🟠 4-7 Hari ({aging_days} Hari)"
+                else:
+                    kat_aging = f"🔴 > 7 Hari ({aging_days} Hari - OVERDUE)"
+
+                status_pencairan = "✅ Sudah Approve" if tiket_cek in approved_tickets else "⏳ Menunggu Approve"
+
+                tot_nominal_aging += nom_req_ag
+                aging_list.append({
+                    "Tanggal Req": tgl_obj.strftime("%d/%m/%Y"),
+                    "Nama PIC": nama_pic,
+                    "Role": str(r_pad[6]).strip() or "-",
+                    "Sub-Tiket": tiket_cek,
+                    "Keperluan": str(r_pad[8]).strip() or "-",
+                    "Kategori": str(r_pad[10]).strip() or "-",
+                    "Nominal": nom_req_ag,
+                    "Aging (Hari)": aging_days,
+                    "Status Aging": kat_aging,
+                    "Status Admin": status_pencairan
+                })
+
+            if aging_list:
+                df_aging = pd.DataFrame(aging_list)
+                df_aging = df_aging.sort_values(by=["Aging (Hari)", "Nominal"], ascending=[False, False])
+
+                # Filter cepat berdasarkan Nama atau Status Aging
+                cf1, cf2 = st.columns(2)
+                with cf1:
+                    list_pic_ag = ["Semua Personel"] + sorted(df_aging["Nama PIC"].unique().tolist())
+                    pilih_pic_ag = st.selectbox("🔍 Filter Nama Personel:", list_pic_ag, key="flt_pic_aging")
+                with cf2:
+                    pilih_st_ag = st.selectbox("⏳ Filter Kategori Aging:", ["Semua Status", "🔴 > 7 Hari (OVERDUE)", "🟠 4-7 Hari", "🟡 1-3 Hari", "🟢 Hari Ini"], key="flt_st_aging")
+
+                if pilih_pic_ag != "Semua Personel":
+                    df_aging = df_aging[df_aging["Nama PIC"] == pilih_pic_ag]
+                if pilih_st_ag == "🔴 > 7 Hari (OVERDUE)":
+                    df_aging = df_aging[df_aging["Aging (Hari)"] > 7]
+                elif pilih_st_ag == "🟠 4-7 Hari":
+                    df_aging = df_aging[(df_aging["Aging (Hari)"] >= 4) & (df_aging["Aging (Hari)"] <= 7)]
+                elif pilih_st_ag == "🟡 1-3 Hari":
+                    df_aging = df_aging[(df_aging["Aging (Hari)"] >= 1) & (df_aging["Aging (Hari)"] <= 3)]
+                elif pilih_st_ag == "🟢 Hari Ini":
+                    df_aging = df_aging[df_aging["Aging (Hari)"] == 0]
+
+                tot_filtered_ag = df_aging["Nominal"].sum()
+                m1, m2, m3 = st.columns(3)
+                m1.metric("🎫 Total Tiket Belum PJB", f"{len(df_aging)} Tiket")
+                m2.metric("💰 Total Dana Menggantung", f"Rp {tot_filtered_ag:,.0f}")
+                m3.metric("🚨 Tiket Overdue (> 7 Hari)", f"{len(df_aging[df_aging['Aging (Hari)'] > 7])} Tiket")
+
+                df_aging_show = df_aging.copy()
+                df_aging_show["Nominal"] = df_aging_show["Nominal"].apply(lambda x: f"Rp {x:,.0f}")
+                st.dataframe(df_aging_show, hide_index=True, use_container_width=True)
+
+                # Tombol Download CSV / Excel untuk tarikan data Aging PJB
+                csv_aging = df_aging.to_csv(index=False).encode("utf-8")
+                st.download_button(
+                    label=f"📥 Tarik / Download Data Aging PJB ({nop_mon})",
+                    data=csv_aging,
+                    file_name=f"Data_Aging_PJB_{nop_mon}_{today_dt.strftime('%d%m%Y')}.csv",
+                    mime="text/csv",
+                    type="primary",
+                    use_container_width=True
+                )
+            else:
+                st.success("🎉 Luar biasa! Seluruh tiket Request Dana di wilayah ini sudah diselesaikan PJB-nya (0 Tiket Gantung).")
 
 # ==========================================
 # PAGE 8: ARAHAN PENGISIAN SIDATA
