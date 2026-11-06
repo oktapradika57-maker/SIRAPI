@@ -1127,7 +1127,80 @@ def load_excel_data():
         
     gc.collect()
     return site_dict, site_list, tim_dict, list_nopol_csv, nik_dict
+SHEET_MASTER_TIM = "Master Tim"
 
+@st.cache_data(ttl=600, max_entries=6, show_spinner=False)
+def fetch_master_tim_sheet(spreadsheet_id):
+    """Membaca tab 'Master Tim' dari Google Sheets (Cache 10 menit agar hemat kuota API)."""
+    try:
+        client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
+        ws = client.worksheet(SHEET_MASTER_TIM)
+        rows = ws.get_all_values()
+        return rows if len(rows) > 1 else []
+    except Exception:
+        return []
+
+def save_master_tim_sheet(spreadsheet_id, list_of_rows):
+    """Menyimpan tabel Master Tim & Nopol secara permanen ke Google Sheets."""
+    for attempt in range(4):
+        try:
+            client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
+            try:
+                ws = client.worksheet(SHEET_MASTER_TIM)
+            except Exception:
+                ws = client.add_worksheet(title=SHEET_MASTER_TIM, rows=300, cols=10)
+            ws.clear()
+            header = [["NAMA", "ROLE", "NOPOL", "NIK", "LATITUDE", "LONGITUDE", "STATUS"]]
+            ws.update("A1", header + list_of_rows, value_input_option="USER_ENTERED")
+            fetch_master_tim_sheet.clear()
+            load_excel_data.clear()
+            return True
+        except Exception as e:
+            if attempt < 3:
+                time.sleep(2.0 * (attempt + 1))
+            else:
+                st.error(f"⚠️ Gagal menyimpan Master Tim ke Google Sheets: {e}")
+                return False
+
+def sync_dynamic_master_data():
+    """Menyinkronkan data dari tab 'Master Tim' Google Sheets ke MASTER_DATA & memori Excel."""
+    site_dict, site_list, tim_dict, list_nopol_csv, nik_dict = load_excel_data()
+    for nop_key, nop_info in MASTER_DATA.items():
+        rows = fetch_master_tim_sheet(nop_info["spreadsheet_id"])
+        if len(rows) > 1:
+            active_names = []
+            for r in rows[1:]:
+                r_pad = (r + [""] * 7)[:7]
+                nm = str(r_pad[0]).strip().upper()
+                rl = str(r_pad[1]).strip()
+                npl = str(r_pad[2]).strip().upper()
+                nik_v = str(r_pad[3]).strip()
+                lat_v = clean_coord(r_pad[4])
+                lon_v = clean_coord(r_pad[5])
+                st_aktif = str(r_pad[6]).strip().upper() or "AKTIF"
+
+                if npl and npl not in ["", "0", "NAN", "NONE", "-"] and npl not in list_nopol_csv:
+                    list_nopol_csv.append(npl)
+
+                if nm and nm not in ["", "NAN", "NONE", "-"]:
+                    if st_aktif == "AKTIF" and nm not in active_names:
+                        active_names.append(nm)
+                    if nm not in tim_dict:
+                        tim_dict[nm] = {"Latitude": 0.0, "Longtitude": 0.0}
+                    if lat_v != 0.0:
+                        tim_dict[nm]["Latitude"] = lat_v
+                    if lon_v != 0.0:
+                        tim_dict[nm]["Longtitude"] = lon_v
+                    if rl and rl not in ["", "-"]:
+                        tim_dict[nm]["ROLE"] = rl
+                    if npl and npl not in ["", "0", "NAN", "NONE", "-"]:
+                        tim_dict[nm]["NOPOL"] = npl
+                    if nik_v and nik_v not in ["", "0", "NAN", "NONE", "-"]:
+                        nik_dict[nm] = nik_v
+            if active_names:
+                MASTER_DATA[nop_key]["names"] = active_names
+
+sync_dynamic_master_data()
 def get_last_indicator(plat_raw, jns, pjb_r):
     if not plat_raw: return 0.0
     plat_clean = str(plat_raw).strip().replace(" ", "").upper()
@@ -1570,9 +1643,15 @@ if st.session_state.page == "🏠 Hub Menu Utama":
             st.rerun()
             
         st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
-        if st.button("🎫 MASTER TIKET PM (Input Data PM Bulanan)", type="secondary", use_container_width=True):
-            st.session_state.page = "🎫 Master Tiket PM"
-            st.rerun()
+        c_top_adm1, c_top_adm2 = st.columns(2)
+        with c_top_adm1:
+            if st.button("🎫 MASTER TIKET PM (Input Data PM Bulanan)", type="secondary", use_container_width=True):
+                st.session_state.page = "🎫 Master Tiket PM"
+                st.rerun()
+        with c_top_adm2:
+            if st.button("👥 MASTER TIM & NOPOL (Tambah/Edit Nama & Plat)", type="primary", use_container_width=True):
+                st.session_state.page = "👥 Master Tim & Nopol"
+                st.rerun()
         
         c_a1, c_a2 = st.columns(2)
         with c_a1:
@@ -1594,6 +1673,129 @@ if st.session_state.page == "🏠 Hub Menu Utama":
                 st.rerun()
 
     st.markdown("<div style='text-align: center; color: #64748B !important; font-size: 0.85rem; margin-top:45px; font-weight:600;'>Created by Okta Pradika<br>KUT SYSTEM - SiRAPI AI V5 Enterprise Edition</div>", unsafe_allow_html=True)# PAGE ADMIN: MASTER TIKET PM
+# ==========================================
+# PAGE ADMIN: MASTER TIM & NOPOL (DINAMIS & PERMANEN)
+# ==========================================
+elif st.session_state.page == "👥 Master Tim & Nopol":
+    st.markdown("<div class='header-card'><h2>👥 MASTER DATA TIM, ROLE & NOPOL</h2><p>Tambah, Edit, atau Nonaktifkan Nama Personel & Nopol Kendaraan/Genset Secara Permanen</p></div>", unsafe_allow_html=True)
+    
+    nop_mt = st.selectbox("📂 Pilih Wilayah Database (NOP):", ["-- Pilih NOP --"] + list(MASTER_DATA.keys()), key="sel_nop_mt")
+    if nop_mt != "-- Pilih NOP --":
+        target_ss = MASTER_DATA[nop_mt]["spreadsheet_id"]
+        site_dict, site_list, tim_dict, list_nopol_csv, nik_dict = load_excel_data()
+        existing_sheet_rows = fetch_master_tim_sheet(target_ss)
+        
+        # Jika tab 'Master Tim' di Google Sheets sudah ada isinya, gunakan data tersebut.
+        # Jika belum pernah disimpan, muat otomatis dari daftar nama & Excel bawaan aplikasi.
+        table_data = []
+        if len(existing_sheet_rows) > 1:
+            for r in existing_sheet_rows[1:]:
+                r_pad = (r + [""] * 7)[:7]
+                table_data.append({
+                    "NAMA": str(r_pad[0]).strip().upper(),
+                    "ROLE": str(r_pad[1]).strip() if str(r_pad[1]).strip() in ["TE", "MBP", "CME", "PM", "Admin", "Koordinator"] else "TE",
+                    "NOPOL": str(r_pad[2]).strip().upper(),
+                    "NIK": str(r_pad[3]).strip(),
+                    "LATITUDE": str(r_pad[4]).strip() or "0",
+                    "LONGITUDE": str(r_pad[5]).strip() or "0",
+                    "STATUS": str(r_pad[6]).strip().upper() if str(r_pad[6]).strip().upper() in ["AKTIF", "NONAKTIF"] else "AKTIF"
+                })
+        else:
+            for nm in MASTER_DATA[nop_mt]["names"]:
+                nm_up = nm.strip().upper()
+                if not nm_up:
+                    continue
+                t_info = tim_dict.get(nm_up, {})
+                role_def = t_info.get("ROLE", "TE")
+                if role_def not in ["TE", "MBP", "CME", "PM", "Admin", "Koordinator"]:
+                    role_def = "TE"
+                table_data.append({
+                    "NAMA": nm_up,
+                    "ROLE": role_def,
+                    "NOPOL": str(t_info.get("NOPOL", "")).strip().upper(),
+                    "NIK": str(nik_dict.get(nm_up, "")).strip(),
+                    "LATITUDE": str(t_info.get("Latitude", "0")),
+                    "LONGITUDE": str(t_info.get("Longtitude", "0")),
+                    "STATUS": "AKTIF"
+                })
+
+        # 1. EXPANDER TAMBAH CEPAT PERSONEL / NOPOL BARU
+        with st.expander("➕ Tambah Cepat Personel / Nopol Baru", expanded=False):
+            with st.form("form_add_personel_cepat"):
+                ca1, ca2, ca3 = st.columns(3)
+                with ca1:
+                    new_nama = st.text_input("Nama Lengkap Personel (Wajib):").strip().upper()
+                    new_role = st.selectbox("Role Jabatan:", ["TE", "MBP", "CME", "PM", "Admin", "Koordinator"])
+                with ca2:
+                    new_nopol = st.text_input("Nopol Mobil/Motor atau ID Genset:").strip().upper()
+                    new_nik = st.text_input("NIK Karyawan (Opsional):").strip()
+                with ca3:
+                    new_lat = st.text_input("Latitude Homebase (Opsional):", value="0").strip()
+                    new_lon = st.text_input("Longitude Homebase (Opsional):", value="0").strip()
+                
+                if st.form_submit_button("➕ Tambahkan & Simpan ke Database", type="primary", use_container_width=True):
+                    if not new_nama and not new_nopol:
+                        st.error("❌ Harap isi minimal Nama Personel atau Nopol!")
+                    else:
+                        nama_isi = new_nama if new_nama else f"UNIT-{new_nopol}"
+                        table_data.append({
+                            "NAMA": nama_isi,
+                            "ROLE": new_role,
+                            "NOPOL": new_nopol,
+                            "NIK": new_nik,
+                            "LATITUDE": new_lat,
+                            "LONGITUDE": new_lon,
+                            "STATUS": "AKTIF"
+                        })
+                        rows_to_save = [[d["NAMA"], d["ROLE"], d["NOPOL"], d["NIK"], d["LATITUDE"], d["LONGITUDE"], d["STATUS"]] for d in table_data]
+                        with st.spinner("Menyimpan data baru ke Google Sheets..."):
+                            if save_master_tim_sheet(target_ss, rows_to_save):
+                                st.success(f"✅ Berhasil menambahkan {nama_isi} ({new_nopol}) ke database {nop_mt}!")
+                                time.sleep(1.5)
+                                st.rerun()
+
+        # 2. TABEL INTERAKTIF EDIT MASSAL
+        st.markdown("<div class='section-title'>✏️ Tabel Edit Langsung (Nama Tim, Role, Nopol, NIK & Koordinat)</div>", unsafe_allow_html=True)
+        st.info("💡 **CARA EDIT:** Klik dua kali pada sel tabel di bawah ini untuk mengubah **Nama**, **Role**, **Nopol**, atau ubah Status menjadi **NONAKTIF** jika personel sudah resign. Anda juga bisa menambah/menghapus baris di tabel, lalu klik tombol **Simpan Perubahan Permanen** di bawah.")
+        
+        df_mt = pd.DataFrame(table_data) if table_data else pd.DataFrame(columns=["NAMA", "ROLE", "NOPOL", "NIK", "LATITUDE", "LONGITUDE", "STATUS"])
+        edited_mt = st.data_editor(
+            df_mt,
+            use_container_width=True,
+            hide_index=True,
+            num_rows="dynamic",
+            column_config={
+                "NAMA": st.column_config.TextColumn("👤 Nama Personel", required=True),
+                "ROLE": st.column_config.SelectboxColumn("💼 Role", options=["TE", "MBP", "CME", "PM", "Admin", "Koordinator"], required=True),
+                "NOPOL": st.column_config.TextColumn("🚗 Nopol / ID Genset"),
+                "NIK": st.column_config.TextColumn("🪪 NIK"),
+                "LATITUDE": st.column_config.TextColumn("📍 Latitude HB"),
+                "LONGITUDE": st.column_config.TextColumn("📍 Longitude HB"),
+                "STATUS": st.column_config.SelectboxColumn("✅ Status", options=["AKTIF", "NONAKTIF"], default="AKTIF", required=True),
+            }
+        )
+        
+        if st.button(f"💾 SIMPAN PERUBAHAN PERMANEN ({nop_mt.upper()})", type="primary", use_container_width=True):
+            clean_rows_save = []
+            for _, r_ed in edited_mt.iterrows():
+                nm_c = str(r_ed.get("NAMA", "")).strip().upper()
+                npl_c = str(r_ed.get("NOPOL", "")).strip().upper()
+                if nm_c in ["", "NAN", "NONE"] and npl_c in ["", "NAN", "NONE"]:
+                    continue
+                clean_rows_save.append([
+                    nm_c,
+                    str(r_ed.get("ROLE", "TE")).strip(),
+                    "" if npl_c in ["NAN", "NONE"] else npl_c,
+                    "" if str(r_ed.get("NIK", "")).strip() in ["nan", "None"] else str(r_ed.get("NIK", "")).strip(),
+                    str(r_ed.get("LATITUDE", "0")).strip(),
+                    str(r_ed.get("LONGITUDE", "0")).strip(),
+                    str(r_ed.get("STATUS", "AKTIF")).strip().upper()
+                ])
+            with st.spinner("Menyimpan seluruh perubahan ke Google Sheets..."):
+                if save_master_tim_sheet(target_ss, clean_rows_save):
+                    st.success(f"🎉 Berhasil! Seluruh data personel & Nopol wilayah {nop_mt} telah diperbarui secara permanen.")
+                    time.sleep(1.5)
+                    st.rerun()
 # ==========================================
 elif st.session_state.page == "🎫 Master Tiket PM":
     st.markdown("<div class='header-card'><h2>🎫 MASTER DATA TIKET PM</h2><p>Push/Upload Daftar Tiket Preventative Maintenance Bulanan ke Database</p></div>", unsafe_allow_html=True)
