@@ -908,20 +908,37 @@ def ui_image_uploader(label, key=None):
     return st.file_uploader(label, type=["jpg", "png", "jpeg"], key=key)
 
 def parse_date(date_str, fallback_ts=""):
+    from datetime import datetime, date
     for raw_val in [date_str, fallback_ts]:
         if raw_val is None or pd.isna(raw_val):
             continue
         s = str(raw_val).strip()
-        if not s:
+        if not s or s.upper() in ["NAN", "NONE", "-", "NAT"]:
             continue
         s_date = s.split(" ")[0].strip()
-        for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%m/%d/%Y", "%d-%m-%Y", "%Y/%m/%d", "%d/%m/%y", "%m/%d/%y"):
+
+        # 1. Prioritas Utama: Format Standar Tanggal/Bulan/Tahun (DD/MM/YYYY) seperti Palangkaraya
+        for fmt_id in ("%d/%m/%Y", "%d-%m-%Y", "%d/%m/%y"):
             try:
-                return datetime.strptime(s_date, fmt).date()
+                d = datetime.strptime(s_date, fmt_id).date()
+                # KOREKSI KHUSUS PANGKALAN BUN:
+                # Jika terbaca Bulan 1 s/d 8 di tahun 2026 (contoh: 11/04/2026 terbaca 11 April 2026),
+                # otomatis balik menjadi 04 November 2026 (Bulan 11).
+                # Tanggal bulan 9, 10, 11, 12 (Sept-Des) TIDAK AKAN DIUBAH SAMA SEKALI.
+                if d.year == 2026 and d.month < 9 and d.day >= 9:
+                    return date(d.year, d.day, d.month)
+                return d
             except ValueError:
                 continue
-    return datetime(1970, 1, 1).date()
 
+        # 2. Cadangan jika angka hari > 12 berada di tengah (contoh: 10/31/2026) atau YYYY-MM-DD
+        for fmt_other in ("%Y-%m-%d", "%m/%d/%Y", "%Y/%m/%d", "%m-%d-%Y", "%m/%d/%y"):
+            try:
+                return datetime.strptime(s_date, fmt_other).date()
+            except ValueError:
+                continue
+
+    return datetime(1970, 1, 1).date()
 def clean_nominal(val):
     if pd.isna(val) or val == "": return 0
     v = str(val).replace('Rp', '').replace(' ', '').strip()
