@@ -1045,10 +1045,17 @@ def parse_indonesian_indicator(raw_val, last_ind=0.0, unit="KM"):
                     return 0.0, "err", f"Penulisan koma pada '{s_orig}' tidak valid (koma ganda)!"
             else:
                 left_p, right_p = parts[0], parts[1]
-                if unit != "Liter" and len(right_p) == 3 and last_ind >= 1000 and abs(float(left_p + right_p) - last_ind) < abs(float(s.replace(",", ".")) - last_ind):
-                    val = float(left_p + right_p)
-                    level = "warn"
-                    note = f"⚠️ **Deteksi Koma Ribuan:** '{s_orig}' dibaca **{format_id_number(val)} {unit}**. Ketik angka polos (`{int(val)}`)."
+                if unit != "Liter" and len(right_p) == 3 and len(left_p) >= 1 and left_p != "0":
+                    as_thousands_c = float(left_p + right_p)
+                    as_decimal_c = float(s.replace(",", "."))
+                    if last_ind > 0 and last_ind < 50 and abs(as_decimal_c - last_ind) < abs(as_thousands_c - last_ind):
+                        val = as_decimal_c
+                        level = "info"
+                        note = f"Koma dibaca desimal: **{format_id_number(val)} {unit}**."
+                    else:
+                        val = as_thousands_c
+                        level = "warn"
+                        note = f"⚠️ **Deteksi Koma Ribuan:** '{s_orig}' dibaca **{format_id_number(val)} {unit}**. Ketik angka polos tanpa koma ribuan (`{int(val)}`)."
                 else:
                     val = float(s.replace(",", "."))
                     if unit != "Liter" and last_ind >= 1000 and val < (last_ind / 100.0):
@@ -1611,61 +1618,481 @@ def sync_dynamic_master_data():
                 MASTER_DATA[nop_key]["names"] = active_names
 
 sync_dynamic_master_data()
-def get_last_indicator(plat_raw, jns, pjb_r):
-    if not plat_raw: return 0.0
-    plat_clean = str(plat_raw).strip().replace(" ", "").upper()
-    if plat_clean in ["", "0", "NAN", "NONE"]: return 0.0
-    for r in reversed(pjb_r[1:]):
-        if len(r) > 12:
-            h_plat = str(r[12]).strip().replace(" ", "").upper()
-            if h_plat == plat_clean and (jns.lower() in str(r[8]).lower()):
-                val = clean_indicator(r[10])
-                if val > 0:
-                    return val
-    return 0.0
+SHEET_MASTER_KMRH = "Master KM RH"
 
-def get_last_indicator_detail(plat_raw, jns, pjb_r, req_r=None):
-    """Mengambil histori KM/RH terakhir beserta timestamp, tiket & PIC untuk Live Kontrol Waktu."""
-    empty_res = {"value": 0.0, "timestamp_str": "-", "dt_obj": None, "source": "-", "tiket": "-", "pic": "-"}
-    if not plat_raw:
+def normalize_plat_key(plat_raw):
+    """Normalisasi Nopol/ID Genset agar 'KH 1234 AB', 'KH-1234-AB', dan 'KH1234AB' terbaca sebagai 1 unit."""
+    s = re.sub(r"[^A-Z0-9]", "", str(plat_raw or "").strip().upper())
+    return "" if s in ["", "0", "NAN", "NONE"] else s
+
+def _detect_unit_tipe_from_cat(kat_str):
+    k = str(kat_str or "").lower()
+    if "genset" in k:
+        return "Genset"
+    if "mobil" in k:
+        return "Mobil"
+    if "motor" in k:
+        return "Motor"
+    return ""
+
+@st.cache_data(ttl=300, max_entries=6, show_spinner=False)
+def fetch_master_kmrh_sheet(spreadsheet_id):
+    """Membaca tab 'Master KM RH' (Patokan / Reset Resmi Admin) dengan cache 5 menit."""
+    try:
+        client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
+        ws = client.worksheet(SHEET_MASTER_KMRH)
+        rows = ws.get_all_values()
+        return rows if len(rows) > 1 else []
+    except Exception:
+        return []
+
+def save_master_kmrh_sheet(spreadsheet_id, list_of_rows):
+    """Menyimpan daftar Patokan / Override KM & RH secara permanen ke tab 'Master KM RH'."""
+    for attempt in range(4):
+        try:
+            client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
+            try:
+                ws = client.worksheet(SHEET_MASTER_KMRH)
+            except Exception:
+                ws = client.add_worksheet(title=SHEET_MASTER_KMRH, rows=300, cols=8)
+            ws.clear()
+            header = [["PLAT_UNIT", "TIPE", "PATOKAN_TERAKHIR", "TANGGAL_SET", "MODE", "CATATAN", "STATUS"]]
+            ws.update("A1", header + list_of_rows, value_input_option="USER_ENTERED")
+            fetch_master_kmrh_sheet.clear()
+            fetch_spreadsheet_data.clear()
+            return True
+        except Exception as e:
+            if attempt < 3:
+                time.sleep(2.0 * (attempt + 1))
+            else:
+                st.error(f"⚠️ Gagal menyimpan Master KM/RH ke Google Sheets: {e}")
+                return False
+
+def get_kmrh_override_map(spreadsheet_id):
+    """Mengembalikan dictionary override aktif keyed by (plat_norm, tipe_lower)."""
+    ov_map = {}
+    if not spreadsheet_id:
+        return ov_map
+    rows = fetch_master_kmrh_sheet(spreadsheet_id)
+    for r in rows[1:]:
+        r_pad = (r + [""] * 7)[:7]
+        p_raw = str(r_pad[0]).strip().upper()
+        p_norm = normalize_plat_key(p_raw)
+        tp = str(r_pad[1]).strip()
+        val = clean_indicator(r_pad[2])
+        tgl_s = str(r_pad[3]).strip()
+        mode_s = str(r_pad[4]).strip().upper() or "AUTO"
+        cat_s = str(r_pad[5]).strip() or "-"
+        st_s = str(r_pad[6]).strip().upper() or "AKTIF"
+        if p_norm and st_s == "AKTIF":
+            ov_map[(p_norm, tp.lower())] = {
+                "plat_display": p_raw,
+                "tipe": tp,
+                "value": float(val),
+                "timestamp_str": tgl_s or "-",
+                "dt_obj": parse_timestamp_dt(tgl_s, tgl_s),
+                "mode": mode_s,
+                "catatan": cat_s
+            }
+    return ov_map
+
+def fetch_raw_sheet_rows(spreadsheet_id, sheet_name):
+    """Membaca baris mentah Google Sheets TANPA membuang baris kosong agar nomor baris (1-indexed) 100% akurat untuk edit."""
+    for attempt in range(4):
+        try:
+            client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
+            ws = client.worksheet(sheet_name)
+            return ws.get_all_values()
+        except Exception:
+            if attempt < 3:
+                time.sleep(2.0 * (attempt + 1))
+            else:
+                return []
+    return []
+
+def batch_update_sheet_cells(spreadsheet_id, sheet_name, updates_list):
+    """
+    Update massal banyak sel dalam 1x API call (hemat kuota Google Sheets + Auto-Retry).
+    updates_list = [{"range": "M15", "values": [["125450"]]}, ...]
+    """
+    if not updates_list:
+        return True
+    for attempt in range(4):
+        try:
+            client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
+            ws = client.worksheet(sheet_name)
+            ws.batch_update(updates_list, value_input_option="USER_ENTERED")
+            fetch_spreadsheet_data.clear()
+            return True
+        except Exception as e:
+            if attempt < 3:
+                time.sleep(2.5 * (attempt + 1))
+            else:
+                st.error(f"⚠️ Gagal menyimpan edit ke sheet '{sheet_name}': {e}")
+                return False
+
+def _build_rejected_ticket_sets(app_r):
+    """Membangun set tiket PJB & Request yang berstatus REJECTED agar tidak meracuni urutan KM/RH."""
+    rej_pjb, rej_req = set(), set()
+    if not app_r or len(app_r) <= 1:
+        return rej_pjb, rej_req
+    pjb_latest, req_latest = {}, {}
+    for a in app_r[1:]:
+        a_pad = (a + [""] * 7)[:7]
+        tk = str(a_pad[2]).strip().upper()
+        jns = str(a_pad[3]).strip()
+        stt = str(a_pad[5]).strip().upper()
+        if not tk:
+            continue
+        if jns == "Verifikasi PJB":
+            pjb_latest[tk] = stt
+        elif jns == "Request Dana":
+            req_latest[tk] = stt
+    rej_pjb = {tk for tk, s in pjb_latest.items() if s == "REJECTED"}
+    rej_req = {tk for tk, s in req_latest.items() if s == "REJECTED"}
+    return rej_pjb, rej_req
+
+def get_last_indicator(plat_raw, jns, pjb_r, app_r=None, spreadsheet_id=None):
+    info = get_last_indicator_detail(plat_raw, jns, pjb_r, req_r=None, app_r=app_r, spreadsheet_id=spreadsheet_id)
+    return float(info.get("value", 0.0))
+
+def get_last_indicator_detail(plat_raw, jns, pjb_r, req_r=None, app_r=None, spreadsheet_id=None):
+    """
+    Pembacaan KM Mobil/Motor & RH Genset Terakhir yang AMAN:
+    1. Normalisasi Nopol/ID Genset (abaikan spasi & tanda hubung).
+    2. Melewati tiket PJB/Request yang berstatus REJECTED (anti keracunan salah ketik).
+    3. Menghormati Patokan/Reset Resmi Admin di sheet 'Master KM RH' (mode AUTO maupun PAKSA/RESET_METER).
+    4. Menyaring angka korup ekstrem (>2.000.000 KM atau >100.000 RH) agar tim tidak pernah terkunci oleh typo masa lalu.
+    """
+    empty_res = {"value": 0.0, "timestamp_str": "-", "dt_obj": None, "source": "-", "tiket": "-", "pic": "-", "override_note": ""}
+    plat_norm = normalize_plat_key(plat_raw)
+    if not plat_norm:
         return empty_res
-    plat_clean = str(plat_raw).strip().replace(" ", "").upper()
-    if plat_clean in ["", "0", "NAN", "NONE"]:
-        return empty_res
-    for r in reversed(pjb_r[1:]):
-        if len(r) > 12:
-            h_plat = str(r[12]).strip().replace(" ", "").upper()
-            if h_plat == plat_clean and (jns.lower() in str(r[8]).lower()):
-                val = clean_indicator(r[10])
-                if val > 0:
-                    ts_s = str(r[0]).strip() if len(r) > 0 else ""
-                    tgl_s = str(r[1]).strip() if len(r) > 1 else ""
-                    return {
-                        "value": val,
-                        "timestamp_str": ts_s or tgl_s or "-",
-                        "dt_obj": parse_timestamp_dt(ts_s, tgl_s),
-                        "source": "PJB Terakhir",
-                        "tiket": str(r[21]).strip() if len(r) > 21 else "-",
-                        "pic": str(r[4]).strip() if len(r) > 4 else "-"
-                    }
-    if req_r:
-        for r in reversed(req_r[1:]):
-            if len(r) > 16:
-                h_plat = str(r[16]).strip().replace(" ", "").upper()
-                if h_plat == plat_clean and (jns.lower() in str(r[10]).lower()):
-                    val = clean_indicator(r[12])
-                    if val > 0:
+
+    jns_low = str(jns or "").strip().lower()
+    max_sane = 100000.0 if jns_low == "genset" else 2000000.0
+    rej_pjb, rej_req = _build_rejected_ticket_sets(app_r)
+
+    # 1. Cek apakah ada Patokan/Override Admin aktif di 'Master KM RH'
+    ov_rec = None
+    if spreadsheet_id:
+        ov_map = get_kmrh_override_map(spreadsheet_id)
+        ov_rec = ov_map.get((plat_norm, jns_low))
+
+    # Jika mode PAKSA, langsung gunakan patokan Admin
+    if ov_rec and ov_rec.get("mode") == "PAKSA":
+        return {
+            "value": ov_rec["value"],
+            "timestamp_str": ov_rec["timestamp_str"],
+            "dt_obj": ov_rec["dt_obj"],
+            "source": f"Patokan Admin ({ov_rec['catatan']})",
+            "tiket": "ADMIN-OVERRIDE",
+            "pic": "Admin",
+            "override_note": ov_rec["catatan"]
+        }
+
+    # 2. Cari histori valid terbaru di Form PJB (prioritas utama), lalu cadangan di Form Request dana
+    candidates = []
+    if pjb_r and len(pjb_r) > 1:
+        for row_i, r in enumerate(pjb_r[1:], start=2):
+            if len(r) > 12:
+                h_plat = normalize_plat_key(r[12])
+                kat_p = str(r[8]).lower() if len(r) > 8 else ""
+                if h_plat == plat_norm and (jns_low in kat_p):
+                    tk = str(r[21]).strip().upper() if len(r) > 21 else ""
+                    if tk and tk in rej_pjb:
+                        continue
+                    val = clean_indicator(r[10])
+                    if 0 < val <= max_sane:
                         ts_s = str(r[0]).strip() if len(r) > 0 else ""
                         tgl_s = str(r[1]).strip() if len(r) > 1 else ""
-                        return {
+                        dt_o = parse_timestamp_dt(ts_s, tgl_s)
+                        candidates.append({
+                            "prio": 2,
+                            "dt_sort": dt_o or datetime(1970, 1, 1),
+                            "row_i": row_i,
                             "value": val,
                             "timestamp_str": ts_s or tgl_s or "-",
-                            "dt_obj": parse_timestamp_dt(ts_s, tgl_s),
+                            "dt_obj": dt_o,
+                            "source": "PJB Terakhir",
+                            "tiket": tk or "-",
+                            "pic": str(r[4]).strip() if len(r) > 4 else "-",
+                            "override_note": ""
+                        })
+
+    if req_r and len(req_r) > 1:
+        for row_i, r in enumerate(req_r[1:], start=2):
+            if len(r) > 16:
+                h_plat = normalize_plat_key(r[16])
+                kat_r = str(r[10]).lower() if len(r) > 10 else ""
+                if h_plat == plat_norm and (jns_low in kat_r):
+                    tk = str(r[3]).strip().upper() if len(r) > 3 else ""
+                    if tk and tk in rej_req:
+                        continue
+                    val = clean_indicator(r[12])
+                    if 0 < val <= max_sane:
+                        ts_s = str(r[0]).strip() if len(r) > 0 else ""
+                        tgl_s = str(r[1]).strip() if len(r) > 1 else ""
+                        dt_o = parse_timestamp_dt(ts_s, tgl_s)
+                        candidates.append({
+                            "prio": 1,
+                            "dt_sort": dt_o or datetime(1970, 1, 1),
+                            "row_i": row_i,
+                            "value": val,
+                            "timestamp_str": ts_s or tgl_s or "-",
+                            "dt_obj": dt_o,
                             "source": "Request Terakhir",
-                            "tiket": str(r[3]).strip() if len(r) > 3 else "-",
-                            "pic": str(r[5]).strip() if len(r) > 5 else "-"
-                        }
-    return empty_res
+                            "tiket": tk or "-",
+                            "pic": str(r[5]).strip() if len(r) > 5 else "-",
+                            "override_note": ""
+                        })
+
+    # Jika ada Patokan Admin (AUTO / RESET_METER), bandingkan waktunya dengan histori PJB/Request
+    if ov_rec:
+        ov_dt = ov_rec.get("dt_obj") or datetime(1970, 1, 1)
+        # Hanya ambil transaksi PJB/Request yang terjadi SETELAH Admin menetapkan patokan
+        newer_cands = [c for c in candidates if c["dt_sort"] > ov_dt]
+        if newer_cands:
+            newer_cands.sort(key=lambda x: (x["dt_sort"], x["prio"], x["row_i"]))
+            best = newer_cands[-1]
+            return {k: best[k] for k in ["value", "timestamp_str", "dt_obj", "source", "tiket", "pic", "override_note"]}
+        return {
+            "value": ov_rec["value"],
+            "timestamp_str": ov_rec["timestamp_str"],
+            "dt_obj": ov_rec["dt_obj"],
+            "source": f"Patokan Admin ({ov_rec['mode']})",
+            "tiket": "ADMIN-PATOKAN",
+            "pic": "Admin",
+            "override_note": ov_rec["catatan"]
+        }
+
+    if not candidates:
+        return empty_res
+
+    # Utamakan PJB terbaru; jika ada Request yang lebih baru dari PJB terakhir, pakai yang paling kronologis terbaru
+    pjb_cands = [c for c in candidates if c["prio"] == 2]
+    if pjb_cands:
+        pjb_cands.sort(key=lambda x: (x["dt_sort"], x["row_i"]))
+        best_pjb = pjb_cands[-1]
+        # Cek apakah ada Request valid yang lebih baru dari PJB terakhir dengan nilai >= PJB terakhir
+        req_newer = [c for c in candidates if c["prio"] == 1 and c["dt_sort"] > best_pjb["dt_sort"] and c["value"] >= best_pjb["value"]]
+        if req_newer:
+            req_newer.sort(key=lambda x: (x["dt_sort"], x["row_i"]))
+            best = req_newer[-1]
+        else:
+            best = best_pjb
+        return {k: best[k] for k in ["value", "timestamp_str", "dt_obj", "source", "tiket", "pic", "override_note"]}
+
+    candidates.sort(key=lambda x: (x["dt_sort"], x["row_i"]))
+    best = candidates[-1]
+    return {k: best[k] for k in ["value", "timestamp_str", "dt_obj", "source", "tiket", "pic", "override_note"]}
+
+def build_unit_full_history(req_r, pjb_r, app_r=None, spreadsheet_id=None):
+    """
+    Membangun historikal lengkap kronologis KM (Mobil/Motor) & RH (Genset MBP)
+    untuk setiap nomor plat / ID genset beserta deteksi urutan (Lurus / Mundur / Lonjakan).
+    """
+    rej_pjb, rej_req = _build_rejected_ticket_sets(app_r)
+    ov_map = get_kmrh_override_map(spreadsheet_id) if spreadsheet_id else {}
+
+    req_by_tiket = {}
+    unit_records = defaultdict(list)
+    unit_meta = {}
+
+    for idx_r, r in enumerate(req_r[1:], start=2):
+        r_pad = (r + [""] * 25)[:25]
+        tp = _detect_unit_tipe_from_cat(r_pad[10])
+        p_raw = re.sub(r'\s+', ' ', str(r_pad[16]).strip().upper())
+        p_norm = normalize_plat_key(p_raw)
+        if not tp or not p_norm:
+            continue
+        tk = str(r_pad[3]).strip().upper()
+        val_ind = clean_indicator(r_pad[12])
+        dt_o = parse_timestamp_dt(r_pad[0], r_pad[1])
+        tgl_d = parse_date(r_pad[1], r_pad[0])
+        tgl_str = tgl_d.strftime("%d/%m/%Y") if tgl_d != datetime(1970, 1, 1).date() else str(r_pad[1]).strip()
+        is_rej = tk in rej_req
+
+        req_by_tiket[tk] = {"km_awal": val_ind, "tgl": tgl_str, "plat": p_raw}
+        ukey = (p_norm, tp)
+        if ukey not in unit_meta:
+            unit_meta[ukey] = {"plat": p_raw, "tipe": tp, "unit": "RH" if tp == "Genset" else "KM"}
+        unit_records[ukey].append({
+            "dt_sort": dt_o or datetime(1970, 1, 1),
+            "order_type": 0,
+            "row_idx": idx_r,
+            "Tanggal": tgl_str,
+            "Timestamp": str(r_pad[0]).strip() or tgl_str,
+            "Sumber": "📝 Request",
+            "No Tiket": tk,
+            "Nama PIC": str(r_pad[5]).strip(),
+            "Kategori": str(r_pad[10]).strip(),
+            "KM/RH Awal": val_ind,
+            "KM/RH Akhir": None,
+            "Nilai Utama": val_ind,
+            "Trip/Run": 0.0,
+            "Liter": 0.0,
+            "Nominal": clean_nominal(r_pad[9]),
+            "Rejected": is_rej
+        })
+
+    for idx_p, p in enumerate(pjb_r[1:], start=2):
+        p_pad = (p + [""] * 40)[:40]
+        tp = _detect_unit_tipe_from_cat(p_pad[8])
+        p_raw = re.sub(r'\s+', ' ', str(p_pad[12]).strip().upper())
+        p_norm = normalize_plat_key(p_raw)
+        if not tp or not p_norm:
+            continue
+        tk = str(p_pad[21]).strip().upper()
+        val_akhir = clean_indicator(p_pad[10])
+        val_awal = req_by_tiket.get(tk, {}).get("km_awal", 0.0)
+        trip_c = clean_indicator(p_pad[24])
+        if trip_c > 0:
+            trip_v = trip_c
+        elif val_akhir > val_awal and val_awal > 0:
+            trip_v = round(val_akhir - val_awal, 2)
+        else:
+            trip_v = 0.0
+        lit_v, _, _ = parse_indonesian_indicator(p_pad[22], 0.0, "Liter") if str(p_pad[22]).strip() else (0.0, "ok", "")
+        dt_o = parse_timestamp_dt(p_pad[0], p_pad[1])
+        tgl_d = parse_date(p_pad[1], p_pad[0])
+        tgl_str = tgl_d.strftime("%d/%m/%Y") if tgl_d != datetime(1970, 1, 1).date() else str(p_pad[1]).strip()
+        is_rej = tk in rej_pjb
+
+        ukey = (p_norm, tp)
+        if ukey not in unit_meta:
+            unit_meta[ukey] = {"plat": p_raw, "tipe": tp, "unit": "RH" if tp == "Genset" else "KM"}
+        unit_records[ukey].append({
+            "dt_sort": dt_o or datetime(1970, 1, 1),
+            "order_type": 1,
+            "row_idx": idx_p,
+            "Tanggal": tgl_str,
+            "Timestamp": str(p_pad[0]).strip() or tgl_str,
+            "Sumber": "✅ PJB",
+            "No Tiket": tk,
+            "Nama PIC": str(p_pad[4]).strip(),
+            "Kategori": str(p_pad[8]).strip(),
+            "KM/RH Awal": val_awal if val_awal > 0 else None,
+            "KM/RH Akhir": val_akhir,
+            "Nilai Utama": val_akhir,
+            "Trip/Run": round(trip_v, 2),
+            "Liter": round(lit_v, 2),
+            "Nominal": clean_nominal(p_pad[11]),
+            "Rejected": is_rej
+        })
+
+    # Tambahkan unit yang hanya ada di Master KM RH
+    for (p_norm, tp_low), ov in ov_map.items():
+        tp_cap = ov["tipe"]
+        ukey = (p_norm, tp_cap)
+        if ukey not in unit_meta:
+            unit_meta[ukey] = {"plat": ov["plat_display"], "tipe": tp_cap, "unit": "RH" if tp_cap == "Genset" else "KM"}
+
+    summary_units = []
+    history_by_unit = {}
+
+    for ukey, meta in sorted(unit_meta.items(), key=lambda kv: (kv[1]["tipe"], kv[1]["plat"])):
+        p_norm, tp = ukey
+        unit_lbl = meta["unit"]
+        recs = sorted(unit_records.get(ukey, []), key=lambda x: (x["dt_sort"], x["order_type"], x["row_idx"]))
+
+        prev_valid = 0.0
+        anom_cnt = 0
+        tot_trip = 0.0
+        tot_liter = 0.0
+        tot_dana = 0
+        last_val = 0.0
+        last_tgl = "-"
+        last_pic = "-"
+        pjb_cnt = 0
+        req_cnt = 0
+
+        enriched = []
+        for rec in recs:
+            v = float(rec["Nilai Utama"] or 0.0)
+            if rec["Sumber"] == "✅ PJB":
+                pjb_cnt += 1
+            else:
+                req_cnt += 1
+
+            if rec["Rejected"]:
+                st_urut = "❌ REJECTED (Diabaikan)"
+                sel_prev = 0.0
+            else:
+                if rec["Sumber"] == "✅ PJB":
+                    tot_trip = round(tot_trip + max(0.0, rec["Trip/Run"]), 2)
+                    tot_liter = round(tot_liter + max(0.0, rec["Liter"]), 2)
+                    tot_dana += rec["Nominal"]
+                if v <= 0:
+                    st_urut = "⚠️ Kosong / 0"
+                    sel_prev = 0.0
+                    anom_cnt += 1
+                elif prev_valid > 0 and v < prev_valid:
+                    sel_prev = round(v - prev_valid, 2)
+                    st_urut = f"🔴 MUNDUR ({sel_prev:+g} {unit_lbl})"
+                    anom_cnt += 1
+                elif prev_valid >= 100 and v > prev_valid * 5 and (v - prev_valid) > (500 if tp == "Genset" else 5000):
+                    sel_prev = round(v - prev_valid, 2)
+                    st_urut = f"🚨 LONJAKAN (+{format_id_number(sel_prev)} {unit_lbl})"
+                    anom_cnt += 1
+                else:
+                    sel_prev = round(v - prev_valid, 2) if prev_valid > 0 else 0.0
+                    st_urut = "✅ Lurus"
+                    prev_valid = v
+                    last_val = v
+                    last_tgl = rec["Tanggal"]
+                    last_pic = rec["Nama PIC"]
+
+            enriched.append({
+                "Tanggal": rec["Tanggal"],
+                "Waktu": rec["Timestamp"],
+                "Sumber": rec["Sumber"],
+                "No Tiket": rec["No Tiket"],
+                "Nama PIC": rec["Nama PIC"],
+                "Kategori": rec["Kategori"],
+                f"{unit_lbl} Awal": rec["KM/RH Awal"],
+                f"{unit_lbl} Akhir": rec["KM/RH Akhir"],
+                f"Angka {unit_lbl}": v,
+                f"Selisih Urutan ({unit_lbl})": sel_prev,
+                f"Trip/Run PJB ({unit_lbl})": rec["Trip/Run"],
+                "BBM (Liter)": rec["Liter"],
+                "Nominal (Rp)": rec["Nominal"],
+                "Status Urutan": st_urut
+            })
+
+        ov_r = ov_map.get((p_norm, tp.lower()))
+        ov_txt = f"{format_id_number(ov_r['value'])} {unit_lbl} [{ov_r['mode']}]" if ov_r else "-"
+        if ov_r and last_val == 0:
+            last_val = ov_r["value"]
+            last_tgl = ov_r["timestamp_str"]
+
+        if tp == "Genset":
+            eff_txt = f"{(tot_liter / tot_trip):.2f} L/RH" if tot_trip > 0 and tot_liter > 0 else "-"
+        else:
+            eff_txt = f"{(tot_trip / tot_liter):.2f} KM/L" if tot_liter > 0 and tot_trip > 0 else "-"
+
+        status_unit = "🟢 Lurus / Aman" if anom_cnt == 0 else f"🔴 {anom_cnt} Anomali Urutan"
+
+        summary_units.append({
+            "unit_key": ukey,
+            "Nopol / ID Unit": meta["plat"],
+            "Tipe": tp,
+            "PIC Terakhir": last_pic,
+            "Tgl Terakhir": last_tgl,
+            "KM/RH Terakhir": last_val,
+            "Satuan": unit_lbl,
+            "Req / PJB": f"{req_cnt} / {pjb_cnt}",
+            "Total Akumulasi Trip/Run": tot_trip,
+            "Total Liter": tot_liter,
+            "Total Dana PJB": tot_dana,
+            "Efisiensi": eff_txt,
+            "Patokan Admin": ov_txt,
+            "Anomali": anom_cnt,
+            "Status Urutan": status_unit
+        })
+        history_by_unit[ukey] = enriched
+
+    return summary_units, history_by_unit
 
 def build_nopol_distance_summary(pjb_r, req_r):
     """Membangun rekapitulasi jarak & odometer/RH terakhir per Nopol/ID Unit serta KM awal per tiket."""
@@ -2376,6 +2803,9 @@ if st.session_state.page == "🏠 Hub Menu Utama":
             if st.button("👀 REQ & PJB MONITORING (Pantau Tim & Warning)", type="primary", use_container_width=True):
                 st.session_state.page = "👀 Request & PJB Monitoring"
                 st.rerun()
+            if st.button("🔧 KONTROL, EDIT & HISTORI KM/RH (Mobil & Genset)", type="secondary", use_container_width=True):
+                st.session_state.page = "🔧 Kontrol & Edit KM/RH"
+                st.rerun()
         with c_a2:
             if st.button("🏦 MANAJEMEN KAS (Distribusi Dana)", type="secondary", use_container_width=True):
                 st.session_state.page = "🏦 Manajemen Kas & Distribusi"
@@ -2389,6 +2819,410 @@ if st.session_state.page == "🏠 Hub Menu Utama":
 
     st.markdown("<div style='text-align: center; color: #64748B !important; font-size: 0.85rem; margin-top:45px; font-weight:600;'>Created by Okta Pradika<br>KUT SYSTEM - SiRAPI AI V5 Enterprise Edition</div>", unsafe_allow_html=True)# PAGE ADMIN: MASTER TIKET PM
 # ==========================================
+# ==========================================
+# PAGE ADMIN: KONTROL, EDIT & HISTORI KM MOBIL / MOTOR & RH GENSET MBP
+# ==========================================
+elif st.session_state.page == "🔧 Kontrol & Edit KM/RH":
+    st.markdown("<div class='header-card'><h2>🔧 KONTROL, EDIT & HISTORI KM / RH UNIT</h2><p>Audit Historikal Per Plat & Genset MBP, Edit & Luruskan Urutan KM/RH ke Google Sheets, dan Set Patokan Resmi</p></div>", unsafe_allow_html=True)
+
+    c_kn1, c_kn2 = st.columns([3, 1])
+    with c_kn1:
+        nop_kmrh = st.selectbox("📂 Pilih Wilayah Database (NOP):", ["-- Pilih NOP --"] + list(MASTER_DATA.keys()), key="sel_nop_kmrh")
+    with c_kn2:
+        st.markdown("<div style='height: 26px;'></div>", unsafe_allow_html=True)
+        if st.button("🔄 Refresh Data Live", type="secondary", use_container_width=True, key="btn_ref_kmrh"):
+            fetch_spreadsheet_data.clear()
+            fetch_master_kmrh_sheet.clear()
+            st.rerun()
+
+    if nop_kmrh != "-- Pilih NOP --":
+        target_ss = MASTER_DATA[nop_kmrh]["spreadsheet_id"]
+        with st.spinner("Menarik database KM/RH & riwayat unit dari server..."):
+            data_all = fetch_spreadsheet_data(target_ss)
+            req_r = data_all.get(SHEET_REQUEST, [])
+            pjb_r = data_all.get(SHEET_PJB, [])
+            app_r = data_all.get(SHEET_APP, [])
+            summary_units, history_by_unit = build_unit_full_history(req_r, pjb_r, app_r=app_r, spreadsheet_id=target_ss)
+
+        tab_hist, tab_edit, tab_patokan = st.tabs([
+            "📊 1. Historikal KM & RH per Plat / Genset",
+            "✏️ 2. Edit & Luruskan Urutan KM/RH (Live Sheets)",
+            "🎯 3. Set / Reset Patokan KM & RH (Buka Kunci Req)"
+        ])
+
+        # ------------------------------------------------------------------
+        # TAB 1: HISTORIKAL KM & RH SETIAP PLAT MOBIL/MOTOR & GENSET MBP
+        # ------------------------------------------------------------------
+        with tab_hist:
+            st.markdown("#### 📋 Rekapitulasi Seluruh Nomor Plat Mobil/Motor & ID Genset MBP")
+            if summary_units:
+                df_units = pd.DataFrame(summary_units)
+                cf_t1, cf_t2 = st.columns(2)
+                with cf_t1:
+                    flt_tipe_u = st.selectbox("🔍 Filter Tipe Unit:", ["Semua Tipe", "Mobil", "Genset", "Motor"], key="flt_tipe_kmrh")
+                with cf_t2:
+                    flt_st_u = st.selectbox("🛡️ Filter Status Urutan:", ["Semua Status", "🔴 Hanya Yang Ada Anomali Urutan", "🟢 Lurus / Aman"], key="flt_st_kmrh")
+
+                df_u_flt = df_units.copy()
+                if flt_tipe_u != "Semua Tipe":
+                    df_u_flt = df_u_flt[df_u_flt["Tipe"] == flt_tipe_u]
+                if "Anomali" in flt_st_u:
+                    df_u_flt = df_u_flt[df_u_flt["Anomali"] > 0]
+                elif "Lurus" in flt_st_u:
+                    df_u_flt = df_u_flt[df_u_flt["Anomali"] == 0]
+
+                m1, m2, m3, m4 = st.columns(4)
+                m1.metric("🚗 Total Unit Terdata", f"{len(df_u_flt)} Unit")
+                m2.metric("🟢 Urutan Lurus", f"{len(df_u_flt[df_u_flt['Anomali'] == 0])} Unit")
+                m3.metric("🔴 Perlu Diluruskan", f"{len(df_u_flt[df_u_flt['Anomali'] > 0])} Unit")
+                m4.metric("🎯 Pakai Patokan Admin", f"{len(df_u_flt[df_u_flt['Patokan Admin'] != '-'])} Unit")
+
+                df_u_show = df_u_flt.drop(columns=["unit_key", "Anomali"], errors="ignore").copy()
+                df_u_show["KM/RH Terakhir"] = df_u_show.apply(lambda r: f"{format_id_number(r['KM/RH Terakhir'])} {r['Satuan']}", axis=1)
+                df_u_show["Total Akumulasi Trip/Run"] = df_u_show.apply(lambda r: f"{format_id_number(r['Total Akumulasi Trip/Run'])} {r['Satuan']}", axis=1)
+                df_u_show["Total Liter"] = df_u_show["Total Liter"].apply(lambda x: f"{format_id_number(x)} L")
+                df_u_show["Total Dana PJB"] = df_u_show["Total Dana PJB"].apply(lambda x: f"Rp {x:,.0f}")
+                st.dataframe(df_u_show.drop(columns=["Satuan"], errors="ignore"), hide_index=True, use_container_width=True)
+
+                st.download_button(
+                    "📥 Download Rekap Seluruh Unit KM/RH (CSV)",
+                    data=df_u_flt.drop(columns=["unit_key"], errors="ignore").to_csv(index=False).encode("utf-8"),
+                    file_name=f"Rekap_KMRH_Unit_{nop_kmrh}_{get_now_wib().strftime('%d%m%Y')}.csv",
+                    mime="text/csv"
+                )
+
+                st.markdown("<hr>", unsafe_allow_html=True)
+                st.markdown("#### 🔎 Detail Historikal Kronologis per Nopol / Genset MBP")
+                unit_options_map = {}
+                for _, ur in df_u_flt.iterrows():
+                    badge_u = "🔴" if ur["Anomali"] > 0 else "🟢"
+                    lbl_u = f"{badge_u} [{ur['Tipe'].upper()}] {ur['Nopol / ID Unit']} — Terakhir: {format_id_number(ur['KM/RH Terakhir'])} {ur['Satuan']}"
+                    unit_options_map[lbl_u] = (ur["unit_key"], ur["Nopol / ID Unit"], ur["Tipe"], ur["Satuan"])
+
+                if unit_options_map:
+                    pick_unit_lbl = st.selectbox("Pilih Nomor Plat / ID Genset untuk melihat riwayat lengkap:", list(unit_options_map.keys()), key="sel_unit_hist")
+                    sel_ukey, sel_plat_disp, sel_tipe_disp, sel_satuan = unit_options_map[pick_unit_lbl]
+                    hist_rows = history_by_unit.get(sel_ukey, [])
+                    if hist_rows:
+                        df_h = pd.DataFrame(hist_rows)
+                        df_h_view = df_h.copy()
+                        df_h_view["Nominal (Rp)"] = df_h_view["Nominal (Rp)"].apply(lambda x: f"Rp {x:,.0f}")
+                        st.dataframe(df_h_view, hide_index=True, use_container_width=True)
+
+                        # Grafik Tren KM / RH
+                        col_angka = f"Angka {sel_satuan}"
+                        df_chart = df_h[(~df_h["Status Urutan"].str.contains("REJECTED")) & (df_h[col_angka] > 0)].copy()
+                        if len(df_chart) >= 2:
+                            df_chart["Urutan"] = [f"{i+1}. {t}" for i, t in enumerate(df_chart["Tanggal"])]
+                            st.markdown(f"##### 📈 Grafik Tren {sel_satuan} — {sel_plat_disp} ({sel_tipe_disp})")
+                            st.line_chart(df_chart.set_index("Urutan")[col_angka], use_container_width=True)
+
+                        st.download_button(
+                            f"📥 Export Historikal {sel_plat_disp} (CSV)",
+                            data=df_h.to_csv(index=False).encode("utf-8"),
+                            file_name=f"Histori_{sel_tipe_disp}_{normalize_plat_key(sel_plat_disp)}.csv",
+                            mime="text/csv",
+                            key="dl_hist_single"
+                        )
+                    else:
+                        st.info("Belum ada catatan transaksi Request/PJB untuk unit ini (baru terdaftar di Patokan Admin).")
+            else:
+                st.info("Belum ada data kendaraan atau genset yang tercatat di wilayah ini.")
+
+        # ------------------------------------------------------------------
+        # TAB 2: EDIT & LURUSKAN URUTAN KM / RH LANGSUNG KE GOOGLE SHEETS
+        # ------------------------------------------------------------------
+        with tab_edit:
+            st.markdown("#### ✏️ Edit Langsung KM Mobil/Motor & RH Genset (Luruskan Urutan di Google Sheets)")
+            st.info(
+                "💡 **CARA MELURUSKAN URUTAN KM/RH:** Pilih Nomor Plat / ID Genset yang datanya salah ketik (mundur/lonjakan), "
+                "ubah angkanya pada kolom **Edit Baru** (ketik angka polos tanpa titik ribuan, contoh: `125450` atau `1450,5`), "
+                "lalu klik **💾 Simpan Koreksi**. Sistem otomatis meluruskan Google Sheets & menghitung ulang `Total Trip/RH`, sehingga tim langsung bisa Request Dana!"
+            )
+
+            all_unit_choices = sorted(list(set([f"[{u['Tipe'].upper()}] {u['Nopol / ID Unit']}" for u in summary_units])))
+            if not all_unit_choices:
+                st.warning("Belum ada unit yang dapat diedit.")
+            else:
+                c_ed1, c_ed2 = st.columns([3, 1])
+                with c_ed1:
+                    pilih_unit_edit = st.selectbox("🎯 Pilih Plat Mobil/Motor atau ID Genset yang akan diedit:", all_unit_choices, key="sel_unit_edit")
+                with c_ed2:
+                    st.markdown("<div style='height: 26px;'></div>", unsafe_allow_html=True)
+                    btn_load_raw = st.button("📥 Muat Baris Asli Sheets", type="primary", use_container_width=True, key="btn_load_raw_kmrh")
+
+                # Parse pilihan [TIPE] PLAT
+                m_ed = re.match(r"^\[(.*?)\]\s+(.*)$", pilih_unit_edit)
+                ed_tipe = m_ed.group(1).title() if m_ed else "Mobil"
+                ed_plat_disp = m_ed.group(2).strip() if m_ed else pilih_unit_edit
+                ed_plat_norm = normalize_plat_key(ed_plat_disp)
+                ed_unit_lbl = "RH" if ed_tipe == "Genset" else "KM"
+
+                if btn_load_raw or st.session_state.get("_kmrh_loaded_key") == f"{nop_kmrh}|{pilih_unit_edit}":
+                    if btn_load_raw:
+                        with st.spinner("Mengambil nomor baris persis dari Google Sheets..."):
+                            st.session_state["_kmrh_raw_req"] = fetch_raw_sheet_rows(target_ss, SHEET_REQUEST)
+                            st.session_state["_kmrh_raw_pjb"] = fetch_raw_sheet_rows(target_ss, SHEET_PJB)
+                            st.session_state["_kmrh_loaded_key"] = f"{nop_kmrh}|{pilih_unit_edit}"
+
+                    raw_req_rows = st.session_state.get("_kmrh_raw_req", [])
+                    raw_pjb_rows = st.session_state.get("_kmrh_raw_pjb", [])
+
+                    req_edit_list = []
+                    req_km_map_live = {}
+                    for sheet_row_no, r in enumerate(raw_req_rows[1:], start=2):
+                        r_pad = (r + [""] * 25)[:25]
+                        tp_r = _detect_unit_tipe_from_cat(r_pad[10])
+                        if tp_r.lower() == ed_tipe.lower() and normalize_plat_key(r_pad[16]) == ed_plat_norm:
+                            tk_r = str(r_pad[3]).strip().upper()
+                            v_old = clean_indicator(r_pad[12])
+                            req_km_map_live[tk_r] = v_old
+                            req_edit_list.append({
+                                "Baris Sheet": sheet_row_no,
+                                "Tanggal": str(r_pad[1]).strip() or str(r_pad[0]).split(" ")[0],
+                                "Sub-Tiket": tk_r,
+                                "Nama PIC": str(r_pad[5]).strip(),
+                                "Kategori": str(r_pad[10]).strip(),
+                                "Plat / ID Unit": str(r_pad[16]).strip().upper(),
+                                f"{ed_unit_lbl} Awal (Lama)": str(r_pad[12]).strip(),
+                                f"{ed_unit_lbl} Awal (Edit Baru)": str(int(v_old)) if v_old == int(v_old) else str(v_old),
+                            })
+
+                    pjb_edit_list = []
+                    for sheet_row_no, p in enumerate(raw_pjb_rows[1:], start=2):
+                        p_pad = (p + [""] * 40)[:40]
+                        tp_p = _detect_unit_tipe_from_cat(p_pad[8])
+                        if tp_p.lower() == ed_tipe.lower() and normalize_plat_key(p_pad[12]) == ed_plat_norm:
+                            tk_p = str(p_pad[21]).strip().upper()
+                            v_old_p = clean_indicator(p_pad[10])
+                            v_awal_ref = req_km_map_live.get(tk_p, 0.0)
+                            pjb_edit_list.append({
+                                "Baris Sheet": sheet_row_no,
+                                "Tanggal": str(p_pad[1]).strip() or str(p_pad[0]).split(" ")[0],
+                                "Sub-Tiket": tk_p,
+                                "Nama PIC": str(p_pad[4]).strip(),
+                                "Kategori": str(p_pad[8]).strip(),
+                                "Plat / ID Unit": str(p_pad[12]).strip().upper(),
+                                f"{ed_unit_lbl} Awal (Ref)": v_awal_ref,
+                                f"{ed_unit_lbl} Akhir (Lama)": str(p_pad[10]).strip(),
+                                f"{ed_unit_lbl} Akhir (Edit Baru)": str(int(v_old_p)) if v_old_p == int(v_old_p) else str(v_old_p),
+                                f"Trip/Run Lama ({ed_unit_lbl})": str(p_pad[24]).strip(),
+                            })
+
+                    st.markdown(f"##### 📝 A. Edit Baris `Form Request dana` ({ed_unit_lbl} Awal — Kolom M & Plat Kolom Q)")
+                    if req_edit_list:
+                        df_re = pd.DataFrame(req_edit_list)
+                        edited_req_km = st.data_editor(
+                            df_re,
+                            hide_index=True,
+                            use_container_width=True,
+                            disabled=["Baris Sheet", "Tanggal", "Sub-Tiket", "Nama PIC", "Kategori", f"{ed_unit_lbl} Awal (Lama)"],
+                            key=f"ed_req_km_{ed_plat_norm}_{ed_tipe}"
+                        )
+                    else:
+                        edited_req_km = pd.DataFrame()
+                        st.info("Tidak ada baris Request Dana untuk unit ini.")
+
+                    st.markdown(f"##### ✅ B. Edit Baris `Form PJB` ({ed_unit_lbl} Akhir — Kolom K, Plat Kolom M & Auto-Hitung Trip Kolom Y)")
+                    if pjb_edit_list:
+                        df_pe = pd.DataFrame(pjb_edit_list)
+                        edited_pjb_km = st.data_editor(
+                            df_pe,
+                            hide_index=True,
+                            use_container_width=True,
+                            disabled=["Baris Sheet", "Tanggal", "Sub-Tiket", "Nama PIC", "Kategori", f"{ed_unit_lbl} Awal (Ref)", f"{ed_unit_lbl} Akhir (Lama)", f"Trip/Run Lama ({ed_unit_lbl})"],
+                            key=f"ed_pjb_km_{ed_plat_norm}_{ed_tipe}"
+                        )
+                    else:
+                        edited_pjb_km = pd.DataFrame()
+                        st.info("Tidak ada baris PJB untuk unit ini.")
+
+                    if not edited_req_km.empty or not edited_pjb_km.empty:
+                        if st.button(f"💾 SIMPAN KOREKSI & LURUSKAN URUTAN {ed_plat_disp} KE GOOGLE SHEETS", type="primary", use_container_width=True, key="btn_save_kmrh_edits"):
+                            req_updates = []
+                            pjb_updates = []
+                            parse_errs = []
+                            updated_req_awal_map = dict(req_km_map_live)
+
+                            # 1. Kumpulkan perubahan Request Dana
+                            if not edited_req_km.empty:
+                                col_new_r = f"{ed_unit_lbl} Awal (Edit Baru)"
+                                col_old_r = f"{ed_unit_lbl} Awal (Lama)"
+                                for idx_i, row_e in edited_req_km.iterrows():
+                                    r_no = int(row_e["Baris Sheet"])
+                                    tk_e = str(row_e["Sub-Tiket"]).strip().upper()
+                                    new_plat_e = str(row_e["Plat / ID Unit"]).strip().upper()
+                                    raw_new_v = str(row_e[col_new_r]).strip()
+                                    val_parsed, lvl_p, msg_p = parse_indonesian_indicator(raw_new_v, 0.0, ed_unit_lbl)
+                                    if lvl_p == "err":
+                                        parse_errs.append(f"Request Baris {r_no} ({tk_e}): {msg_p}")
+                                        continue
+                                    updated_req_awal_map[tk_e] = val_parsed
+                                    old_val_num = clean_indicator(row_e[col_old_r])
+                                    old_plat_orig = str(req_edit_list[idx_i]["Plat / ID Unit"]).strip().upper()
+                                    if abs(val_parsed - old_val_num) > 1e-6 or str(row_e[col_old_r]).strip() != str(val_parsed):
+                                        val_str_save = str(int(val_parsed)) if val_parsed == int(val_parsed) else str(val_parsed)
+                                        req_updates.append({"range": f"M{r_no}", "values": [[val_str_save]]})
+                                    if new_plat_e and new_plat_e != old_plat_orig:
+                                        req_updates.append({"range": f"Q{r_no}", "values": [[new_plat_e]]})
+
+                            # 2. Kumpulkan perubahan PJB + Auto-recalculate Kolom Y (Total Trip/Run)
+                            if not edited_pjb_km.empty:
+                                col_new_p = f"{ed_unit_lbl} Akhir (Edit Baru)"
+                                col_old_p = f"{ed_unit_lbl} Akhir (Lama)"
+                                for idx_i, row_e in edited_pjb_km.iterrows():
+                                    r_no = int(row_e["Baris Sheet"])
+                                    tk_e = str(row_e["Sub-Tiket"]).strip().upper()
+                                    new_plat_e = str(row_e["Plat / ID Unit"]).strip().upper()
+                                    raw_new_v = str(row_e[col_new_p]).strip()
+                                    val_parsed, lvl_p, msg_p = parse_indonesian_indicator(raw_new_v, 0.0, ed_unit_lbl)
+                                    if lvl_p == "err":
+                                        parse_errs.append(f"PJB Baris {r_no} ({tk_e}): {msg_p}")
+                                        continue
+                                    old_val_num = clean_indicator(row_e[col_old_p])
+                                    old_plat_orig = str(pjb_edit_list[idx_i]["Plat / ID Unit"]).strip().upper()
+                                    km_awal_baru = updated_req_awal_map.get(tk_e, float(row_e[f"{ed_unit_lbl} Awal (Ref)"]))
+                                    trip_baru = round(max(0.0, val_parsed - km_awal_baru), 2) if km_awal_baru > 0 else clean_indicator(row_e[f"Trip/Run Lama ({ed_unit_lbl})"])
+                                    old_trip_num = clean_indicator(row_e[f"Trip/Run Lama ({ed_unit_lbl})"])
+
+                                    if abs(val_parsed - old_val_num) > 1e-6 or str(row_e[col_old_p]).strip() != str(val_parsed):
+                                        val_str_save = str(int(val_parsed)) if val_parsed == int(val_parsed) else str(val_parsed)
+                                        pjb_updates.append({"range": f"K{r_no}", "values": [[val_str_save]]})
+                                    if abs(trip_baru - old_trip_num) > 1e-6:
+                                        pjb_updates.append({"range": f"Y{r_no}", "values": [[str(trip_baru)]]})
+                                    if new_plat_e and new_plat_e != old_plat_orig:
+                                        pjb_updates.append({"range": f"M{r_no}", "values": [[new_plat_e]]})
+
+                            if parse_errs:
+                                st.error("❌ Gagal validasi angka:\n" + "\n".join([f"- {e}" for e in parse_errs]))
+                            elif not req_updates and not pjb_updates:
+                                st.info("ℹ️ Tidak ada perubahan nilai yang terdeteksi untuk disimpan.")
+                            else:
+                                with st.spinner("Menyimpan koreksi KM/RH & meluruskan urutan ke Google Sheets..."):
+                                    ok1 = batch_update_sheet_cells(target_ss, SHEET_REQUEST, req_updates) if req_updates else True
+                                    ok2 = batch_update_sheet_cells(target_ss, SHEET_PJB, pjb_updates) if pjb_updates else True
+                                    if ok1 and ok2:
+                                        st.session_state["_kmrh_raw_req"] = fetch_raw_sheet_rows(target_ss, SHEET_REQUEST)
+                                        st.session_state["_kmrh_raw_pjb"] = fetch_raw_sheet_rows(target_ss, SHEET_PJB)
+                                        st.success(f"🎉 Berhasil meluruskan {len(req_updates)} sel di Request Dana & {len(pjb_updates)} sel di Form PJB! Urutan KM/RH `{ed_plat_disp}` kini sudah lurus dan tim dapat langsung melakukan Request Dana.")
+                                        time.sleep(1.5)
+                                        st.rerun()
+
+        # ------------------------------------------------------------------
+        # TAB 3: SET / RESET PATOKAN KM & RH TERAKHIR (BUKA KUNCI REQUEST TIM)
+        # ------------------------------------------------------------------
+        with tab_patokan:
+            st.markdown("#### 🎯 Set / Reset Patokan KM & RH Terakhir Resmi (Tab `Master KM RH`)")
+            st.info(
+                "💡 Gunakan fitur ini jika **odometer mobil / hourmeter genset baru diganti (reset ke 0/angka kecil)**, "
+                "atau jika ingin **langsung menetapkan angka patokan terakhir resmi** agar tim lapangan segera bisa melakukan Request Dana tanpa terkunci histori lama."
+            )
+
+            existing_ov_rows = fetch_master_kmrh_sheet(target_ss)
+            ov_table = []
+            for r in existing_ov_rows[1:]:
+                r_pad = (r + [""] * 7)[:7]
+                ov_table.append({
+                    "PLAT_UNIT": str(r_pad[0]).strip().upper(),
+                    "TIPE": str(r_pad[1]).strip() if str(r_pad[1]).strip() in ["Mobil", "Motor", "Genset"] else "Mobil",
+                    "PATOKAN_TERAKHIR": str(r_pad[2]).strip(),
+                    "TANGGAL_SET": str(r_pad[3]).strip(),
+                    "MODE": str(r_pad[4]).strip().upper() if str(r_pad[4]).strip().upper() in ["AUTO", "PAKSA"] else "AUTO",
+                    "CATATAN": str(r_pad[5]).strip(),
+                    "STATUS": str(r_pad[6]).strip().upper() if str(r_pad[6]).strip().upper() in ["AKTIF", "NONAKTIF"] else "AKTIF"
+                })
+
+            existing_plats = sorted(list(set([u["Nopol / ID Unit"] for u in summary_units])))
+            with st.form("form_set_patokan_kmrh"):
+                cp1, cp2, cp3 = st.columns(3)
+                with cp1:
+                    pick_p_ov = st.selectbox("Pilih Plat / ID Genset:", ["-- Ketik Manual --"] + existing_plats)
+                    man_p_ov = st.text_input("Atau Ketik Plat / ID Genset Baru:").strip().upper()
+                    tp_ov = st.selectbox("Tipe Unit:", ["Mobil", "Genset", "Motor"])
+                with cp2:
+                    val_ov_raw = st.text_input("Angka Patokan KM / RH Terakhir Resmi (Polos tanpa titik ribuan):", placeholder="Misal: 125450 atau 1450,5")
+                    mode_ov = st.selectbox(
+                        "Mode Patokan:",
+                        ["AUTO", "PAKSA"],
+                        help="AUTO = Pakai patokan ini sekarang, otomatis ikut maju saat ada PJB baru setelah tanggal set. PAKSA = Selalu kunci patokan ke angka ini sampai Admin menonaktifkan."
+                    )
+                with cp3:
+                    cat_ov = st.text_input("Alasan / Catatan Koreksi:", value="Koreksi luruskan urutan KM/RH oleh Admin")
+                    st.caption(f"⏱️ Waktu Set: `{get_now_wib().strftime('%d/%m/%Y %H:%M:%S WIB')}`")
+
+                if st.form_submit_button("💾 Simpan Patokan Resmi & Buka Kunci Request Tim", type="primary", use_container_width=True):
+                    final_p = man_p_ov if (pick_p_ov == "-- Ketik Manual --" or man_p_ov) else pick_p_ov.strip().upper()
+                    u_lbl_ov = "RH" if tp_ov == "Genset" else "KM"
+                    v_ov_num, lvl_ov, msg_ov = parse_indonesian_indicator(val_ov_raw, 0.0, u_lbl_ov)
+                    if not final_p:
+                        st.error("❌ Harap pilih atau ketik Nomor Plat / ID Genset!")
+                    elif lvl_ov == "err":
+                        st.error(f"❌ Angka patokan tidak valid: {msg_ov}")
+                    else:
+                        v_ov_str = str(int(v_ov_num)) if v_ov_num == int(v_ov_num) else str(v_ov_num)
+                        ts_ov_now = get_now_wib().strftime("%d/%m/%Y %H:%M:%S")
+                        # Update jika sudah ada unit+tipe sama, atau tambah baris baru
+                        replaced = False
+                        for row_o in ov_table:
+                            if normalize_plat_key(row_o["PLAT_UNIT"]) == normalize_plat_key(final_p) and row_o["TIPE"] == tp_ov:
+                                row_o["PLAT_UNIT"] = final_p
+                                row_o["PATOKAN_TERAKHIR"] = v_ov_str
+                                row_o["TANGGAL_SET"] = ts_ov_now
+                                row_o["MODE"] = mode_ov
+                                row_o["CATATAN"] = cat_ov
+                                row_o["STATUS"] = "AKTIF"
+                                replaced = True
+                                break
+                        if not replaced:
+                            ov_table.append({
+                                "PLAT_UNIT": final_p, "TIPE": tp_ov, "PATOKAN_TERAKHIR": v_ov_str,
+                                "TANGGAL_SET": ts_ov_now, "MODE": mode_ov, "CATATAN": cat_ov, "STATUS": "AKTIF"
+                            })
+                        rows_save_ov = [[d["PLAT_UNIT"], d["TIPE"], d["PATOKAN_TERAKHIR"], d["TANGGAL_SET"], d["MODE"], d["CATATAN"], d["STATUS"]] for d in ov_table]
+                        with st.spinner("Menyimpan patokan resmi ke Google Sheets..."):
+                            if save_master_kmrh_sheet(target_ss, rows_save_ov):
+                                st.success(f"✅ Patokan resmi `{final_p}` ({tp_ov}) ditetapkan ke **{format_id_number(v_ov_num)} {u_lbl_ov}** ({mode_ov})! Tim langsung bisa melakukan Request Dana.")
+                                time.sleep(1.5)
+                                st.rerun()
+
+            if ov_table:
+                st.markdown("##### 📋 Daftar Patokan / Override KM & RH Tersimpan")
+                df_ov = pd.DataFrame(ov_table)
+                ed_ov = st.data_editor(
+                    df_ov,
+                    hide_index=True,
+                    use_container_width=True,
+                    num_rows="dynamic",
+                    column_config={
+                        "TIPE": st.column_config.SelectboxColumn("Tipe", options=["Mobil", "Genset", "Motor"], required=True),
+                        "MODE": st.column_config.SelectboxColumn("Mode", options=["AUTO", "PAKSA"], required=True),
+                        "STATUS": st.column_config.SelectboxColumn("Status", options=["AKTIF", "NONAKTIF"], required=True),
+                    },
+                    key="ed_master_kmrh_tbl"
+                )
+                if st.button("💾 Simpan Perubahan Tabel Patokan KM/RH", type="secondary", use_container_width=True, key="btn_save_ov_tbl"):
+                    clean_ov_save = []
+                    for _, ro in ed_ov.iterrows():
+                        p_c = str(ro.get("PLAT_UNIT", "")).strip().upper()
+                        if not p_c or p_c in ["NAN", "NONE"]:
+                            continue
+                        clean_ov_save.append([
+                            p_c,
+                            str(ro.get("TIPE", "Mobil")).strip(),
+                            str(ro.get("PATOKAN_TERAKHIR", "0")).strip(),
+                            str(ro.get("TANGGAL_SET", get_now_wib().strftime("%d/%m/%Y %H:%M:%S"))).strip(),
+                            str(ro.get("MODE", "AUTO")).strip().upper(),
+                            str(ro.get("CATATAN", "-")).strip(),
+                            str(ro.get("STATUS", "AKTIF")).strip().upper()
+                        ])
+                    with st.spinner("Menyimpan perubahan tabel Master KM RH..."):
+                        if save_master_kmrh_sheet(target_ss, clean_ov_save):
+                            st.success("✅ Tabel Patokan Master KM/RH berhasil diperbarui!")
+                            time.sleep(1.5)
+                            st.rerun()
+            else:
+                st.caption("ℹ️ Belum ada patokan/override khusus yang tersimpan di wilayah ini (seluruh unit memakai histori normal Form PJB & Request Dana).")
+
 # ==========================================
 # PAGE ADMIN: FORM PEMBERITAHUAN PEMBAHARUAN SERVER & GENERATE WA
 # ==========================================
@@ -3062,7 +3896,7 @@ elif st.session_state.page == "📝 Form Request Dana":
                             if pilihan_mob == "-- Pilih Nopol / Ketik Baru --": plat_mobil = st.text_input("Ketik Plat Mobil:", key="pmob_man").strip().upper()
                             else: plat_mobil = pilihan_mob.strip().upper()
                             
-                            last_info_mob = get_last_indicator_detail(plat_mobil, "Mobil", pjb_r, req_r)
+                            last_info_mob = get_last_indicator_detail(plat_mobil, "Mobil", pjb_r, req_r, app_r=app_r, spreadsheet_id=target_ss)
                             last_km_mob = last_info_mob["value"]
                             if st.session_state.get("_prev_plat_mob") != plat_mobil:
                                 st.session_state["_prev_plat_mob"] = plat_mobil
@@ -3091,6 +3925,16 @@ elif st.session_state.page == "📝 Form Request Dana":
                                 st.warning("🛣️ **LIVE KONTROL KM & WAKTU MOBIL:**\n" + "\n".join(ctrl_mob["detail_lines"]))
                             else:
                                 st.info("🛣️ **LIVE KONTROL KM & WAKTU MOBIL:**\n" + "\n".join(ctrl_mob["detail_lines"]))
+                            if plat_mobil:
+                                _pn_m = normalize_plat_key(plat_mobil)
+                                _h_mob = []
+                                for _rp in reversed(pjb_r[1:]):
+                                    if len(_rp) > 12 and normalize_plat_key(_rp[12]) == _pn_m and "mobil" in str(_rp[8]).lower():
+                                        _h_mob.append({"Tanggal": _rp[1], "Tiket": _rp[21] if len(_rp)>21 else "-", "PIC": _rp[4], "KM Akhir": format_id_number(clean_indicator(_rp[10])), "Trip": f"{_rp[24] if len(_rp)>24 else '-'} KM"})
+                                        if len(_h_mob) >= 5: break
+                                if _h_mob:
+                                    with st.expander(f"📜 5 Histori KM Terakhir ({plat_mobil})", expanded=False):
+                                        st.dataframe(pd.DataFrame(_h_mob), hide_index=True, use_container_width=True)
                         
                         selisih_km_mob = ctrl_mob["selisih"]
                         hist_km_mob_str = f"KM {format_id_number(last_km_mob)}->{format_id_number(km_awal_mob)} (+{format_id_number(selisih_km_mob)} KM dlm {ctrl_mob['elapsed_text']} | {ctrl_mob['status_short']})" if last_km_mob > 0 else f"KM Awal: {format_id_number(km_awal_mob)}"
@@ -3201,7 +4045,7 @@ elif st.session_state.page == "📝 Form Request Dana":
                             if pilihan_mot == "-- Pilih Nopol / Ketik Baru --": plat_motor = st.text_input("Ketik Plat Motor:", key="pmot_man").strip().upper()
                             else: plat_motor = pilihan_mot.strip().upper()
                             
-                            last_info_mot = get_last_indicator_detail(plat_motor, "Motor", pjb_r, req_r)
+                            last_info_mot = get_last_indicator_detail(plat_motor, "Motor", pjb_r, req_r, app_r=app_r, spreadsheet_id=target_ss)
                             last_km_mot = last_info_mot["value"]
                             if st.session_state.get("_prev_plat_mot") != plat_motor:
                                 st.session_state["_prev_plat_mot"] = plat_motor
@@ -3362,7 +4206,7 @@ elif st.session_state.page == "📝 Form Request Dana":
                             if is_gen_portable:
                                 tanpa_rh_portable = st.checkbox("🔋 Genset Portable tidak memiliki meteran RH digital (gunakan estimasi jam backup)", value=False, key="chk_gen_port_norh")
 
-                            last_info_gen = get_last_indicator_detail(plat_genset, "Genset", pjb_r, req_r)
+                            last_info_gen = get_last_indicator_detail(plat_genset, "Genset", pjb_r, req_r, app_r=app_r, spreadsheet_id=target_ss)
                             last_rh_gen = last_info_gen["value"]
                             if st.session_state.get("_prev_plat_gen") != plat_genset:
                                 st.session_state["_prev_plat_gen"] = plat_genset
@@ -3398,6 +4242,16 @@ elif st.session_state.page == "📝 Form Request Dana":
                                 else:
                                     st.info("⏱️ **LIVE KONTROL RH & WAKTU GENSET:**\n" + "\n".join(ctrl_gen["detail_lines"]))
                                 selisih_rh_gen = ctrl_gen["selisih"]
+                            if plat_genset:
+                                _pn_g = normalize_plat_key(plat_genset)
+                                _h_gen = []
+                                for _rp in reversed(pjb_r[1:]):
+                                    if len(_rp) > 12 and normalize_plat_key(_rp[12]) == _pn_g and "genset" in str(_rp[8]).lower():
+                                        _h_gen.append({"Tanggal": _rp[1], "Tiket": _rp[21] if len(_rp)>21 else "-", "PIC": _rp[4], "RH Akhir": format_id_number(clean_indicator(_rp[10])), "Run": f"{_rp[24] if len(_rp)>24 else '-'} RH"})
+                                        if len(_h_gen) >= 5: break
+                                if _h_gen:
+                                    with st.expander(f"📜 5 Histori RH Terakhir ({plat_genset})", expanded=False):
+                                        st.dataframe(pd.DataFrame(_h_gen), hide_index=True, use_container_width=True)
                         
                         hist_rh_gen_str = "Portable Non-RH" if tanpa_rh_portable else (f"RH {format_id_number(last_rh_gen)}->{format_id_number(rh_awal_gen)} (+{format_id_number(selisih_rh_gen)} RH dlm {ctrl_gen['elapsed_text']} | {ctrl_gen['status_short']})" if last_rh_gen > 0 else f"RH Awal: {format_id_number(rh_awal_gen)}")
                         kat_gen_base = f"Genset Portable - {jb_genset} [{sumber_gen.upper()}]" if is_gen_portable else f"Genset - {jb_genset} [{sumber_gen.upper()}]"
