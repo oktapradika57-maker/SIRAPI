@@ -900,7 +900,7 @@ LIST_KEPERLUAN = ["", "Tshoot", "Backup", "Support", "PM", "Program BCP", "Progr
 # ==============================================================================
 BBM_PRICE_RULES_SPBU = {
     "Pertalite":     {"default": 10000, "min": 9000,  "max": 10000},
-    "Pertamax":      {"default": 16000, "min": 11500, "max": 16000},
+    "Pertamax":      {"default": 16500, "min": 11500, "max": 16500},
     "Bio Solar":     {"default": 6000,  "min": 5500,  "max": 6000},
     "Dexlite":       {"default": 25000, "min": 12500, "max": 25000},
     "Pertamina Dex": {"default": 18500, "min": 13000, "max": 18500},
