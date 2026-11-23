@@ -900,7 +900,7 @@ LIST_KEPERLUAN = ["", "Tshoot", "Backup", "Support", "PM", "Program BCP", "Progr
 # ==============================================================================
 BBM_PRICE_RULES_SPBU = {
     "Pertalite":     {"default": 10000, "min": 9000,  "max": 10000},
-    "Pertamax":      {"default": 16500, "min": 11500, "max": 16500},
+    "Pertamax":      {"default": 16000, "min": 11500, "max": 16000},
     "Bio Solar":     {"default": 6000,  "min": 5500,  "max": 6000},
     "Dexlite":       {"default": 25000, "min": 12500, "max": 25000},
     "Pertamina Dex": {"default": 18500, "min": 13000, "max": 18500},
@@ -1667,6 +1667,261 @@ def get_last_indicator_detail(plat_raw, jns, pjb_r, req_r=None):
                         }
     return empty_res
 
+def build_nopol_distance_summary(pjb_r, req_r):
+    """Membangun rekapitulasi jarak & odometer/RH terakhir per Nopol/ID Unit serta KM awal per tiket."""
+    req_info_map = {}
+    for rq in req_r[1:]:
+        if len(rq) > 12 and str(rq[3]).strip():
+            tk = str(rq[3]).strip().upper()
+            req_info_map[tk] = {
+                "km_awal": float(clean_indicator(rq[12])),
+                "jarak_satelit": str(rq[13]).strip() if len(rq) > 13 else "-",
+                "desc": str(rq[11]).strip() if len(rq) > 11 else "",
+                "plat": str(rq[16]).strip().upper() if len(rq) > 16 else "",
+                "tgl": str(rq[1]).strip() if len(rq) > 1 else ""
+            }
+
+    nopol_stats = {}
+    for pjb in pjb_r[1:]:
+        if len(pjb) > 12:
+            plat_raw = str(pjb[12]).strip().upper()
+            plat_clean = re.sub(r'\s+', ' ', plat_raw)
+            if not plat_clean or plat_clean in ["0", "NONE", "NAN", "-"]:
+                continue
+            kat_str = str(pjb[8]).lower() if len(pjb) > 8 else ""
+            is_gen = "genset" in kat_str
+            is_veh = is_gen or ("mobil" in kat_str) or ("motor" in kat_str)
+            if not is_veh:
+                continue
+
+            tk = str(pjb[21]).strip().upper() if len(pjb) > 21 else ""
+            km_akhir_v = float(clean_indicator(pjb[10])) if len(pjb) > 10 else 0.0
+            trip_col_v = float(clean_indicator(pjb[24])) if len(pjb) > 24 else 0.0
+            km_awal_v = req_info_map.get(tk, {}).get("km_awal", 0.0)
+            if trip_col_v > 0:
+                trip_v = trip_col_v
+            elif km_akhir_v > km_awal_v and km_awal_v > 0:
+                trip_v = round(km_akhir_v - km_awal_v, 2)
+            else:
+                trip_v = 0.0
+
+            tgl_d = parse_date(pjb[1] if len(pjb) > 1 else "", pjb[0] if len(pjb) > 0 else "")
+            tgl_fmt = tgl_d.strftime("%d/%m/%Y") if tgl_d != datetime(1970, 1, 1).date() else "-"
+
+            if plat_clean not in nopol_stats:
+                nopol_stats[plat_clean] = {
+                    "unit": "RH" if is_gen else "KM",
+                    "last_odo": 0.0,
+                    "total_trip": 0.0,
+                    "trip_count": 0,
+                    "last_date": tgl_fmt,
+                    "last_pic": str(pjb[4]).strip() if len(pjb) > 4 else "-"
+                }
+            st_n = nopol_stats[plat_clean]
+            st_n["trip_count"] += 1
+            st_n["total_trip"] = round(st_n["total_trip"] + max(0.0, trip_v), 2)
+            if km_akhir_v >= st_n["last_odo"]:
+                st_n["last_odo"] = km_akhir_v
+                st_n["last_date"] = tgl_fmt
+                st_n["last_pic"] = str(pjb[4]).strip() if len(pjb) > 4 else "-"
+    return nopol_stats, req_info_map
+
+def generate_daily_finance_wa_report(nop_name, target_date, data_all, selected_batch="Semua Batch", extra_note=""):
+    """Menyusun teks WA Report Harian Penggunaan Dana & Sisa Saldo Uang Muka (UM)."""
+    um_r = data_all.get(SHEET_UM, [])
+    dist_r = data_all.get(SHEET_DISTRIBUSI, [])
+    req_r = data_all.get(SHEET_REQUEST, [])
+    pjb_r = data_all.get(SHEET_PJB, [])
+    rekap_r = data_all.get("Rekap PJB", [])
+    app_r = data_all.get(SHEET_APP, [])
+
+    now_wib = get_now_wib()
+    tgl_str = target_date.strftime("%d/%m/%Y")
+    d1 = target_date.strftime("%d/%m/%Y")
+    d2 = target_date.strftime("%m/%d/%Y")
+    d3 = target_date.strftime("%Y-%m-%d")
+
+    def _is_date_match(raw_tgl, raw_ts):
+        rt1, rt2 = str(raw_tgl or "").strip(), str(raw_ts or "").strip()
+        if (d1 in rt1 or d2 in rt1 or d3 in rt1) or (d1 in rt2 or d2 in rt2 or d3 in rt2):
+            return True
+        return parse_date(rt1, rt2) == target_date
+
+    # 1. Hitung Kas / Uang Muka Masuk & Distribusi per Batch
+    in_by_batch = {}
+    for r in um_r[1:]:
+        if len(r) > 3 and str(r[2]).strip():
+            b = str(r[2]).strip()
+            in_by_batch[b] = in_by_batch.get(b, 0) + clean_nominal(r[3])
+
+    out_by_batch = {}
+    dist_today_items = []
+    tot_dist_today = 0
+    for r in dist_r[1:]:
+        if len(r) > 4 and str(r[2]).strip():
+            b = str(r[2]).strip()
+            nom_d = clean_nominal(r[4])
+            out_by_batch[b] = out_by_batch.get(b, 0) + nom_d
+            if selected_batch == "Semua Batch" or b == selected_batch:
+                if _is_date_match(r[1] if len(r) > 1 else "", r[0] if len(r) > 0 else ""):
+                    tot_dist_today += nom_d
+                    pic_d = str(r[3]).strip() if len(r) > 3 else "-"
+                    ket_d = str(r[5]).strip() if len(r) > 5 else ""
+                    ket_short = ket_d.replace("AUTO-SUPPORT:", "").strip() if not ket_d.startswith("http") else "Transfer Manual"
+                    dist_today_items.append(f"  • {pic_d} ({ket_short}): Rp {nom_d:,.0f}")
+
+    if selected_batch != "Semua Batch":
+        tot_um_in = in_by_batch.get(selected_batch, 0)
+        tot_dist_all = out_by_batch.get(selected_batch, 0)
+        batch_label = selected_batch
+    else:
+        tot_um_in = sum(in_by_batch.values())
+        tot_dist_all = sum(out_by_batch.values())
+        batch_label = f"Semua Batch ({len(in_by_batch)} Batch)"
+
+    sisa_um_dist = tot_um_in - tot_dist_all
+
+    # Total Penyerapan Rekap PJB
+    tot_rekap_pjb = 0
+    for r in rekap_r[1:]:
+        if len(r) > 15:
+            val_q = str(r[16]).strip() if len(r) > 16 else ""
+            if selected_batch == "Semua Batch" or val_q == selected_batch:
+                tot_rekap_pjb += clean_nominal(r[15])
+    sisa_um_pjb = tot_um_in - tot_rekap_pjb
+
+    # 2. Request Dana Hari Ini (Pending vs Total)
+    processed_req = set()
+    rejected_req = set()
+    for a in app_r[1:]:
+        a_pad = (a + [""] * 8)[:8]
+        if str(a_pad[3]).strip() == "Request Dana":
+            st_a = str(a_pad[5]).strip().upper()
+            tk_a = str(a_pad[2]).strip().upper()
+            if st_a in ["APPROVED", "REJECTED"] and tk_a:
+                processed_req.add(tk_a)
+            if st_a == "REJECTED" and tk_a:
+                rejected_req.add(tk_a)
+
+    req_today_cnt = 0
+    req_today_nom = 0
+    req_pending_cnt = 0
+    req_pending_nom = 0
+    for r in req_r[1:]:
+        if len(r) > 9:
+            tk_r = str(r[3]).strip().upper()
+            if tk_r in rejected_req:
+                continue
+            if _is_date_match(r[1], r[0]):
+                nom_r = clean_nominal(r[9])
+                req_today_cnt += 1
+                req_today_nom += nom_r
+                if tk_r not in processed_req:
+                    req_pending_cnt += 1
+                    req_pending_nom += nom_r
+
+    # 3. PJB Disubmit Hari Ini + Breakdown Kategori
+    pjb_today_cnt = 0
+    pjb_today_nom = 0
+    pjb_kat_breakdown = defaultdict(int)
+    pjb_done_set = set()
+    for p in pjb_r[1:]:
+        p_pad = (p + [""] * 40)[:40]
+        tk_s = str(p_pad[36]).strip().upper()
+        tk_b = str(p_pad[21]).strip().upper()
+        if tk_s and tk_s not in ["-", "NAN", "NONE", "0"]: pjb_done_set.add(tk_s)
+        if tk_b and tk_b not in ["-", "NAN", "NONE", "0"]: pjb_done_set.add(tk_b)
+        if _is_date_match(p_pad[1], p_pad[0]):
+            nom_p = clean_nominal(p_pad[11])
+            pjb_today_cnt += 1
+            pjb_today_nom += nom_p
+            kat_raw = str(p_pad[8]).strip() or "Lainnya"
+            kl = kat_raw.lower()
+            if "mobil" in kl: kat_grp = "BBM Mobil"
+            elif "motor" in kl: kat_grp = "BBM Motor"
+            elif "genset" in kl: kat_grp = "BBM Genset"
+            elif "uang makan" in kl or "akomodasi" in kl: kat_grp = "Uang Makan"
+            elif "penginapan" in kl: kat_grp = "Penginapan"
+            elif "material" in kl: kat_grp = "Material"
+            elif "fery" in kl or "klotok" in kl: kat_grp = "Transportasi Air"
+            else: kat_grp = "Support / Lainnya"
+            pjb_kat_breakdown[kat_grp] += nom_p
+
+    # 4. Hitung PJB Gantung (Aging)
+    out_cnt = 0
+    out_nom = 0
+    overdue_cnt = 0
+    for r in req_r[1:]:
+        r_pad = (r + [""] * 15)[:15]
+        tk_c = str(r_pad[3]).strip().upper()
+        if not tk_c or tk_c in rejected_req or tk_c in pjb_done_set:
+            continue
+        tgl_r = parse_date(r_pad[1], r_pad[0])
+        if tgl_r >= CUTOFF_DATE:
+            out_cnt += 1
+            out_nom += clean_nominal(r_pad[9])
+            if (now_wib.date() - tgl_r).days > 7:
+                overdue_cnt += 1
+
+    # Rincian Batch Aktif (yang masih bersaldo != 0, maks 6 batch terbaru)
+    batch_lines = []
+    if selected_batch == "Semua Batch":
+        for b_name in sorted(in_by_batch.keys(), reverse=True)[:6]:
+            b_in = in_by_batch[b_name]
+            b_out = out_by_batch.get(b_name, 0)
+            b_sisa = b_in - b_out
+            batch_lines.append(f"  • {b_name}: Sisa *Rp {b_sisa:,.0f}* (UM Rp {b_in:,.0f} | Cair Rp {b_out:,.0f})")
+
+    lines_wa = [
+        f"*📊 REPORT HARIAN PENGGUNAAN DANA & SISA UM (SiRAPI)*",
+        f"🌐 Wilayah : *NOP {nop_name.upper()}*",
+        f"📅 Tanggal : {tgl_str} (Update {now_wib.strftime('%H:%M WIB')})",
+        f"💼 Filter UM : {batch_label}",
+        "",
+        "*1. 🏦 POSISI SALDO UANG MUKA (UM)*",
+        f"• Total Uang Muka Masuk : Rp {tot_um_in:,.0f}",
+        f"• Total Distribusi ke Tim : Rp {tot_dist_all:,.0f}",
+        f"• *Sisa Saldo UM (Kas) : Rp {sisa_um_dist:,.0f}*",
+        f"• Total Serapan Rekap PJB : Rp {tot_rekap_pjb:,.0f} (Sisa vs PJB: Rp {sisa_um_pjb:,.0f})",
+    ]
+    if batch_lines:
+        lines_wa.append("*📌 Rincian Saldo per Batch UM:*")
+        lines_wa.extend(batch_lines)
+
+    lines_wa.extend([
+        "",
+        f"*2. 💸 PENGGUNAAN DANA HARI INI ({tgl_str})*",
+        f"• Dana Cair / Distribusi Hari Ini : *Rp {tot_dist_today:,.0f}* ({len(dist_today_items)} transaksi)",
+    ])
+    if dist_today_items:
+        lines_wa.extend(dist_today_items[:12])
+        if len(dist_today_items) > 12:
+            lines_wa.append(f"  • ...dan {len(dist_today_items) - 12} transaksi lainnya")
+    lines_wa.extend([
+        f"• Request Masuk Hari Ini : {req_today_cnt} tiket (Rp {req_today_nom:,.0f})",
+        f"• Menunggu Approval Hari Ini : {req_pending_cnt} tiket (Rp {req_pending_nom:,.0f})",
+        "",
+        f"*3. ✅ LAPORAN PJB DISUBMIT HARI INI ({tgl_str})*",
+        f"• Total PJB Masuk : {pjb_today_cnt} tiket (*Rp {pjb_today_nom:,.0f}*)",
+    ])
+    if pjb_kat_breakdown:
+        for k_grp, k_nom in sorted(pjb_kat_breakdown.items(), key=lambda x: -x[1]):
+            lines_wa.append(f"  • {k_grp} : Rp {k_nom:,.0f}")
+    lines_wa.extend([
+        "",
+        "*4. 🚨 STATUS TIKET BELUM PJB (AGING)*",
+        f"• Total Tiket Gantung : {out_cnt} tiket (Rp {out_nom:,.0f})",
+        f"• Overdue (>7 Hari) : {overdue_cnt} tiket",
+    ])
+    if extra_note and extra_note.strip():
+        lines_wa.extend(["", f"*📝 Catatan Admin:*", extra_note.strip()])
+    lines_wa.extend(["", "_Generated automatically via SiRAPI KUT System_"])
+
+    return "\n".join(lines_wa), {
+        "tot_um_in": tot_um_in, "tot_dist_all": tot_dist_all, "sisa_um_dist": sisa_um_dist,
+        "tot_dist_today": tot_dist_today, "pjb_today_nom": pjb_today_nom, "out_cnt": out_cnt
+    }
+
 def get_user_tickets_status(nama, req_rows, pjb_rows, app_rows):
     if nama == "-- Pilih Nama --" or not str(nama).strip():
         return [], [], [], []
@@ -2128,9 +2383,154 @@ if st.session_state.page == "🏠 Hub Menu Utama":
             if st.button("🖨️ REPORT & AUTO PJB (Export Laporan)", type="secondary", use_container_width=True):
                 st.session_state.page = "🖨️ Auto PJB Report"
                 st.rerun()
+            if st.button("📢 INFO UPDATE SERVER & WA (Broadcast)", type="primary", use_container_width=True):
+                st.session_state.page = "📢 Info Update Server & WA"
+                st.rerun()
 
     st.markdown("<div style='text-align: center; color: #64748B !important; font-size: 0.85rem; margin-top:45px; font-weight:600;'>Created by Okta Pradika<br>KUT SYSTEM - SiRAPI AI V5 Enterprise Edition</div>", unsafe_allow_html=True)# PAGE ADMIN: MASTER TIKET PM
 # ==========================================
+# ==========================================
+# PAGE ADMIN: FORM PEMBERITAHUAN PEMBAHARUAN SERVER & GENERATE WA
+# ==========================================
+elif st.session_state.page == "📢 Info Update Server & WA":
+    st.markdown("<div class='header-card'><h2>📢 FORM PEMBERITAHUAN PEMBAHARUAN SERVER</h2><p>Buat Pengumuman Update / Maintenance SiRAPI & Generate Pesan WhatsApp Siap Kirim</p></div>", unsafe_allow_html=True)
+
+    now_wib_srv = get_now_wib()
+    c_sv1, c_sv2 = st.columns(2)
+    with c_sv1:
+        jenis_info_srv = st.selectbox(
+            "📌 Jenis Pemberitahuan:",
+            [
+                "🚀 Pembaharuan Fitur & Versi Server SiRAPI",
+                "🛠️ Maintenance / Perbaikan Server Sementara",
+                "✅ Server Sudah Normal & Siap Digunakan Kembali",
+                "⚠️ Pengumuman Aturan Operasional / SOP Baru"
+            ],
+            key="srv_jenis"
+        )
+        target_wilayah_srv = st.multiselect(
+            "🌐 Target Wilayah / Tim Penerima:",
+            ["Semua NOP (Kalimantan)", "NOP Palangkaraya", "NOP Pangkalan Bun", "NOP Tarakan", "NOP Pontianak"],
+            default=["NOP Palangkaraya", "NOP Pangkalan Bun"],
+            key="srv_target"
+        )
+        versi_srv = st.text_input("🏷️ Versi Aplikasi / Build:", value="SiRAPI V5.3 (Update Terbaru)", key="srv_versi")
+        link_app_srv = st.text_input("🔗 Link Aplikasi:", value="https://sirapi-kut.streamlit.app/", key="srv_link")
+
+    with c_sv2:
+        tgl_update_srv = st.date_input("📅 Tanggal Efektif:", value=now_wib_srv.date(), key="srv_tgl")
+        jam_update_srv = st.text_input("⏰ Jam Update / Jadwal (WIB):", value=now_wib_srv.strftime("%H:%M WIB"), key="srv_jam")
+        durasi_maint_srv = ""
+        if "Maintenance" in jenis_info_srv:
+            durasi_maint_srv = st.text_input("⏳ Estimasi Durasi Maintenance:", value="± 15 - 30 Menit", key="srv_dur")
+        pengirim_srv = st.text_input("👤 Pengirim / Penandatangan:", value="Okta Pradika — Engineering Project Control (PT Kinarya Utama Teknik)", key="srv_sender")
+        no_wa_tujuan_srv = st.text_input("📱 Nomor WA Tujuan Khusus (Opsional, format 628xxx — kosongkan untuk pilih Grup/Kontak bebas):", value="", key="srv_wa_num")
+
+    st.markdown("<div class='section-title'>📝 Poin Pembaharuan & Informasi</div>", unsafe_allow_html=True)
+    preset_updates = [
+        "Pilihan Pembelian BBM SPBU vs Eceran dengan validasi harga aktual ketat",
+        "Khusus Pembelian Eceran: WAJIB 2 foto tambahan saat PJB (Full foto botol/liter & Bukti bayar toko) dianalisa AI",
+        "Wajib mengisi Kapasitas Tangki (1x & 2x Pengisian) untuk Mobil, Motor & Genset agar tidak over request",
+        "Penambahan opsi Genset Portable (Pertalite / Pertamax)",
+        "Pembaruan Uang Makan: Pekerjaan Atas ganti RRU (<80 KM) berhak Rp 30.000/orang; PP >80 KM tetap Rp 60.000/orang",
+        "Live Kontrol Waktu (WIB) & validasi penulisan titik/koma KM Mobil dan RH Genset",
+        "Cetak PDF PJB diperbarui menjadi Full 1 Lembar per Foto (ukuran asli) + Kalkulasi Jarak Nopol Terakhir",
+        "Peningkatan kestabilan server & sistem Auto-Retry anti error antrean Google Sheets"
+    ]
+    poin_pilihan_srv = st.multiselect(
+        "✅ Pilih Poin Pembaharuan Cepat (Bisa Pilih Lebih Dari 1):",
+        preset_updates,
+        default=preset_updates[:4] if "Pembaharuan" in jenis_info_srv else [],
+        key="srv_poin_pick"
+    )
+    poin_custom_srv = st.text_area(
+        "✏️ Tambahan Keterangan / Poin Khusus (Opsional, 1 baris = 1 poin):",
+        height=100,
+        placeholder="Contoh:\nTim wajib melampirkan foto nota asli dan jelas\nHarap segera selesaikan PJB tertunda sebelum jam 17.00 WIB",
+        key="srv_poin_custom"
+    )
+    instruksi_tim_srv = st.text_area(
+        "🔔 Tindakan Wajib Tim Lapangan:",
+        value="1. Tutup tab browser lama lalu buka ulang link SiRAPI (atau tekan Ctrl+Shift+R di laptop) agar tampilan terbaru termuat sempurna.\n2. Jika muncul kendala akses setelah update, segera laporkan ke Admin NOP / Koordinator.",
+        height=85,
+        key="srv_instruksi"
+    )
+
+    # Susun Pesan WA Otomatis
+    wilayah_txt = ", ".join(target_wilayah_srv) if target_wilayah_srv else "Seluruh Tim Operasional"
+    semua_poin = list(poin_pilihan_srv)
+    for ln_c in poin_custom_srv.splitlines():
+        if ln_c.strip():
+            semua_poin.append(ln_c.strip())
+
+    if "Maintenance" in jenis_info_srv:
+        header_wa_srv = "*🛠️ PEMBERITAHUAN MAINTENANCE SERVER SiRAPI*"
+        pembuka_wa_srv = "Diberitahukan kepada seluruh rekan tim bahwa saat ini sedang dilakukan proses pemeliharaan & pembaharuan server aplikasi SiRAPI."
+    elif "Normal" in jenis_info_srv:
+        header_wa_srv = "*✅ PEMBERITAHUAN: SERVER SiRAPI SUDAH NORMAL*"
+        pembuka_wa_srv = "Alhamdulillah proses pembaharuan server aplikasi SiRAPI telah selesai. Sistem sudah normal dan dapat digunakan kembali untuk pengajuan Request Dana & PJB."
+    elif "SOP" in jenis_info_srv:
+        header_wa_srv = "*⚠️ PENGUMUMAN ATURAN & SOP OPERASIONAL SiRAPI*"
+        pembuka_wa_srv = "Disampaikan kepada seluruh tim terkait pembaruan aturan operasional yang langsung berlaku di sistem SiRAPI:"
+    else:
+        header_wa_srv = "*🚀 PEMBERITAHUAN PEMBAHARUAN SERVER & FITUR SiRAPI*"
+        pembuka_wa_srv = "Diberitahukan kepada seluruh tim operasional bahwa server aplikasi SiRAPI telah diperbarui untuk meningkatkan kestabilan dan ketertiban administrasi."
+
+    wa_srv_lines = [
+        header_wa_srv,
+        "━━━━━━━━━━━━━━━━━━━━",
+        f"📢 *Kepada* : {wilayah_txt}",
+        f"📅 *Tanggal* : {tgl_update_srv.strftime('%d/%m/%Y')} ({jam_update_srv})",
+        f"🏷️ *Versi* : {versi_srv}",
+    ]
+    if durasi_maint_srv:
+        wa_srv_lines.append(f"⏳ *Estimasi* : {durasi_maint_srv}")
+    wa_srv_lines.append(f"🔗 *Link App* : {link_app_srv}")
+    wa_srv_lines.extend(["", pembuka_wa_srv])
+
+    if semua_poin:
+        wa_srv_lines.append("")
+        wa_srv_lines.append("*📋 Rincian Pembaharuan / Informasi:*")
+        for idx_p, pt in enumerate(semua_poin, 1):
+            wa_srv_lines.append(f"{idx_p}. {pt}")
+
+    if instruksi_tim_srv.strip():
+        wa_srv_lines.extend(["", "*⚡ Arahan Untuk Seluruh Tim:*", instruksi_tim_srv.strip()])
+
+    wa_srv_lines.extend([
+        "",
+        "Terima kasih atas kerja sama dan disiplin seluruh tim di lapangan. Tetap jaga keselamatan kerja (K3) & integritas! 💪",
+        "",
+        f"Hormat kami,\n*{pengirim_srv}*"
+    ])
+
+    wa_srv_final = "\n".join(wa_srv_lines)
+
+    st.markdown("<div class='section-title'>📲 Preview & Generate Pesan WhatsApp</div>", unsafe_allow_html=True)
+    st.info("💡 Klik ikon **Copy** di pojok kanan atas kotak teks di bawah ini, atau langsung klik tombol **Kirim via WhatsApp**.")
+    st.code(wa_srv_final, language="markdown")
+
+    wa_srv_enc = quote(wa_srv_final)
+    clean_phone = re.sub(r"[^\d]", "", no_wa_tujuan_srv)
+    if clean_phone.startswith("0"):
+        clean_phone = "62" + clean_phone[1:]
+    wa_srv_url = f"https://wa.me/{clean_phone}?text={wa_srv_enc}" if clean_phone else f"https://wa.me/?text={wa_srv_enc}"
+
+    c_wa_s1, c_wa_s2 = st.columns(2)
+    with c_wa_s1:
+        st.markdown(
+            f'<a href="{wa_srv_url}" target="_blank" class="btn-sidata-blue" style="background: linear-gradient(135deg, #22C55E 0%, #16A34A 100%) !important;">📲 BUKA & KIRIM PEMBERITAHUAN VIA WHATSAPP</a>',
+            unsafe_allow_html=True
+        )
+    with c_wa_s2:
+        st.download_button(
+            "📥 Simpan Draft Teks (.txt)",
+            data=wa_srv_final.encode("utf-8"),
+            file_name=f"Info_Update_Server_{tgl_update_srv.strftime('%d%m%Y')}.txt",
+            mime="text/plain",
+            use_container_width=True
+        )
+
 # PAGE ADMIN: MASTER TIM & NOPOL (DINAMIS & PERMANEN)
 # ==========================================
 elif st.session_state.page == "👥 Master Tim & Nopol":
@@ -2852,31 +3252,42 @@ elif st.session_state.page == "📝 Form Request Dana":
                                         if "motor" in str(r[10]).lower(): total_motor_this_month += clean_nominal(r[9])
                                 except: pass
                             
-                # 3. LOGIKA GENSET (SPBU vs ECERAN + WAJIB TANGKI + LIVE KONTROL RH & WAKTU)
+                # 3. LOGIKA GENSET (SOLAR & GENSET PORTABLE PERTALITE/PERTAMAX + SPBU/ECERAN + WAJIB TANGKI + LIVE KONTROL RH)
                 if "Genset" in jns_bbm_list:
                     is_genset = True
-                    with st.expander("⚡ Input BBM Genset (SPBU / Eceran, Tangki, Harga & Live Kontrol RH)", expanded=True):
+                    with st.expander("⚡ Input BBM Genset (Solar / Genset Portable Pertalite-Pertamax, Tangki & Live Kontrol RH)", expanded=True):
+                        tipe_genset = st.radio(
+                            "🔌 Pilih Tipe Unit Genset:",
+                            ["⚡ Genset Solar / Mobile (Dexlite / Bio Solar / Pertamina Dex)", "🔋 Genset Portable / Bensin (Pertalite / Pertamax)"],
+                            horizontal=True,
+                            key="tipe_gen_sel"
+                        )
+                        is_gen_portable = ("Portable" in tipe_genset)
+                        rate_l_per_jam = 1.2 if is_gen_portable else 2.5
+                        opsi_jb_genset = ["Pertalite", "Pertamax"] if is_gen_portable else ["Dexlite", "Bio Solar", "Pertamina Dex"]
+
                         c_g1, c_g2 = st.columns(2)
                         with c_g1:
                             sumber_gen = st.radio("Sumber Pembelian BBM Genset:", ["SPBU", "Eceran"], horizontal=True, key="src_gen")
                             if sumber_gen == "Eceran":
                                 st.warning("⚠️ **PEMBELIAN ECERAN:** Saat PJB nanti **WAJIB** melampirkan 2 foto tambahan (1. Full foto isi BBM sesuai jumlah botol/jerigen liter, 2. Foto bukti bayar cash/transfer ke toko) yang akan **dianalisa oleh AI**.")
-                            jb_genset = st.selectbox("Jenis BBM Genset", ["Dexlite", "Bio Solar", "Pertalite", "Pertamax", "Pertamina Dex"], key="b_gen")
+                            jb_genset = st.selectbox("Jenis BBM Genset", opsi_jb_genset, key="b_gen")
                             _, _, rule_gen = get_bbm_rule(jb_genset, sumber_gen)
-                            def_harga_gen = rule_gen["default"] if rule_gen else 25000
+                            def_harga_gen = rule_gen["default"] if rule_gen else (10000 if is_gen_portable else 25000)
 
-                            gen_price_sig = f"{sumber_gen}|{jb_genset}"
+                            gen_price_sig = f"{tipe_genset}|{sumber_gen}|{jb_genset}"
                             if st.session_state.get("_prev_gen_sig") != gen_price_sig:
                                 st.session_state["_prev_gen_sig"] = gen_price_sig
                                 st.session_state["hs_gen"] = int(def_harga_gen)
                             
-                            k_tangki_gen = st.number_input("Kapasitas Tangki Genset / Jerigen (Liter) [WAJIB DIISI]", min_value=0.0, max_value=500.0, step=1.0, value=0.0, key="kt_gen", help="Wajib cantumkan kapasitas tangki genset atau total jerigen yang dibawa per pengisian agar tidak over request.")
+                            lbl_tangki_gen = "Kapasitas Tangki Genset Portable / Jerigen (Liter) [WAJIB DIISI]" if is_gen_portable else "Kapasitas Tangki Genset / Jerigen (Liter) [WAJIB DIISI]"
+                            k_tangki_gen = st.number_input(lbl_tangki_gen, min_value=0.0, max_value=500.0, step=1.0, value=0.0, key="kt_gen", help="Wajib cantumkan kapasitas tangki genset atau total jerigen yang dibawa per pengisian agar tidak over request.")
                             if k_tangki_gen <= 0:
                                 st.error("🚨 **WAJIB DIISI:** Cantumkan **Kapasitas Tangki Genset / Jerigen (Liter)** untuk pengisian 1x maupun 2x agar tidak terjadi over request!")
                                 bbm_tank_lock = True
 
                             est_jam_gen = st.number_input("Estimasi Durasi Running / Backup (Jam)", min_value=0.5, step=0.5, value=5.0, key="jam_gen")
-                            est_liter_gen = max(0.5, round(est_jam_gen * 2.5, 1))
+                            est_liter_gen = max(0.5, round(est_jam_gen * rate_l_per_jam, 1))
                             
                             h_satuan_gen = st.number_input(f"Harga Satuan BBM Genset ({sumber_gen} - Rp/Liter)", min_value=0, step=100, key="hs_gen")
                             ok_hgen, msg_hgen = validate_bbm_price(jb_genset, h_satuan_gen, sumber_gen)
@@ -2915,78 +3326,89 @@ elif st.session_state.page == "📝 Form Request Dana":
                             std_biaya_gen = int(round(est_liter_gen * h_satuan_gen))
                             selisih_l_gen = round(l_gen_req - est_liter_gen, 1)
                             selisih_rp_gen = keb_genset - std_biaya_gen
+                            lbl_tipe_g = "Genset Portable" if is_gen_portable else "Genset Solar"
                             
                             if selisih_l_gen > 0.5:
                                 ket_selisih_gen = f"OVER +{selisih_l_gen} L (+Rp {selisih_rp_gen:,.0f})"
                                 st.warning(
-                                    f"📊 **Komparasi Otomatis BBM Genset ({sumber_gen}):**\n"
+                                    f"📊 **Komparasi Otomatis BBM {lbl_tipe_g} ({sumber_gen}):**\n"
                                     f"- **Request Tim:** {format_id_number(l_gen_req)} Liter × Rp {h_satuan_gen:,.0f} = **Rp {keb_genset:,.0f}** (Tangki: {k_tangki_gen:g} L)\n"
-                                    f"- **Seharusnya (Backup {est_jam_gen} Jam @ 2.5 L/Jam):** {format_id_number(est_liter_gen)} Liter (**Rp {std_biaya_gen:,.0f}**)\n"
+                                    f"- **Seharusnya (Backup {est_jam_gen} Jam @ {rate_l_per_jam} L/Jam):** {format_id_number(est_liter_gen)} Liter (**Rp {std_biaya_gen:,.0f}**)\n"
                                     f"- **Keterangan Selisih:** ⚠️ **Lebih +{format_id_number(selisih_l_gen)} Liter (+Rp {selisih_rp_gen:,.0f})** dari standar durasi"
                                 )
                             elif selisih_l_gen < -0.5:
                                 ket_selisih_gen = f"HEMAT {selisih_l_gen} L (-Rp {abs(selisih_rp_gen):,.0f})"
                                 st.success(
-                                    f"📊 **Komparasi Otomatis BBM Genset ({sumber_gen}):**\n"
+                                    f"📊 **Komparasi Otomatis BBM {lbl_tipe_g} ({sumber_gen}):**\n"
                                     f"- **Request Tim:** {format_id_number(l_gen_req)} Liter × Rp {h_satuan_gen:,.0f} = **Rp {keb_genset:,.0f}** (Tangki: {k_tangki_gen:g} L)\n"
-                                    f"- **Seharusnya (Backup {est_jam_gen} Jam @ 2.5 L/Jam):** {format_id_number(est_liter_gen)} Liter (**Rp {std_biaya_gen:,.0f}**)\n"
+                                    f"- **Seharusnya (Backup {est_jam_gen} Jam @ {rate_l_per_jam} L/Jam):** {format_id_number(est_liter_gen)} Liter (**Rp {std_biaya_gen:,.0f}**)\n"
                                     f"- **Keterangan Selisih:** ✅ **Hemat {format_id_number(selisih_l_gen)} Liter (-Rp {abs(selisih_rp_gen):,.0f})**"
                                 )
                             else:
                                 ket_selisih_gen = f"SESUAI STANDAR (Selisih {selisih_l_gen:+.1f} L)"
                                 st.info(
-                                    f"📊 **Komparasi Otomatis BBM Genset ({sumber_gen}):**\n"
+                                    f"📊 **Komparasi Otomatis BBM {lbl_tipe_g} ({sumber_gen}):**\n"
                                     f"- **Request Tim:** {format_id_number(l_gen_req)} Liter × Rp {h_satuan_gen:,.0f} = **Rp {keb_genset:,.0f}** (Tangki: {k_tangki_gen:g} L)\n"
-                                    f"- **Seharusnya (Backup {est_jam_gen} Jam @ 2.5 L/Jam):** {format_id_number(est_liter_gen)} Liter (**Rp {std_biaya_gen:,.0f}**)\n"
+                                    f"- **Seharusnya (Backup {est_jam_gen} Jam @ {rate_l_per_jam} L/Jam):** {format_id_number(est_liter_gen)} Liter (**Rp {std_biaya_gen:,.0f}**)\n"
                                     f"- **Keterangan Selisih:** ✅ **Sesuai Standar Sistem**"
                                 )
 
                         with c_g2:
                             pilihan_gen = st.selectbox("ID / Plat Genset", options_nopol, key="p_gen")
-                            if pilihan_gen == "-- Pilih Nopol / Ketik Baru --": plat_genset = st.text_input("Ketik ID Genset:", key="pgen_man").strip().upper()
+                            if pilihan_gen == "-- Pilih Nopol / Ketik Baru --": plat_genset = st.text_input("Ketik ID Genset (Misal: PORTABLE-01):", key="pgen_man").strip().upper()
                             else: plat_genset = pilihan_gen.strip().upper()
                             
+                            tanpa_rh_portable = False
+                            if is_gen_portable:
+                                tanpa_rh_portable = st.checkbox("🔋 Genset Portable tidak memiliki meteran RH digital (gunakan estimasi jam backup)", value=False, key="chk_gen_port_norh")
+
                             last_info_gen = get_last_indicator_detail(plat_genset, "Genset", pjb_r, req_r)
                             last_rh_gen = last_info_gen["value"]
                             if st.session_state.get("_prev_plat_gen") != plat_genset:
                                 st.session_state["_prev_plat_gen"] = plat_genset
                                 st.session_state["rh_gen_txt"] = str(int(last_rh_gen)) if last_rh_gen == int(last_rh_gen) else str(last_rh_gen)
 
-                            rh_gen_raw = st.text_input(
-                                f"RH Awal Genset Sekarang (Histori Terakhir: {format_id_number(last_rh_gen)} RH)",
-                                key="rh_gen_txt",
-                                placeholder="Ketik angka polos tanpa titik ribuan, misal: 1450 atau 1450,5",
-                                help="Jangan gunakan titik sebagai pemisah ribuan! Gunakan koma untuk angka desimal (contoh: 1450,5)."
-                            )
-                            rh_awal_gen, lvl_rhg, note_rhg = parse_indonesian_indicator(rh_gen_raw, last_rh_gen, "RH")
-                            if lvl_rhg == "err":
-                                st.error(note_rhg)
-                                bbm_ind_errors.append(f"Genset ({plat_genset}): {note_rhg}")
-                            elif lvl_rhg == "warn":
-                                st.warning(note_rhg)
+                            if tanpa_rh_portable:
+                                rh_awal_gen = float(last_rh_gen) if last_rh_gen > 0 else 0.0
+                                selisih_rh_gen = 0.0
+                                ctrl_gen = {"is_blocking": False, "level": "ok", "elapsed_text": "-", "selisih": 0.0, "status_short": "PORTABLE TANPA RH METER", "detail_lines": []}
+                                st.info(f"🔋 **Mode Genset Portable (Non-RH Meter):** Estimasi backup **{est_jam_gen} Jam** | BBM **{jb_genset} ({sumber_gen})**.")
                             else:
-                                st.caption(f"🔎 {note_rhg}")
+                                rh_gen_raw = st.text_input(
+                                    f"RH Awal Genset Sekarang (Histori Terakhir: {format_id_number(last_rh_gen)} RH)",
+                                    key="rh_gen_txt",
+                                    placeholder="Ketik angka polos tanpa titik ribuan, misal: 1450 atau 1450,5",
+                                    help="Jangan gunakan titik sebagai pemisah ribuan! Gunakan koma untuk angka desimal (contoh: 1450,5)."
+                                )
+                                rh_awal_gen, lvl_rhg, note_rhg = parse_indonesian_indicator(rh_gen_raw, last_rh_gen, "RH")
+                                if lvl_rhg == "err":
+                                    st.error(note_rhg)
+                                    bbm_ind_errors.append(f"Genset ({plat_genset}): {note_rhg}")
+                                elif lvl_rhg == "warn":
+                                    st.warning(note_rhg)
+                                else:
+                                    st.caption(f"🔎 {note_rhg}")
 
-                            ctrl_gen = evaluate_live_indicator_control(rh_awal_gen, last_info_gen, now_wib_req, tipe="Genset")
-                            if ctrl_gen["is_blocking"]:
-                                st.error("⏱️ **LIVE KONTROL RH & WAKTU GENSET:**\n" + "\n".join(ctrl_gen["detail_lines"]))
-                                bbm_ind_errors.append(f"Genset ({plat_genset}): {ctrl_gen['status_short']}")
-                            elif ctrl_gen["level"] == "warn":
-                                st.warning("⏱️ **LIVE KONTROL RH & WAKTU GENSET:**\n" + "\n".join(ctrl_gen["detail_lines"]))
-                            else:
-                                st.info("⏱️ **LIVE KONTROL RH & WAKTU GENSET:**\n" + "\n".join(ctrl_gen["detail_lines"]))
+                                ctrl_gen = evaluate_live_indicator_control(rh_awal_gen, last_info_gen, now_wib_req, tipe="Genset")
+                                if ctrl_gen["is_blocking"]:
+                                    st.error("⏱️ **LIVE KONTROL RH & WAKTU GENSET:**\n" + "\n".join(ctrl_gen["detail_lines"]))
+                                    bbm_ind_errors.append(f"Genset ({plat_genset}): {ctrl_gen['status_short']}")
+                                elif ctrl_gen["level"] == "warn":
+                                    st.warning("⏱️ **LIVE KONTROL RH & WAKTU GENSET:**\n" + "\n".join(ctrl_gen["detail_lines"]))
+                                else:
+                                    st.info("⏱️ **LIVE KONTROL RH & WAKTU GENSET:**\n" + "\n".join(ctrl_gen["detail_lines"]))
+                                selisih_rh_gen = ctrl_gen["selisih"]
                         
-                        selisih_rh_gen = ctrl_gen["selisih"]
-                        hist_rh_gen_str = f"RH {format_id_number(last_rh_gen)}->{format_id_number(rh_awal_gen)} (+{format_id_number(selisih_rh_gen)} RH dlm {ctrl_gen['elapsed_text']} | {ctrl_gen['status_short']})" if last_rh_gen > 0 else f"RH Awal: {format_id_number(rh_awal_gen)}"
-                        kat_gen_base = f"Genset - {jb_genset} [{sumber_gen.upper()}]"
+                        hist_rh_gen_str = "Portable Non-RH" if tanpa_rh_portable else (f"RH {format_id_number(last_rh_gen)}->{format_id_number(rh_awal_gen)} (+{format_id_number(selisih_rh_gen)} RH dlm {ctrl_gen['elapsed_text']} | {ctrl_gen['status_short']})" if last_rh_gen > 0 else f"RH Awal: {format_id_number(rh_awal_gen)}")
+                        kat_gen_base = f"Genset Portable - {jb_genset} [{sumber_gen.upper()}]" if is_gen_portable else f"Genset - {jb_genset} [{sumber_gen.upper()}]"
                         if opsi_pengisian_gen == "1x Pengisian":
-                            info_bbm_gen = f"Beli: {sumber_gen.upper()} | Tangki: {k_tangki_gen:g} L | Req Tim: {l_gen_req} L (@Rp {h_satuan_gen:,.0f}) = Rp {keb_genset:,.0f} | Seharusnya ({est_jam_gen} Jam): {est_liter_gen} L (Rp {std_biaya_gen:,.0f}) | Selisih: {ket_selisih_gen} | {hist_rh_gen_str}"
-                            sub_requests.append({"tiket": f"{base_tiket_clean} [GENSET]", "kategori": kat_gen_base, "kebutuhan": keb_genset, "plat": plat_genset, "indikator": rh_awal_gen, "last_ind": last_rh_gen, "tipe": "Genset", "info_bbm": info_bbm_gen, "harga_satuan": h_satuan_gen, "kapasitas_tangki": k_tangki_gen, "sumber_bbm": sumber_gen})
+                            info_bbm_gen = f"Unit: {lbl_tipe_g} | Beli: {sumber_gen.upper()} | Tangki: {k_tangki_gen:g} L | Req Tim: {l_gen_req} L (@Rp {h_satuan_gen:,.0f}) = Rp {keb_genset:,.0f} | Seharusnya ({est_jam_gen} Jam): {est_liter_gen} L (Rp {std_biaya_gen:,.0f}) | Selisih: {ket_selisih_gen} | {hist_rh_gen_str}"
+                            sub_requests.append({"tiket": f"{base_tiket_clean} [GENSET]", "kategori": kat_gen_base, "kebutuhan": keb_genset, "plat": plat_genset, "indikator": rh_awal_gen, "last_ind": last_rh_gen, "tipe": "Genset", "info_bbm": info_bbm_gen, "harga_satuan": h_satuan_gen, "kapasitas_tangki": k_tangki_gen, "sumber_bbm": sumber_gen, "skip_ind_check": tanpa_rh_portable})
                         else:
-                            info_bbm_gen1 = f"Beli: {sumber_gen.upper()} | Tangki: {k_tangki_gen:g} L | Isi 1: {l_gen_1} L (@Rp {h_satuan_gen:,.0f}) = Rp {keb_genset_1:,.0f} [Total 1+2: {l_gen_req} L vs Std {est_liter_gen} L | {ket_selisih_gen} | {hist_rh_gen_str}]"
-                            info_bbm_gen2 = f"Beli: {sumber_gen.upper()} | Tangki: {k_tangki_gen:g} L | Isi 2: {l_gen_2} L (@Rp {h_satuan_gen:,.0f}) = Rp {keb_genset_2:,.0f} [Total 1+2: {l_gen_req} L vs Std {est_liter_gen} L | {ket_selisih_gen} | {hist_rh_gen_str}]"
-                            sub_requests.append({"tiket": f"{base_tiket_clean} [GENSET-1]", "kategori": f"{kat_gen_base} (Isi 1)", "kebutuhan": keb_genset_1, "plat": plat_genset, "indikator": rh_awal_gen, "last_ind": last_rh_gen, "tipe": "Genset", "info_bbm": info_bbm_gen1, "harga_satuan": h_satuan_gen, "kapasitas_tangki": k_tangki_gen, "sumber_bbm": sumber_gen})
-                            sub_requests.append({"tiket": f"{base_tiket_clean} [GENSET-2]", "kategori": f"{kat_gen_base} (Isi 2)", "kebutuhan": keb_genset_2, "plat": plat_genset, "indikator": rh_awal_gen, "last_ind": last_rh_gen, "tipe": "Genset", "info_bbm": info_bbm_gen2, "harga_satuan": h_satuan_gen, "kapasitas_tangki": k_tangki_gen, "sumber_bbm": sumber_gen})
+                            info_bbm_gen1 = f"Unit: {lbl_tipe_g} | Beli: {sumber_gen.upper()} | Tangki: {k_tangki_gen:g} L | Isi 1: {l_gen_1} L (@Rp {h_satuan_gen:,.0f}) = Rp {keb_genset_1:,.0f} [Total 1+2: {l_gen_req} L vs Std {est_liter_gen} L | {ket_selisih_gen} | {hist_rh_gen_str}]"
+                            info_bbm_gen2 = f"Unit: {lbl_tipe_g} | Beli: {sumber_gen.upper()} | Tangki: {k_tangki_gen:g} L | Isi 2: {l_gen_2} L (@Rp {h_satuan_gen:,.0f}) = Rp {keb_genset_2:,.0f} [Total 1+2: {l_gen_req} L vs Std {est_liter_gen} L | {ket_selisih_gen} | {hist_rh_gen_str}]"
+                            sub_requests.append({"tiket": f"{base_tiket_clean} [GENSET-1]", "kategori": f"{kat_gen_base} (Isi 1)", "kebutuhan": keb_genset_1, "plat": plat_genset, "indikator": rh_awal_gen, "last_ind": last_rh_gen, "tipe": "Genset", "info_bbm": info_bbm_gen1, "harga_satuan": h_satuan_gen, "kapasitas_tangki": k_tangki_gen, "sumber_bbm": sumber_gen, "skip_ind_check": tanpa_rh_portable})
+                            sub_requests.append({"tiket": f"{base_tiket_clean} [GENSET-2]", "kategori": f"{kat_gen_base} (Isi 2)", "kebutuhan": keb_genset_2, "plat": plat_genset, "indikator": rh_awal_gen, "last_ind": last_rh_gen, "tipe": "Genset", "info_bbm": info_bbm_gen2, "harga_satuan": h_satuan_gen, "kapasitas_tangki": k_tangki_gen, "sumber_bbm": sumber_gen, "skip_ind_check": tanpa_rh_portable})
                 st.markdown("</div>", unsafe_allow_html=True)
             
             # =========================================================
@@ -3278,7 +3700,7 @@ elif st.session_state.page == "📝 Form Request Dana":
                                 if req.get('kapasitas_tangki', 0) <= 0:
                                     st.error(f"❌ Kapasitas Tangki pada {req['tipe']} wajib diisi (> 0 Liter) agar tidak over request!")
                                     st.stop()
-                                if req['indikator'] <= 0 or req['indikator'] < req['last_ind']:
+                                if not req.get('skip_ind_check', False) and (req['indikator'] <= 0 or req['indikator'] < req['last_ind']):
                                     st.error(f"❌ KM/RH Awal pada {req['tipe']} bermasalah (0 atau lebih kecil dari histori {req['last_ind']}).")
                                     st.stop()
                     
@@ -3629,9 +4051,26 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                             else:
                                 st.warning(f"🛢️ **MODE PJB ECERAN AKTIF** — Range Harga Eceran: **Rp {rule_pjb_bbm['min']:,.0f} – Rp {rule_pjb_bbm['max']:,.0f}/Liter**. WAJIB unggah 2 Foto Tambahan Eceran di bawah (dianalisa AI).")
 
+                        # TAMPILKAN RINGKASAN KALKULASI JARAK NOPOL & HISTORI TERAKHIR SAAT PJB
+                        nopol_stats_pjb, _ = build_nopol_distance_summary(pjb_r, req_r)
+                        plat_pjb_key = re.sub(r'\s+', ' ', str(d.get("Plat", "")).strip().upper())
+                        nopol_rec_pjb = nopol_stats_pjb.get(plat_pjb_key, {})
+                        unit_pjb_lbl = "RH" if is_genset else "KM"
+                        is_pjb_portable = ("portable" in str(d.get("BBM", "")).lower()) or ("portable non-rh" in str(d.get("Desc", "")).lower())
+
+                        if plat_pjb_key and plat_pjb_key not in ["", "-", "0", "NONE"]:
+                            last_odo_npl = nopol_rec_pjb.get("last_odo", 0.0)
+                            tot_trip_npl = nopol_rec_pjb.get("total_trip", 0.0)
+                            cnt_trip_npl = nopol_rec_pjb.get("trip_count", 0)
+                            last_dt_npl = nopol_rec_pjb.get("last_date", "-")
+                            st.info(
+                                f"🛣️ **KALKULASI JARAK NOPOL / UNIT (`{plat_pjb_key}`):**\n"
+                                f"- **{unit_pjb_lbl} Terakhir Tercatat di PJB:** **{format_id_number(last_odo_npl)} {unit_pjb_lbl}** *(Tgl: {last_dt_npl} | Akumulasi Histori: {format_id_number(tot_trip_npl)} {unit_pjb_lbl} dari {cnt_trip_npl} Trip)*\n"
+                                f"- **{unit_pjb_lbl} Awal Tiket Ini:** **{format_id_number(real_km_awal)} {unit_pjb_lbl}**  |  **Estimasi Jarak Satelit Request:** `{d.get('Jarak', '-')}`"
+                            )
+
                         c_c1, c_d1 = st.columns(2)
                         with c_c1:
-                            unit_pjb_lbl = "RH" if is_genset else "KM"
                             st.info(f"📍 {unit_pjb_lbl} Awal (Saat Request): **{format_id_number(real_km_awal)} {unit_pjb_lbl}**  |  ⏱️ `{now_wib_pjb.strftime('%d/%m/%Y %H:%M WIB')}`")
                             default_km_akhir = max(0.0, float(d.get("km_akhir_lama", real_km_awal)))
                             def_km_str = str(int(default_km_akhir)) if default_km_akhir == int(default_km_akhir) else str(default_km_akhir)
@@ -3825,7 +4264,7 @@ elif st.session_state.page == "✅ Form PJB Operasional":
                             ai_mismatch_flag = True
 
                     if "Operational" in jns_pjb and is_vehicle:
-                        if pjb_ind_error_flag or km_akhir <= 0 or km_akhir < real_km_awal:
+                        if (not (is_pjb_portable and real_km_awal == 0 and km_akhir == 0)) and (pjb_ind_error_flag or km_akhir <= 0 or km_akhir < real_km_awal):
                             st.error("❌ PENGIRIMAN DITOLAK: KM/RH Akhir bermasalah (salah titik/koma, 0, lonjakan ekstrem, atau lebih kecil dari KM/RH Awal)!")
                             st.stop()
                         if sumber_bbm_pjb == "Eceran":
@@ -4308,6 +4747,21 @@ elif st.session_state.page == "🏦 Manajemen Kas & Distribusi":
                 df_view_report["Sisa Saldo Tersedia"] = df_view_report["Sisa Saldo Tersedia"].apply(lambda x: f"Rp {x:,.0f}")
                 st.dataframe(df_view_report, hide_index=True, use_container_width=True)
 
+                st.markdown("<hr>", unsafe_allow_html=True)
+                st.markdown("#### 📲 Generate WA Report Harian Penggunaan Dana & Sisa Uang Muka")
+                ck1, ck2, ck3 = st.columns([1, 1, 2])
+                with ck1: tgl_wa_kas = st.date_input("Tanggal Laporan:", value=get_now_wib().date(), key="wa_kas_tgl")
+                with ck2: batch_wa_kas = st.selectbox("Pilih Batch UM:", ["Semua Batch"] + sorted(in_data.keys()), key="wa_kas_batch")
+                with ck3: note_wa_kas = st.text_input("Catatan Tambahan (Opsional):", key="wa_kas_note")
+
+                wa_kas_txt, _ = generate_daily_finance_wa_report(nop_admin, tgl_wa_kas, data_all, selected_batch=batch_wa_kas, extra_note=note_wa_kas)
+                st.code(wa_kas_txt, language="markdown")
+                wa_kas_enc = quote(wa_kas_txt)
+                st.markdown(
+                    f'<a href="https://wa.me/?text={wa_kas_enc}" target="_blank" class="btn-sidata-blue" style="background: linear-gradient(135deg, #22C55E 0%, #16A34A 100%) !important;">📲 BUKA & KIRIM WA REPORT HARIAN (KAS & SISA UM)</a>',
+                    unsafe_allow_html=True
+                )
+
         with tab_pjb:
             if len(rekap_r) > 1:
                 list_col_a = sorted(list(set([r[0].strip() for r in rekap_r[1:] if len(r) > 0 and r[0].strip() != ""])))
@@ -4574,7 +5028,10 @@ elif st.session_state.page == "📈 Live Monitoring":
 
                     liter_gen = float(clean_indicator(pjb[22])) if len(pjb) > 22 else 0.0
                     dana_gen = clean_nominal(pjb[11]) if len(pjb) > 11 else 0
-                    if liter_gen <= 0 and dana_gen > 0: liter_gen = round(dana_gen / 14500, 2)
+                    if liter_gen <= 0 and dana_gen > 0:
+                        _, _, _rgen_fb = get_bbm_rule(str(pjb[8]), "Eceran" if "eceran" in str(pjb[8]).lower() else "SPBU")
+                        _hrg_fb = _rgen_fb["default"] if _rgen_fb else 14500
+                        liter_gen = round(dana_gen / _hrg_fb, 2)
 
                     liter_per_rh = (liter_gen / total_rh) if total_rh > 0 else 0.0
                     biaya_per_rh = (dana_gen / total_rh) if total_rh > 0 else 0.0
@@ -4634,6 +5091,9 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                 ]
                 inc_bukti_tf = st.checkbox("Sertakan Foto Bukti Transfer Dana (Jika Ada)", value=False)
 
+                # Hitung Rekap Jarak & Odometer Terakhir per Nopol untuk ditampilkan di Tabel & PDF PJB
+                nopol_stats_rep, req_info_rep = build_nopol_distance_summary(pjb_r, req_r)
+
                 dict_pjb_exact = defaultdict(list)
                 for r in pjb_r[1:]:
                     if len(r) > 21:
@@ -4650,10 +5110,50 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                                         seen_urls.add(u)
                                         
                             pdf_url = str(r[35]).strip() if len(r) > 35 and str(r[35]).strip().startswith("http") else ""
+                            tgl_pjb_d = parse_date(r[1] if len(r) > 1 else "", r[0] if len(r) > 0 else "")
+                            tgl_pjb_clean = tgl_pjb_d.strftime("%d/%m/%Y") if tgl_pjb_d != datetime(1970, 1, 1).date() else (str(r[1]).strip() if len(r) > 1 else "-")
+
+                            plat_val = re.sub(r'\s+', ' ', str(r[12]).strip().upper()) if len(r) > 12 else ""
+                            km_akhir_v = float(clean_indicator(r[10])) if len(r) > 10 else 0.0
+                            trip_col_v = float(clean_indicator(r[24])) if len(r) > 24 else 0.0
+                            req_m = req_info_rep.get(tk, {})
+                            km_awal_v = req_m.get("km_awal", 0.0)
+                            if trip_col_v > 0:
+                                trip_v = trip_col_v
+                                if km_awal_v == 0 and km_akhir_v >= trip_v:
+                                    km_awal_v = round(km_akhir_v - trip_v, 2)
+                            elif km_akhir_v > km_awal_v and km_awal_v > 0:
+                                trip_v = round(km_akhir_v - km_awal_v, 2)
+                            else:
+                                trip_v = 0.0
+
+                            kat_v = str(r[8]).strip() if len(r) > 8 else "-"
+                            is_gen_v = "genset" in kat_v.lower()
+                            is_veh_v = is_gen_v or ("mobil" in kat_v.lower()) or ("motor" in kat_v.lower())
+                            unit_v = "RH" if is_gen_v else "KM"
+
+                            npl_stat = nopol_stats_rep.get(plat_val, {})
+                            if is_veh_v and (km_akhir_v > 0 or trip_v > 0 or plat_val):
+                                last_odo_n = npl_stat.get("last_odo", km_akhir_v)
+                                tot_acc_n = npl_stat.get("total_trip", trip_v)
+                                cnt_tr_n = npl_stat.get("trip_count", 1)
+                                jarak_nopol_txt = (
+                                    f"Awal: {format_id_number(km_awal_v)} → Akhir: {format_id_number(km_akhir_v)} {unit_v} "
+                                    f"(Trip: +{format_id_number(trip_v)} {unit_v}) | "
+                                    f"Terakhir Nopol: {format_id_number(last_odo_n)} {unit_v} (Total {format_id_number(tot_acc_n)} {unit_v} / {cnt_tr_n} Trip)"
+                                )
+                            else:
+                                jarak_nopol_txt = req_m.get("jarak_satelit", "-") or "-"
+
+                            desc_real = str(r[9]).strip() if len(r) > 9 else ""
+                            if not desc_real or desc_real == "-":
+                                desc_real = req_m.get("desc", "-")
+
                             dict_pjb_exact[tk].append({
-                                "tanggal": r[1] if len(r) > 1 else "-", "nama": r[4] if len(r) > 4 else "-",
-                                "role": r[5] if len(r) > 5 else "-", "kategori": r[8] if len(r) > 8 else "-",
-                                "keperluan": r[7] if len(r) > 7 else "-", "deskripsi": r[9] if len(r) > 9 else "-",
+                                "tanggal": tgl_pjb_clean, "nama": r[4] if len(r) > 4 else "-",
+                                "role": r[5] if len(r) > 5 else "-", "kategori": kat_v,
+                                "keperluan": r[7] if len(r) > 7 else "-", "deskripsi": desc_real or "-",
+                                "plat": plat_val or "-", "jarak_nopol": jarak_nopol_txt,
                                 "nominal": clean_nominal(r[11]) if len(r) > 11 else 0,
                                 "photos": photos, "pdf_link": pdf_url
                             })
@@ -4661,10 +5161,21 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                 list_periode = sorted(list(set([r[16].strip() for r in rekap_r[1:] if len(r) > 16 and r[16].strip() != ""])))
                 list_role = sorted(list(set([r[6].strip() for r in rekap_r[1:] if len(r) > 6 and r[6].strip() != ""])))
                 
-                st.markdown("<div class='section-title'>🔍 1. Parameter Filter Laporan</div>", unsafe_allow_html=True)
+                st.markdown("<div class='section-title'>🔍 1. Parameter Filter & Mode Layout PDF</div>", unsafe_allow_html=True)
                 col_f1, col_f2 = st.columns(2)
                 with col_f1: filter_periode = st.selectbox("📅 Periode Dana Ops:", ["Semua Periode"] + list_periode)
                 with col_f2: filter_role = st.multiselect("💼 Role Pekerjaan:", list_role, default=list_role)
+
+                mode_pdf_layout = st.radio(
+                    "🖨️ Pilih Format Cetak PDF Foto PJB:",
+                    [
+                        "📄 Full 1 Lembar Per Foto (Ukuran Asli Proporsional — Rekomendasi Audit)",
+                        "🗂️ Mode Ringkas (Grid Semua Foto Dalam 1 Halaman per Tiket)"
+                    ],
+                    index=0,
+                    horizontal=True,
+                    key="pdf_layout_mode"
+                )
 
                 draft_rows = []
                 ticket_counts = defaultdict(int)
@@ -4686,23 +5197,42 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                             rec_list = dict_pjb_exact[found_tiket]
                             rec_pjb = rec_list[idx_for_tk] if idx_for_tk < len(rec_list) else rec_list[-1]
                             ticket_counts[found_tiket] += 1
+
+                            # FIX TANGGAL TERBALIK / TERTULIS BULAN:
+                            # Di sheet Rekap PJB, Kolom A (row[0]) adalah BULAN, Kolom B (row[1]) adalah TANGGAL.
+                            # Prioritaskan tanggal asli dari Form PJB (rec_pjb["tanggal"]) atau Kolom B (row[1]) yang sudah dinormalisasi DD/MM/YYYY!
+                            tgl_rekap_b = parse_date(row[1] if len(row) > 1 else "")
+                            if rec_pjb["tanggal"] and rec_pjb["tanggal"] != "-":
+                                tgl_final_pdf = rec_pjb["tanggal"]
+                            elif tgl_rekap_b != datetime(1970, 1, 1).date():
+                                tgl_final_pdf = tgl_rekap_b.strftime("%d/%m/%Y")
+                            else:
+                                tgl_final_pdf = str(row[1]).strip() if len(row) > 1 and str(row[1]).strip() else "-"
+
+                            # FIX DESKRIPSI vs NOPOL:
+                            # Prioritaskan Deskripsi asli dari Form PJB (rec_pjb["deskripsi"]), BUKAN row[9] dari Rekap PJB yang berisi Nopol/No Tiket!
+                            desc_asli = str(rec_pjb.get("deskripsi", "")).strip()
+                            if not desc_asli or desc_asli == "-":
+                                desc_asli = str(row[9]).strip() if len(row) > 9 and str(row[9]).strip() else "-"
                             
                             photo_links_str = " | ".join([f"{lbl}::{url}" for lbl, url in rec_pjb["photos"]])
                             draft_rows.append({
-                                "Cetak": True, "No Tiket": found_tiket, "Periode": row_periode,
-                                "Tanggal": row[0] if len(row) > 0 and str(row[0]).strip() else rec_pjb["tanggal"],
+                                "Cetak": True, "No Tiket": found_tiket, "Periode": row_periode or (str(row[0]).strip() if len(row) > 0 else "-"),
+                                "Tanggal": tgl_final_pdf,
                                 "Nama": row[4] if len(row) > 4 and str(row[4]).strip() else rec_pjb["nama"],
                                 "Role": row_role if row_role else rec_pjb["role"],
                                 "Kategori": rec_pjb["kategori"],
+                                "Nopol / ID Unit": rec_pjb["plat"],
+                                "Kalkulasi Jarak Nopol": rec_pjb["jarak_nopol"],
                                 "Keperluan": row[8] if len(row) > 8 and str(row[8]).strip() else rec_pjb["keperluan"],
-                                "Deskripsi": row[9] if len(row) > 9 and str(row[9]).strip() else rec_pjb["deskripsi"],
+                                "Deskripsi": desc_asli,
                                 "Nominal": clean_nominal(row[15]) if len(row) > 15 and str(row[15]).strip() else rec_pjb["nominal"],
                                 "Jml Foto": len(rec_pjb["photos"]),
                                 "Data Foto (Label::URL)": photo_links_str, "Link PDF UM": rec_pjb["pdf_link"]
                             })
 
-                st.markdown("<div class='section-title'>✏️ 2. Tabel Auto-Edit List PJB & Foto (Khusus Admin)</div>", unsafe_allow_html=True)
-                st.info("💡 **AUTO-EDIT ADMIN:** Anda dapat mengedit Tabel di bawah ini secara langsung sebelum men-generate PDF.")
+                st.markdown("<div class='section-title'>✏️ 2. Tabel Auto-Edit List PJB, Nopol, Jarak & Foto (Khusus Admin)</div>", unsafe_allow_html=True)
+                st.info("💡 **AUTO-EDIT ADMIN:** Tanggal sudah dikoreksi otomatis ke format `DD/MM/YYYY`, Nopol & Deskripsi sudah dipisahkan dengan benar, serta **Kalkulasi Jarak & Odometer Terakhir Nopol** tampil langsung di tabel & PDF.")
                 
                 if draft_rows:
                     df_draft = pd.DataFrame(draft_rows)
@@ -4719,10 +5249,13 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                         btn_gen_html = st.button("🚀 Generate Laporan PDF Lumpsum", type="primary", use_container_width=True)
 
                     if btn_gen_html:
+                        is_full_per_photo = ("Full 1 Lembar Per Foto" in mode_pdf_layout)
                         html_content = ""
-                        count_match = 0
+                        page_counter = 0
+                        ticket_counter = 0
+
                         for _, erow in df_selected.iterrows():
-                            count_match += 1
+                            ticket_counter += 1
                             raw_photos_str = str(erow.get("Data Foto (Label::URL)", "")).strip()
                             valid_photos = []
                             if raw_photos_str and raw_photos_str != "nan":
@@ -4733,63 +5266,111 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                                             valid_photos.append((lbl.strip(), u.strip()))
                             
                             jml_foto = len(valid_photos)
-                            # Smart Grid A4 Portrait: sesuaikan kolom & tinggi foto agar 1 tiket = 1 halaman
-                            if jml_foto == 1:
-                                grid_cols = "1fr"
-                                img_height = "460px"
-                            elif jml_foto == 2:
-                                grid_cols = "1fr 1fr"
-                                img_height = "380px"
-                            elif jml_foto in [3, 4]:
-                                grid_cols = "1fr 1fr"
-                                img_height = "265px"
-                            else:
-                                grid_cols = "1fr 1fr 1fr"
-                                img_height = "225px"
+                            nopol_pdf = erow.get("Nopol / ID Unit", "-")
+                            jarak_nopol_pdf = erow.get("Kalkulasi Jarak Nopol", "-")
+                            desc_pdf = str(erow.get("Deskripsi", "-")).replace("\n", "<br>")
 
-                            html_content += f"""
-                            <div class='ticket-card'>
-                                <div class='report-top-bar'>
-                                    <span>LAPORAN PERTANGGUNGJAWABAN (PJB) — NOP {nop_report.upper()}</span>
-                                    <span>Hal. {count_match}</span>
-                                </div>
-                                <div class='ticket-header'>
-                                    <span>🎫 SUB-TIKET: {erow.get("No Tiket", "-")}</span>
-                                    <span>📦 KATEGORI: {erow.get("Kategori", "-")}</span>
-                                </div>
-                                <table class='info-table'>
-                                    <tr>
-                                        <td width='14%'><b>Tanggal</b></td><td width='36%'>: {erow.get("Tanggal", "-")}</td>
-                                        <td width='14%'><b>Periode</b></td><td width='36%'>: {erow.get("Periode", "-")}</td>
-                                    </tr>
-                                    <tr>
-                                        <td><b>Nama PIC</b></td><td>: {erow.get("Nama", "-")}</td>
-                                        <td><b>Nominal PJB</b></td><td>: <span style='color:#059669; font-weight:800;'>Rp {clean_nominal(erow.get("Nominal", 0)):,.0f}</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td><b>Role/Jabatan</b></td><td>: {erow.get("Role", "-")}</td>
-                                        <td><b>Keperluan</b></td><td>: {erow.get("Keperluan", "-")}</td>
-                                    </tr>
-                                    <tr>
-                                        <td valign='top'><b>Deskripsi</b></td><td colspan='3'>: {erow.get("Deskripsi", "-")}</td>
-                                    </tr>
-                                </table>
-                                <div class='photo-grid' style='grid-template-columns: {grid_cols};'>
-                            """
-                            for idx_f, (lbl_foto, url_foto) in enumerate(valid_photos, 1):
-                                # Jika jumlah foto ganjil (3 foto), foto ke-3 ditaruh rapi di tengah
-                                span_style = "grid-column: span 2; width: 65%; margin: 0 auto;" if (jml_foto == 3 and idx_f == 3) else ""
-                                html_content += f"""
-                                    <div class='photo-box' style='{span_style}'>
-                                        <div class='img-wrapper' style='height: {img_height};'>
-                                            <img src='{url_foto}' alt='{lbl_foto}'>
+                            if is_full_per_photo:
+                                # MODE FULL 1 LEMBAR A4 PORTRAIT PER FOTO (UKURAN ASLI PROPORSIONAL)
+                                photos_to_render = valid_photos if valid_photos else [("Tidak Ada Lampiran Foto", "")]
+                                for idx_f, (lbl_foto, url_foto) in enumerate(photos_to_render, 1):
+                                    page_counter += 1
+                                    img_html = f"<img src='{url_foto}' alt='{lbl_foto}'>" if url_foto else "<div style='color:#94A3B8; font-weight:700;'>Tidak ada gambar terlampir</div>"
+                                    html_content += f"""
+                                    <div class='ticket-card full-page-photo'>
+                                        <div class='report-top-bar'>
+                                            <span>LAPORAN PERTANGGUNGJAWABAN (PJB) — NOP {nop_report.upper()}</span>
+                                            <span>Tiket #{ticket_counter} | Foto {idx_f}/{len(photos_to_render)} | Hal. {page_counter}</span>
                                         </div>
-                                        <div class='photo-caption'>📸 {lbl_foto}</div>
+                                        <div class='ticket-header'>
+                                            <span>🎫 SUB-TIKET: {erow.get("No Tiket", "-")}</span>
+                                            <span>📦 KATEGORI: {erow.get("Kategori", "-")}</span>
+                                        </div>
+                                        <table class='info-table'>
+                                            <tr>
+                                                <td width='14%'><b>Tanggal</b></td><td width='36%'>: {erow.get("Tanggal", "-")}</td>
+                                                <td width='14%'><b>Periode</b></td><td width='36%'>: {erow.get("Periode", "-")}</td>
+                                            </tr>
+                                            <tr>
+                                                <td><b>Nama PIC</b></td><td>: {erow.get("Nama", "-")} ({erow.get("Role", "-")})</td>
+                                                <td><b>Nominal PJB</b></td><td>: <span style='color:#059669; font-weight:800;'>Rp {clean_nominal(erow.get("Nominal", 0)):,.0f}</span></td>
+                                            </tr>
+                                            <tr>
+                                                <td><b>Nopol / Unit</b></td><td>: <b>{nopol_pdf}</b></td>
+                                                <td><b>Keperluan</b></td><td>: {erow.get("Keperluan", "-")}</td>
+                                            </tr>
+                                            <tr style='background:#F0F9FF;'>
+                                                <td><b>Jarak Nopol</b></td><td colspan='3'>: <b style='color:#0369A1;'>{jarak_nopol_pdf}</b></td>
+                                            </tr>
+                                            <tr>
+                                                <td valign='top'><b>Deskripsi</b></td><td colspan='3'>: {desc_pdf}</td>
+                                            </tr>
+                                        </table>
+                                        <div class='single-photo-stage'>
+                                            <div class='single-photo-title'>📸 {lbl_foto} (Ukuran Asli Proporsional)</div>
+                                            <div class='single-img-wrapper'>
+                                                {img_html}
+                                            </div>
+                                        </div>
                                     </div>
-                                """
-                            html_content += "</div></div>"
+                                    """
+                            else:
+                                # MODE RINGKAS (GRID 1 HALAMAN PER TIKET)
+                                page_counter += 1
+                                if jml_foto == 1:
+                                    grid_cols, img_height = "1fr", "430px"
+                                elif jml_foto == 2:
+                                    grid_cols, img_height = "1fr 1fr", "350px"
+                                elif jml_foto in [3, 4]:
+                                    grid_cols, img_height = "1fr 1fr", "245px"
+                                else:
+                                    grid_cols, img_height = "1fr 1fr 1fr", "205px"
 
-                        if count_match > 0:
+                                html_content += f"""
+                                <div class='ticket-card'>
+                                    <div class='report-top-bar'>
+                                        <span>LAPORAN PERTANGGUNGJAWABAN (PJB) — NOP {nop_report.upper()}</span>
+                                        <span>Hal. {page_counter}</span>
+                                    </div>
+                                    <div class='ticket-header'>
+                                        <span>🎫 SUB-TIKET: {erow.get("No Tiket", "-")}</span>
+                                        <span>📦 KATEGORI: {erow.get("Kategori", "-")}</span>
+                                    </div>
+                                    <table class='info-table'>
+                                        <tr>
+                                            <td width='14%'><b>Tanggal</b></td><td width='36%'>: {erow.get("Tanggal", "-")}</td>
+                                            <td width='14%'><b>Periode</b></td><td width='36%'>: {erow.get("Periode", "-")}</td>
+                                        </tr>
+                                        <tr>
+                                            <td><b>Nama PIC</b></td><td>: {erow.get("Nama", "-")} ({erow.get("Role", "-")})</td>
+                                            <td><b>Nominal PJB</b></td><td>: <span style='color:#059669; font-weight:800;'>Rp {clean_nominal(erow.get("Nominal", 0)):,.0f}</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td><b>Nopol / Unit</b></td><td>: <b>{nopol_pdf}</b></td>
+                                            <td><b>Keperluan</b></td><td>: {erow.get("Keperluan", "-")}</td>
+                                        </tr>
+                                        <tr style='background:#F0F9FF;'>
+                                            <td><b>Jarak Nopol</b></td><td colspan='3'>: <b style='color:#0369A1;'>{jarak_nopol_pdf}</b></td>
+                                        </tr>
+                                        <tr>
+                                            <td valign='top'><b>Deskripsi</b></td><td colspan='3'>: {desc_pdf}</td>
+                                        </tr>
+                                    </table>
+                                    <div class='photo-grid' style='grid-template-columns: {grid_cols};'>
+                                """
+                                for idx_f, (lbl_foto, url_foto) in enumerate(valid_photos, 1):
+                                    span_style = "grid-column: span 2; width: 65%; margin: 0 auto;" if (jml_foto == 3 and idx_f == 3) else ""
+                                    html_content += f"""
+                                        <div class='photo-box' style='{span_style}'>
+                                            <div class='img-wrapper' style='height: {img_height};'>
+                                                <img src='{url_foto}' alt='{lbl_foto}'>
+                                            </div>
+                                            <div class='photo-caption'>📸 {lbl_foto}</div>
+                                        </div>
+                                    """
+                                html_content += "</div></div>"
+
+                        if page_counter > 0:
                             full_html = f"""
                             <!DOCTYPE html>
                             <html>
@@ -4842,30 +5423,75 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                                         padding: 5px 12px;
                                         border-radius: 5px 5px 0 0;
                                         letter-spacing: 0.4px;
+                                        flex-shrink: 0;
                                     }}
                                     .ticket-header {{
                                         display: flex;
                                         justify-content: space-between;
                                         background-color: #EFF6FF;
                                         color: #1E3A8A;
-                                        padding: 7px 12px;
+                                        padding: 6px 12px;
                                         font-weight: 800;
-                                        font-size: 10pt;
+                                        font-size: 9.5pt;
                                         border-bottom: 2px solid #2563EB;
-                                        margin-bottom: 8px;
+                                        margin-bottom: 6px;
                                         border-radius: 0 0 5px 5px;
+                                        flex-shrink: 0;
                                     }}
                                     .info-table {{
                                         width: 100%;
                                         border-collapse: collapse;
-                                        margin-bottom: 10px;
-                                        font-size: 9pt;
+                                        margin-bottom: 8px;
+                                        font-size: 8.5pt;
+                                        flex-shrink: 0;
                                     }}
                                     .info-table td {{
-                                        padding: 4px 6px;
+                                        padding: 3.5px 6px;
                                         border-bottom: 1px solid #E2E8F0;
-                                        line-height: 1.3;
+                                        line-height: 1.28;
                                     }}
+                                    /* FULL 1 LEMBAR PER FOTO — UKURAN ASLI PROPORSIONAL */
+                                    .single-photo-stage {{
+                                        flex: 1 1 auto;
+                                        min-height: 0;
+                                        display: flex;
+                                        flex-direction: column;
+                                        border: 1.2px solid #CBD5E1;
+                                        border-radius: 8px;
+                                        background: #F8FAFC;
+                                        padding: 8px;
+                                        overflow: hidden;
+                                    }}
+                                    .single-photo-title {{
+                                        text-align: center;
+                                        font-weight: 800;
+                                        font-size: 9.5pt;
+                                        color: #1E293B;
+                                        padding-bottom: 6px;
+                                        margin-bottom: 6px;
+                                        border-bottom: 1px dashed #CBD5E1;
+                                        flex-shrink: 0;
+                                    }}
+                                    .single-img-wrapper {{
+                                        flex: 1 1 auto;
+                                        min-height: 0;
+                                        width: 100%;
+                                        display: flex;
+                                        align-items: center;
+                                        justify-content: center;
+                                        background: #FFFFFF;
+                                        border-radius: 6px;
+                                        overflow: hidden;
+                                    }}
+                                    .single-img-wrapper img {{
+                                        max-width: 100%;
+                                        max-height: 100%;
+                                        width: auto;
+                                        height: auto;
+                                        object-fit: contain;
+                                        display: block;
+                                    }}
+                                    /* GRID RINGKAS */
                                     .photo-grid {{
                                         display: grid;
                                         gap: 10px;
@@ -4912,8 +5538,7 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                                     }}
                                     @media screen {{
                                         .ticket-card {{
-                                            height: auto;
-                                            max-height: none;
+                                            height: 277mm;
                                             margin-bottom: 24px;
                                             box-shadow: 0 4px 12px rgba(0,0,0,0.08);
                                         }}
@@ -4925,11 +5550,12 @@ elif st.session_state.page == "🖨️ Auto PJB Report":
                             </body>
                             </html>
                             """
-                            st.success(f"✅ Berhasil men-generate **{count_match}** halaman A4 Portrait (1 Sub-Tiket = 1 Halaman Rapi).")
+                            mode_msg = "Full 1 Lembar per Foto (Ukuran Asli)" if is_full_per_photo else "Grid 1 Halaman per Tiket"
+                            st.success(f"✅ Berhasil men-generate **{page_counter}** lembar A4 Portrait dari **{ticket_counter}** tiket ({mode_msg}).")
                             b64_html = base64.b64encode(full_html.encode("utf-8")).decode()
                             st.markdown(f'<a href="data:text/html;base64,{b64_html}" download="Laporan_PJB_{nop_report}.html" style="display: block; text-align: center; background-color: #007BFF; color: white !important; padding: 15px 20px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 1.05em;">📥 Download Laporan HTML Siap Cetak PDF (Tekan CTRL+P -> Save as PDF)</a>', unsafe_allow_html=True)
                             st.markdown("<hr>", unsafe_allow_html=True)
-                            st.components.v1.html(full_html, height=800, scrolling=True)
+                            st.components.v1.html(full_html, height=850, scrolling=True)
         
         with tab_report2:
             st.markdown("### 📊 Status Tracking All Data (Request Dana vs Penyelesaian PJB)")
@@ -5450,6 +6076,30 @@ elif st.session_state.page == "👀 Request & PJB Monitoring":
                 st.dataframe(df_dpjb, hide_index=True, use_container_width=True)
                 st.markdown(f"<div style='text-align:right; font-size:1.2em; color:#10B981; font-weight:bold;'>Total PJB: Rp {tot_pjb_daily:,.0f}</div>", unsafe_allow_html=True)
             else: st.success("Belum ada PJB yang disubmit hari ini.")
+
+            # ========================================================
+            # 📲 WA REPORT HARIAN PENGGUNAAN DANA & SISA UANG MUKA (UM)
+            # ========================================================
+            st.markdown("<hr>", unsafe_allow_html=True)
+            st.markdown(f"#### 📲 WA Report Harian Penggunaan Dana & Sisa Uang Muka ({filter_date_str})")
+            c_wr1, c_wr2 = st.columns([1, 2])
+            with c_wr1:
+                batch_wa_opt = st.selectbox("Filter Batch Uang Muka (UM):", ["Semua Batch"] + valid_batches, key="wa_rep_batch_mon")
+            with c_wr2:
+                note_wa_daily = st.text_input("Catatan Tambahan Admin (Opsional):", placeholder="Misal: Mohon tim yang belum PJB segera melengkapi hari ini.", key="wa_rep_note_mon")
+
+            wa_daily_txt, wa_daily_metrics = generate_daily_finance_wa_report(nop_mon, filter_date, data_all, selected_batch=batch_wa_opt, extra_note=note_wa_daily)
+            mw1, mw2, mw3 = st.columns(3)
+            mw1.metric("💰 Total UM Masuk", f"Rp {wa_daily_metrics['tot_um_in']:,.0f}")
+            mw2.metric("💸 Cair Hari Ini", f"Rp {wa_daily_metrics['tot_dist_today']:,.0f}")
+            mw3.metric("🏦 Sisa Saldo UM", f"Rp {wa_daily_metrics['sisa_um_dist']:,.0f}")
+
+            st.code(wa_daily_txt, language="markdown")
+            wa_daily_enc = quote(wa_daily_txt)
+            st.markdown(
+                f'<a href="https://wa.me/?text={wa_daily_enc}" target="_blank" class="btn-sidata-blue" style="background: linear-gradient(135deg, #22C55E 0%, #16A34A 100%) !important;">📲 KIRIM WA REPORT HARIAN DANA & SISA UM SEKARANG</a>',
+                unsafe_allow_html=True
+            )
             
         with tab_warning:
             st.markdown("#### 🚨 Daftar Aging PJB & Monitoring Tiket Gantung (Belum PJB)")
