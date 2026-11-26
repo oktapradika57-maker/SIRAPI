@@ -900,7 +900,7 @@ LIST_KEPERLUAN = ["", "Tshoot", "Backup", "Support", "PM", "Program BCP", "Progr
 # ==============================================================================
 BBM_PRICE_RULES_SPBU = {
     "Pertalite":     {"default": 10000, "min": 9000,  "max": 10000},
-    "Pertamax":      {"default": 16500, "min": 11500, "max": 16500},
+    "Pertamax":      {"default": 16000, "min": 11500, "max": 16000},
     "Bio Solar":     {"default": 6000,  "min": 5500,  "max": 6000},
     "Dexlite":       {"default": 25000, "min": 12500, "max": 25000},
     "Pertamina Dex": {"default": 18500, "min": 13000, "max": 18500},
@@ -1400,28 +1400,79 @@ def get_route_and_distance(lon1, lat1, lon2, lat2):
     durasi_sec = (dist_km / 40.0) * 3600
     return dist_km, [[lon1, lat1], [lon2, lat2]], durasi_sec
 
+def _parse_gcp_json_str(raw_str):
+    import json
+    s = str(raw_str or "").strip()
+    # Bersihkan jika user tidak sengaja menyalin tanda kutip 3 dari Streamlit Secrets
+    if (s.startswith('"""') and s.endswith('"""')) or (s.startswith("'''") and s.endswith("'''")):
+        s = s[3:-3].strip()
+    elif (s.startswith('"') and s.endswith('"')) and not s.startswith('{"'):
+        s = s[1:-1].strip()
+    info = json.loads(s, strict=False)
+    if isinstance(info, str):
+        info = json.loads(info, strict=False)
+    if isinstance(info, dict) and "private_key" in info and isinstance(info["private_key"], str):
+        info["private_key"] = info["private_key"].replace("\\n", "\n")
+    return info
+
 @st.cache_resource
 def get_credentials():
-    if "gcp_json" in st.secrets:
-        import json
-        creds_info = json.loads(st.secrets["gcp_json"], strict=False)
+    # 1. Prioritas Utama (Railway / Render / Docker): Environment Variable GCP_JSON atau gcp_json
+    env_raw = os.environ.get("GCP_JSON") or os.environ.get("gcp_json")
+    if env_raw and env_raw.strip():
+        creds_info = _parse_gcp_json_str(env_raw)
         return Credentials.from_service_account_info(creds_info, scopes=SCOPES)
+
+    # 1b. Cadangan Base64 (opsional jika disimpan dalam GCP_JSON_B64)
+    env_b64 = os.environ.get("GCP_JSON_B64")
+    if env_b64 and env_b64.strip():
+        decoded = base64.b64decode(env_b64.strip()).decode("utf-8")
+        creds_info = _parse_gcp_json_str(decoded)
+        return Credentials.from_service_account_info(creds_info, scopes=SCOPES)
+
+    # 2. Streamlit Cloud (st.secrets — dibungkus try/except agar aman jika secrets.toml tidak ada di Railway)
+    try:
+        if "gcp_json" in st.secrets:
+            creds_info = _parse_gcp_json_str(st.secrets["gcp_json"])
+            return Credentials.from_service_account_info(creds_info, scopes=SCOPES)
+        if "GCP_JSON" in st.secrets:
+            creds_info = _parse_gcp_json_str(st.secrets["GCP_JSON"])
+            return Credentials.from_service_account_info(creds_info, scopes=SCOPES)
+    except Exception:
+        pass
+
+    # 3. Lokal Laptop (credentials.json)
     return Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
 
-@st.cache_data(ttl=180, max_entries=6, show_spinner=False)
+@st.cache_data(ttl=180, max_entries=8, show_spinner=False)
 def fetch_spreadsheet_data(spreadsheet_id):
     ws_names = [SHEET_REQUEST, SHEET_PJB, SHEET_UM, SHEET_DISTRIBUSI, SHEET_APP, "Rekap PJB", SHEET_TIKET_PM, SHEET_ABSENSI]
     data = {name: [] for name in ws_names}
-    
-    # Sistem Auto-Retry: Jika Google Sheets sedang sibuk (Error 429), tunggu & coba lagi otomatis hingga 4x
+
+    # Sistem Auto-Retry + Optimasi Batch Read (Hemat kuota Google API hingga 8x untuk 200 user di Railway)
     for attempt in range(4):
         try:
             client = gspread.authorize(get_credentials()).open_by_key(spreadsheet_id)
-            for name in ws_names:
+            existing_titles = {ws.title for ws in client.worksheets()}
+            valid_names = [n for n in ws_names if n in existing_titles]
+            if valid_names:
+                try:
+                    ranges = [f"'{n}'!A:AN" for n in valid_names]
+                    batch_res = client.values_batch_get(ranges)
+                    value_ranges = batch_res.get("valueRanges", [])
+                    for idx_n, name in enumerate(valid_names):
+                        raw_rows = value_ranges[idx_n].get("values", []) if idx_n < len(value_ranges) else []
+                        data[name] = [r[:40] for r in raw_rows if any(str(cell).strip() != "" for cell in r)]
+                    gc.collect()
+                    return data
+                except Exception:
+                    # Fallback baca satu per satu jika batch_get gagal
+                    pass
+
+            for name in valid_names:
                 try:
                     raw_rows = client.worksheet(name).get_all_values()
-                    clean_rows = [r[:40] for r in raw_rows if any(str(cell).strip() != "" for cell in r)]
-                    data[name] = clean_rows
+                    data[name] = [r[:40] for r in raw_rows if any(str(cell).strip() != "" for cell in r)]
                     del raw_rows
                 except Exception:
                     data[name] = []
@@ -1429,7 +1480,7 @@ def fetch_spreadsheet_data(spreadsheet_id):
             return data
         except Exception:
             if attempt < 3:
-                time.sleep(2.5 * (attempt + 1))
+                time.sleep(2.0 * (attempt + 1))
             else:
                 break
     gc.collect()
