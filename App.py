@@ -36,519 +36,282 @@ except Exception:
 st.set_page_config(page_title="SiRAPI NOP PLK & PBU Dashboard", page_icon="🦺", layout="wide", initial_sidebar_state="collapsed")
 
 # =================================================================
-# 🎨 SUNTIKAN UI/UX: PERSIS SiDATA (TANPA MENU BAR ATAS & LOGO PRESISI)
+# 🎨 TEMA TAMPILAN SiRAPI (bersih, satu warna aksen, minim gangguan)
 # =================================================================
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
 
-    /* 1. HILANGKAN 100% MENU BAR ATAS, TOOLBAR, FOOTER & ANCHOR LINK */
-    #MainMenu,
-    footer,
-    header,
-    header[data-testid="stHeader"],
-    div[data-testid="stHeader"],
-    div[data-testid="stToolbar"],
-    div[data-testid="stDecoration"],
-    div[data-testid="stStatusWidget"],
-    [data-testid="collapsedControl"],
+    :root {
+        --canvas: #F4F7FE;
+        --surface: #FFFFFF;
+        --line: #D5DBE5;
+        --line-soft: #E6EAF1;
+        --ink: #0F172A;
+        --muted: #566275;
+        --brand: #0A5BD3;
+        --brand-dark: #084BB0;
+        --brand-soft: #EAF2FF;
+        --plk: #0A5BD3;
+        --pbu: #D92D3A;
+        --r-ctl: 8px;
+        --r-card: 12px;
+        color-scheme: light;
+    }
+
+    /* 1. Sembunyikan menu bar atas, toolbar, footer */
+    #MainMenu, footer, header,
+    header[data-testid="stHeader"], div[data-testid="stHeader"],
+    div[data-testid="stToolbar"], div[data-testid="stDecoration"],
+    div[data-testid="stStatusWidget"], [data-testid="collapsedControl"],
     [data-testid="stHeaderActionElements"] {
-        visibility: hidden !important;
-        display: none !important;
-        height: 0px !important;
-        width: 0px !important;
-        margin: 0 !important;
-        padding: 0 !important;
+        visibility: hidden !important; display: none !important;
+        height: 0 !important; width: 0 !important; margin: 0 !important; padding: 0 !important;
     }
 
-    /* 2. Latar Belakang Aplikasi & Font Global */
+    /* 2. Kanvas & font */
     html, body, .stApp, .main {
-        background-color: #F4F7FE !important;
-        color: #0F172A !important;
-        font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif !important;
+        background-color: var(--canvas) !important;
+        color: var(--ink) !important;
+        font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif !important;
+        color-scheme: light;
     }
-
     .main .block-container {
-        padding-top: 0rem !important;
-        padding-bottom: 3rem !important;
-        max-width: 1180px !important;
-        margin: 0 auto !important;
+        padding-top: 0 !important; padding-bottom: 3rem !important;
+        max-width: 1180px !important; margin: 0 auto !important;
     }
+    hr { margin: 26px 0 !important; border: 0 !important; border-top: 1px solid var(--line) !important; }
 
-    /* 3. KUNCI PAKSA SEMUA TEKS & LABEL AGAR GELAP TAJAM DI ATAS BACKGROUND PUTIH */
+    /* 3. Teks selalu gelap & terbaca (aman walau HP memakai mode gelap) */
     p, label, h1, h2, h3, h4, h5, h6, li,
-    div[data-testid="stMarkdownContainer"] p,
-    div[data-testid="stMarkdownContainer"] li,
-    div[data-testid="stWidgetLabel"] p,
-    div[data-testid="stWidgetLabel"] label,
-    div[data-testid="stWidgetLabel"] span,
-    div[data-testid="stCheckbox"] label span,
-    div[data-testid="stCheckbox"] p,
-    div[role="radiogroup"] label p,
-    div[role="radiogroup"] label span {
-        color: #0F172A !important;
+    div[data-testid="stMarkdownContainer"] p, div[data-testid="stMarkdownContainer"] li,
+    div[data-testid="stWidgetLabel"] p, div[data-testid="stWidgetLabel"] label, div[data-testid="stWidgetLabel"] span,
+    div[data-testid="stCheckbox"] label span, div[data-testid="stCheckbox"] p,
+    div[role="radiogroup"] label p, div[role="radiogroup"] label span { color: var(--ink) !important; }
+    div[data-testid="stWidgetLabel"] p, div[data-testid="stWidgetLabel"] label {
+        font-weight: 600 !important; font-size: 0.88rem !important;
     }
 
-    div[data-testid="stWidgetLabel"] p,
-    div[data-testid="stWidgetLabel"] label {
-        font-weight: 700 !important;
-        font-size: 0.92rem !important;
+    /* 4. Kolom isian */
+    div[data-baseweb="input"], div[data-baseweb="textarea"],
+    div[data-baseweb="base-input"]:not(div[data-baseweb="input"] *):not(div[data-baseweb="textarea"] *) {
+        background-color: var(--surface) !important;
+        border: 1px solid var(--line) !important;
+        border-radius: var(--r-ctl) !important;
+        box-shadow: none !important;
     }
-
-    /* 4. FIX SEMUA KOLOM INPUT (Text, Number, Date, Password, TextArea) */
-    div[data-baseweb="input"],
-    div[data-baseweb="base-input"],
-    div[data-baseweb="textarea"] {
-        background-color: #FFFFFF !important;
-        border: 1.5px solid #CBD5E1 !important;
-        border-radius: 10px !important;
-        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03) !important;
+    div[data-baseweb="input"] div[data-baseweb="base-input"],
+    div[data-baseweb="textarea"] div[data-baseweb="base-input"] {
+        background: transparent !important; border: 0 !important; box-shadow: none !important;
     }
-
-    div[data-baseweb="input"] input,
-    div[data-baseweb="base-input"] input,
-    div[data-baseweb="textarea"] textarea,
-    .stTextInput input,
-    .stNumberInput input,
-    .stDateInput input,
-    .stTextArea textarea {
-        background-color: #FFFFFF !important;
-        color: #0F172A !important;
-        -webkit-text-fill-color: #0F172A !important;
-        caret-color: #0F172A !important;
-        font-weight: 600 !important;
-        font-size: 0.95rem !important;
+    div[data-baseweb="input"]:focus-within, div[data-baseweb="textarea"]:focus-within,
+    div[data-baseweb="select"] > div:focus-within {
+        border-color: var(--brand) !important; box-shadow: 0 0 0 3px rgba(10, 91, 211, 0.16) !important;
+    }
+    div[data-baseweb="input"] input, div[data-baseweb="base-input"] input,
+    div[data-baseweb="textarea"] textarea, .stTextInput input, .stNumberInput input,
+    .stDateInput input, .stTextArea textarea {
+        background-color: transparent !important;
+        color: var(--ink) !important; -webkit-text-fill-color: var(--ink) !important;
+        caret-color: var(--ink) !important;
+        font-weight: 500 !important; font-size: 0.95rem !important;
+        font-variant-numeric: tabular-nums;
         padding: 10px 14px !important;
     }
-
-    input:disabled,
-    textarea:disabled,
-    div[data-baseweb="base-input"] input:disabled {
-        background-color: #F1F5F9 !important;
-        color: #0F172A !important;
-        -webkit-text-fill-color: #0F172A !important;
-        opacity: 1 !important;
-        font-weight: 700 !important;
+    input:disabled, textarea:disabled {
+        background-color: #EEF1F6 !important; color: var(--ink) !important;
+        -webkit-text-fill-color: var(--ink) !important; opacity: 1 !important; font-weight: 600 !important;
     }
-
     input::placeholder, textarea::placeholder {
-        color: #64748B !important;
-        -webkit-text-fill-color: #64748B !important;
-        opacity: 1 !important;
+        color: #6B7686 !important; -webkit-text-fill-color: #6B7686 !important; opacity: 1 !important;
+    }
+    div[data-testid="stNumberInput"] button, div[data-baseweb="input"] button {
+        background-color: #F5F7FA !important; color: var(--ink) !important;
+    }
+    div[data-testid="stNumberInput"] button svg, div[data-baseweb="input"] button svg {
+        fill: var(--ink) !important; color: var(--ink) !important;
     }
 
-    div[data-testid="stNumberInput"] button,
-    div[data-baseweb="input"] button {
-        background-color: #F8FAFC !important;
-        color: #0F172A !important;
-    }
-    div[data-testid="stNumberInput"] button svg,
-    div[data-baseweb="input"] button svg {
-        fill: #0F172A !important;
-        color: #0F172A !important;
-    }
-
-    /* 5. FIX DROPDOWN SELECTBOX & MULTISELECT */
+    /* 5. Dropdown & multiselect */
     div[data-baseweb="select"] > div {
-        background-color: #FFFFFF !important;
-        border: 1.5px solid #CBD5E1 !important;
-        border-radius: 10px !important;
-        color: #0F172A !important;
+        background-color: var(--surface) !important;
+        border: 1px solid var(--line) !important;
+        border-radius: var(--r-ctl) !important;
         min-height: 44px !important;
     }
-
-    div[data-baseweb="select"] span,
-    div[data-baseweb="select"] div,
-    div[data-baseweb="select"] input {
-        color: #0F172A !important;
-        -webkit-text-fill-color: #0F172A !important;
-        font-weight: 600 !important;
+    div[data-baseweb="select"] span, div[data-baseweb="select"] div, div[data-baseweb="select"] input {
+        color: var(--ink) !important; -webkit-text-fill-color: var(--ink) !important; font-weight: 500 !important;
     }
-
-    div[data-baseweb="select"] svg {
-        fill: #0F172A !important;
-        color: #0F172A !important;
-    }
-
+    div[data-baseweb="select"] svg { fill: var(--muted) !important; color: var(--muted) !important; }
     span[data-baseweb="tag"] {
-        background-color: #E0F2FE !important;
-        border: 1px solid #7DD3FC !important;
-        border-radius: 6px !important;
+        background-color: var(--brand-soft) !important; border: 1px solid #BFD6FA !important; border-radius: 6px !important;
     }
     span[data-baseweb="tag"] span {
-        color: #0369A1 !important;
-        -webkit-text-fill-color: #0369A1 !important;
-        font-weight: 700 !important;
+        color: var(--brand-dark) !important; -webkit-text-fill-color: var(--brand-dark) !important; font-weight: 600 !important;
     }
+    div[data-baseweb="popover"], div[data-baseweb="popover"] > div, div[data-baseweb="menu"],
+    ul[role="listbox"], li[role="option"] { background-color: var(--surface) !important; color: var(--ink) !important; }
+    li[role="option"] span, li[role="option"] div { color: var(--ink) !important; font-weight: 500 !important; }
+    li[role="option"]:hover, li[role="option"][aria-selected="true"] { background-color: var(--brand-soft) !important; }
 
-    div[data-baseweb="popover"],
-    div[data-baseweb="popover"] > div,
-    div[data-baseweb="menu"],
-    ul[role="listbox"],
-    li[role="option"] {
-        background-color: #FFFFFF !important;
-        color: #0F172A !important;
+    /* 6. Tombol: satu aksen. Utama = biru penuh, sekunder = garis. Tanpa efek naik-turun. */
+    div[data-testid="stButton"] > button, div[data-testid="stFormSubmitButton"] > button,
+    div[data-testid="stDownloadButton"] > button {
+        border-radius: var(--r-ctl) !important; min-height: 46px !important; padding: 10px 16px !important;
+        width: 100% !important; box-shadow: none !important; transform: none !important;
+        transition: background-color .12s ease, border-color .12s ease !important;
     }
-    li[role="option"] span,
-    li[role="option"] div {
-        color: #0F172A !important;
-        font-weight: 600 !important;
+    div[data-testid="stButton"] > button *, div[data-testid="stFormSubmitButton"] > button *,
+    div[data-testid="stDownloadButton"] > button * {
+        font-weight: 600 !important; font-size: 0.92rem !important; letter-spacing: 0 !important;
     }
-    li[role="option"]:hover,
-    li[role="option"][aria-selected="true"] {
-        background-color: #EFF6FF !important;
-        color: #007BFF !important;
+    div[data-testid="stButton"] > button[kind="primary"], div[data-testid="stFormSubmitButton"] > button {
+        background: var(--brand) !important; border: 1px solid var(--brand) !important; color: #FFFFFF !important;
     }
-
-    /* 6. TOMBOL MERAH & BIRU PERSIS SiDATA */
-    div[data-testid="stButton"] > button[kind="primary"],
-    div[data-testid="stFormSubmitButton"] > button {
-        background: linear-gradient(135deg, #FF2E36 0%, #E11D48 100%) !important;
-        color: #FFFFFF !important;
-        border: none !important;
-        border-radius: 10px !important;
-        padding: 12px 18px !important;
-        min-height: 48px !important;
-        box-shadow: 0 6px 16px rgba(225, 29, 72, 0.25) !important;
-        transition: all 0.2s ease !important;
-        width: 100% !important;
+    div[data-testid="stButton"] > button[kind="primary"] *, div[data-testid="stFormSubmitButton"] > button * {
+        color: #FFFFFF !important; -webkit-text-fill-color: #FFFFFF !important;
     }
-    div[data-testid="stButton"] > button[kind="primary"] *,
-    div[data-testid="stFormSubmitButton"] > button * {
-        color: #FFFFFF !important;
-        -webkit-text-fill-color: #FFFFFF !important;
-        font-weight: 700 !important;
-        font-size: 0.92rem !important;
-        letter-spacing: 0.3px !important;
+    div[data-testid="stButton"] > button[kind="primary"]:hover, div[data-testid="stFormSubmitButton"] > button:hover {
+        background: var(--brand-dark) !important; border-color: var(--brand-dark) !important;
     }
-    div[data-testid="stButton"] > button[kind="primary"]:hover,
-    div[data-testid="stFormSubmitButton"] > button:hover {
-        background: linear-gradient(135deg, #E11D48 0%, #BE123C 100%) !important;
-        transform: translateY(-2px) !important;
-        box-shadow: 0 10px 20px rgba(225, 29, 72, 0.35) !important;
-    }
-
     div[data-testid="stButton"] > button[kind="secondary"] {
-        background: linear-gradient(135deg, #007BFF 0%, #0056D2 100%) !important;
-        color: #FFFFFF !important;
-        border: none !important;
-        border-radius: 10px !important;
-        padding: 12px 18px !important;
-        min-height: 48px !important;
-        box-shadow: 0 6px 16px rgba(0, 123, 255, 0.22) !important;
-        transition: all 0.2s ease !important;
-        width: 100% !important;
+        background: var(--surface) !important; border: 1px solid var(--brand) !important; color: var(--brand) !important;
     }
     div[data-testid="stButton"] > button[kind="secondary"] * {
-        color: #FFFFFF !important;
-        -webkit-text-fill-color: #FFFFFF !important;
-        font-weight: 700 !important;
-        font-size: 0.92rem !important;
-        letter-spacing: 0.3px !important;
+        color: var(--brand) !important; -webkit-text-fill-color: var(--brand) !important;
     }
-    div[data-testid="stButton"] > button[kind="secondary"]:hover {
-        background: linear-gradient(135deg, #0056D2 0%, #003E99 100%) !important;
-        transform: translateY(-2px) !important;
-        box-shadow: 0 10px 20px rgba(0, 123, 255, 0.32) !important;
+    div[data-testid="stButton"] > button[kind="secondary"]:hover { background: var(--brand-soft) !important; }
+    div[data-testid="stButton"] > button:disabled, div[data-testid="stFormSubmitButton"] > button:disabled {
+        background: #E9EDF3 !important; border: 1px solid var(--line) !important; color: #7A8494 !important;
     }
-
-    div[data-testid="stButton"] > button:disabled,
-    div[data-testid="stFormSubmitButton"] > button:disabled {
-        background: #E2E8F0 !important;
-        color: #64748B !important;
-        border: 1.5px solid #CBD5E1 !important;
-        box-shadow: none !important;
-        transform: none !important;
+    div[data-testid="stButton"] > button:disabled *, div[data-testid="stFormSubmitButton"] > button:disabled * {
+        color: #7A8494 !important; -webkit-text-fill-color: #7A8494 !important;
     }
-    div[data-testid="stButton"] > button:disabled *,
-    div[data-testid="stFormSubmitButton"] > button:disabled * {
-        color: #64748B !important;
-        -webkit-text-fill-color: #64748B !important;
-    }
-
     div[data-testid="stDownloadButton"] > button {
-        background: linear-gradient(135deg, #10B981 0%, #059669 100%) !important;
-        color: #FFFFFF !important;
-        border: none !important;
-        border-radius: 10px !important;
-        min-height: 48px !important;
+        background: #0F8F63 !important; border: 1px solid #0F8F63 !important;
     }
-    div[data-testid="stDownloadButton"] > button * {
-        color: #FFFFFF !important;
-        -webkit-text-fill-color: #FFFFFF !important;
-        font-weight: 700 !important;
-    }
+    div[data-testid="stDownloadButton"] > button * { color: #FFFFFF !important; -webkit-text-fill-color: #FFFFFF !important; }
+    div[data-testid="stDownloadButton"] > button:hover { background: #0B7551 !important; }
 
-    .btn-sidata-blue {
-        display: block;
-        width: 100%;
-        text-align: center;
-        background: linear-gradient(135deg, #0EA5E9 0%, #0284C7 100%);
-        color: #FFFFFF !important;
-        padding: 13px 18px;
-        border-radius: 10px;
-        font-weight: 700;
-        font-size: 0.92rem;
-        text-decoration: none !important;
-        box-shadow: 0 6px 16px rgba(2, 132, 199, 0.22);
-        margin-top: 6px;
-        transition: all 0.2s ease;
+    /* Tombol berbentuk tautan (WhatsApp, SiDATA). Kelas lama tetap dipakai di banyak halaman. */
+    .btn-sidata-blue, .btn-sidata-red {
+        display: block; width: 100%; text-align: center; color: #FFFFFF !important;
+        padding: 13px 18px; border-radius: var(--r-ctl); font-weight: 600; font-size: 0.92rem;
+        text-decoration: none !important; margin-top: 6px; box-sizing: border-box;
+        transition: background-color .12s ease;
     }
-    .btn-sidata-blue:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 10px 20px rgba(2, 132, 199, 0.32);
-    }
-    .btn-sidata-red {
-        display: block;
-        width: 100%;
-        text-align: center;
-        background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
-        color: #FFFFFF !important;
-        padding: 13px 18px;
-        border-radius: 10px;
-        font-weight: 700;
-        font-size: 0.92rem;
-        text-decoration: none !important;
-        box-shadow: 0 6px 16px rgba(239, 68, 68, 0.22);
-        margin-top: 6px;
-        transition: all 0.2s ease;
-    }
-    .btn-sidata-red:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 10px 20px rgba(239, 68, 68, 0.32);
-    }
+    .btn-sidata-blue { background: var(--brand); }
+    .btn-sidata-blue:hover { background: var(--brand-dark); }
+    .btn-sidata-red { background: var(--pbu); }
+    .btn-sidata-red:hover { background: #B8232F; }
 
-    /* 7. FILE UPLOADER, EXPANDER & TABS */
+    /* 7. Upload, expander, tab */
     section[data-testid="stFileUploaderDropzone"] {
-        background-color: #FFFFFF !important;
-        border: 2px dashed #94A3B8 !important;
-        border-radius: 12px !important;
+        background-color: var(--surface) !important; border: 1.5px dashed #A9B4C4 !important; border-radius: 10px !important;
     }
-    section[data-testid="stFileUploaderDropzone"] * {
-        color: #0F172A !important;
-    }
+    section[data-testid="stFileUploaderDropzone"] * { color: var(--ink) !important; }
     section[data-testid="stFileUploaderDropzone"] button {
-        background-color: #F1F5F9 !important;
-        border: 1px solid #CBD5E1 !important;
-        color: #0F172A !important;
+        background-color: #F5F7FA !important; border: 1px solid var(--line) !important; color: var(--ink) !important;
     }
-
     div[data-testid="stExpander"] {
-        background-color: #FFFFFF !important;
-        border: 1px solid #E2E8F0 !important;
-        border-radius: 12px !important;
+        background-color: var(--surface) !important; border: 1px solid var(--line) !important;
+        border-radius: 10px !important; box-shadow: none !important;
     }
-    div[data-testid="stExpander"] summary p,
-    div[data-testid="stExpander"] summary span {
-        color: #0F172A !important;
-        font-weight: 700 !important;
+    div[data-testid="stExpander"] summary p, div[data-testid="stExpander"] summary span {
+        color: var(--ink) !important; font-weight: 600 !important;
     }
-
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-        background-color: transparent !important;
-    }
+    .stTabs [data-baseweb="tab-list"] { gap: 4px; background: transparent !important; border-bottom: 1px solid var(--line); }
     .stTabs [data-baseweb="tab"] {
-        background-color: #E2E8F0 !important;
-        border-radius: 10px 10px 0 0 !important;
-        padding: 10px 20px !important;
-        font-weight: 700 !important;
+        background: transparent !important; border-radius: 8px 8px 0 0 !important;
+        padding: 10px 16px !important; font-weight: 600 !important;
     }
-    .stTabs [data-baseweb="tab"] * {
-        color: #334155 !important;
-    }
-    .stTabs [aria-selected="true"] {
-        background-color: #007BFF !important;
-    }
-    .stTabs [aria-selected="true"] * {
-        color: #FFFFFF !important;
-    }
+    .stTabs [data-baseweb="tab"] * { color: var(--muted) !important; }
+    .stTabs [aria-selected="true"] * { color: var(--brand) !important; }
+    .stTabs [data-baseweb="tab-highlight"] { background-color: var(--brand) !important; height: 3px !important; }
+    .stTabs [data-baseweb="tab-border"] { display: none !important; }
 
-    /* 8. LOGO BADGE PRESISI 100% DI TENGAH ATAS & KARTU AREA OPERASIONAL SiDATA */
-    .sidata-top-wrapper {
-        width: 100%;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        text-align: center;
-        margin-top: 0px;
-        margin-bottom: 28px;
-    }
-    .sidata-logo-badge {
-        background: #FFFFFF;
-        width: 210px;
-        padding: 20px 26px 18px 26px;
-        border-radius: 0 0 24px 24px;
-        box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
-        border: 1px solid #E2E8F0;
-        border-top: none;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin: 0 auto 22px auto;
-    }
-    .sidata-logo-badge img {
-        width: 145px;
-        height: auto;
-        display: block;
-        margin: 0 auto;
-        object-fit: contain;
-    }
-    .sidata-main-title {
-        font-size: 2.25rem !important;
-        font-weight: 800 !important;
-        color: #1E293B !important;
-        margin: 0 0 8px 0 !important;
-        letter-spacing: -0.5px !important;
-        text-align: center !important;
-        width: 100%;
-    }
-    .sidata-main-sub {
-        font-size: 1.02rem !important;
-        color: #475569 !important;
-        font-weight: 500 !important;
-        margin: 0 !important;
-        text-align: center !important;
-        width: 100%;
-    }
+    /* Pesan status (info / sukses / peringatan / error) */
+    div[data-testid="stAlert"] { border-radius: 10px !important; }
 
-    .sidata-area-card {
-        background: #FFFFFF;
-        border-radius: 22px;
-        padding: 34px 28px 28px 28px;
-        text-align: center;
-        box-shadow: 0 12px 32px rgba(15, 23, 42, 0.06);
-        border: 1px solid #E2E8F0;
-        min-height: 285px;
-        display: flex;
-        flex-direction: column;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 14px;
-        transition: transform 0.25s ease, box-shadow 0.25s ease;
-    }
-    .sidata-area-card:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 18px 36px rgba(15, 23, 42, 0.09);
-    }
-    .sidata-card-heading {
-        font-size: 1.45rem !important;
-        font-weight: 800 !important;
-        color: #1E293B !important;
-        margin: 6px 0 10px 0 !important;
-        text-align: center !important;
-    }
-    .sidata-card-desc {
-        font-size: 0.93rem !important;
-        color: #475569 !important;
-        line-height: 1.6 !important;
-        margin: 0 !important;
-        text-align: center !important;
-    }
-    .sidata-pill-blue {
-        display: inline-block;
-        background-color: #EFF6FF;
-        color: #007BFF !important;
-        border: 1.5px solid #93C5FD;
-        border-radius: 999px;
-        padding: 5px 18px;
-        font-size: 0.78rem;
-        font-weight: 800;
-        letter-spacing: 0.6px;
-        margin: 12px 0;
-    }
-    .sidata-pill-red {
-        display: inline-block;
-        background-color: #FFF1F2;
-        color: #FF2E36 !important;
-        border: 1.5px solid #FDA4AF;
-        border-radius: 999px;
-        padding: 5px 18px;
-        font-size: 0.78rem;
-        font-weight: 800;
-        letter-spacing: 0.6px;
-        margin: 12px 0;
-    }
-    .sidata-stat-blue {
-        font-size: 1.02rem;
-        font-weight: 800;
-        color: #007BFF !important;
-        margin-top: 14px;
-    }
-    .sidata-stat-red {
-        font-size: 1.02rem;
-        font-weight: 800;
-        color: #FF2E36 !important;
-        margin-top: 14px;
-    }
+    /* 8. Minim gangguan saat rerun: elemen tidak berkedip pudar & tidak ada gerakan hover */
+    div[data-stale="true"], [data-stale="true"] { opacity: 0.8 !important; transition: none !important; }
+    *:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+    @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 
-    /* 9. HEADER CARD HALAMAN DALAM & SECTION TITLE */
+    /* 9. Beranda */
+    .hub-head { display: flex; align-items: center; gap: 16px; padding: 22px 0 6px 0; }
+    .hub-logo {
+        background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card);
+        padding: 9px 14px; display: flex; align-items: center; flex: 0 0 auto;
+    }
+    .hub-logo img { height: 34px; width: auto; display: block; }
+    .hub-title { font-size: 1.55rem; font-weight: 700; letter-spacing: -0.01em; color: var(--ink) !important; line-height: 1.2; margin: 0; }
+    .hub-sub { font-size: 0.92rem; color: var(--muted) !important; margin: 3px 0 0 0; line-height: 1.4; }
+    .hub-lead { font-size: 0.95rem; font-weight: 600; color: var(--ink) !important; margin: 22px 0 10px 0; }
+
+    .st-key-area_plk, .st-key-area_pbu {
+        background: var(--surface); border: 1px solid var(--line); border-top: 4px solid var(--plk);
+        border-radius: var(--r-card); padding: 18px 20px 16px 20px;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+    .st-key-area_pbu { border-top-color: var(--pbu); }
+    .area-name { font-size: 1.2rem; font-weight: 700; color: var(--ink) !important; margin: 0; line-height: 1.3; }
+    .area-cluster { font-size: 0.9rem; color: var(--muted) !important; margin: 3px 0 0 0; line-height: 1.45; }
+    .area-meta { font-size: 0.85rem; color: var(--muted) !important; margin: 10px 0 14px 0; }
+    .area-meta b { color: var(--ink) !important; font-weight: 700; }
+    .area-link {
+        display: inline-block; margin-top: 8px; font-size: 0.88rem; font-weight: 600;
+        color: var(--brand) !important; text-decoration: none !important;
+    }
+    .area-link:hover { text-decoration: underline !important; }
+    .hub-note { font-size: 0.86rem; color: var(--muted) !important; margin: 14px 0 0 0; line-height: 1.5; }
+    .hub-foot { text-align: center; color: #7A8494 !important; font-size: 0.8rem; margin-top: 36px; }
+
+    /* Bilah atas halaman dalam */
+    .area-chip {
+        display: flex; align-items: center; gap: 8px; min-height: 46px;
+        font-size: 0.9rem; font-weight: 600; color: var(--ink) !important; white-space: nowrap;
+    }
+    .area-chip i { width: 10px; height: 10px; border-radius: 50%; background: var(--plk); display: inline-block; flex: 0 0 auto; }
+    .area-chip.pbu i { background: var(--pbu); }
+
+    /* 10. Judul halaman & seksi */
     .header-card {
-        background: #FFFFFF !important;
-        padding: 28px 30px !important;
-        border-radius: 20px !important;
-        text-align: center !important;
-        box-shadow: 0 10px 25px rgba(15, 23, 42, 0.06) !important;
-        margin-top: 10px !important;
-        margin-bottom: 28px !important;
-        border: 1px solid #E2E8F0 !important;
-        border-top: 5px solid #007BFF !important;
+        background: transparent !important; padding: 18px 0 14px 0 !important; margin: 4px 0 18px 0 !important;
+        border: 0 !important; border-bottom: 1px solid var(--line) !important; border-radius: 0 !important;
+        text-align: left !important; box-shadow: none !important;
     }
     .header-card h1, .header-card h2, .header-card h3 {
-        color: #1E293B !important;
-        font-weight: 800 !important;
-        font-size: 1.75rem !important;
-        margin-bottom: 6px !important;
-        text-shadow: none !important;
+        color: var(--ink) !important; font-weight: 700 !important; font-size: 1.45rem !important;
+        letter-spacing: -0.01em; margin: 0 0 4px 0 !important; text-align: left !important; text-shadow: none !important;
     }
     .header-card p, .header-card span, .header-card div {
-        color: #475569 !important;
-        font-size: 1rem !important;
-        font-weight: 500 !important;
-        margin: 0 !important;
+        color: var(--muted) !important; font-size: 0.95rem !important; font-weight: 400 !important;
+        margin: 0 !important; text-align: left !important;
     }
-
-    .section-title { 
-        color: #0F172A !important;
-        font-size: 1.22rem !important;
-        font-weight: 800 !important;
-        margin: 28px 0 14px 0 !important;
-        display: flex !important;
-        align-items: center !important;
-        gap: 10px !important;
+    .section-title {
+        color: var(--ink) !important; font-size: 1.05rem !important; font-weight: 700 !important;
+        margin: 26px 0 12px 0 !important; padding-bottom: 8px; border-bottom: 1px solid var(--line-soft);
+        display: block !important;
     }
-    .section-title::before {
-        content: '';
-        display: block;
-        width: 6px;
-        height: 22px;
-        background: #007BFF;
-        border-radius: 4px;
-    }
-
     .metric-3d {
-        background: #FFFFFF !important;
-        padding: 24px 20px !important;
-        border-radius: 16px !important;
-        text-align: center !important;
-        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05) !important;
-        border: 1px solid #E2E8F0 !important;
-        border-top: 4px solid #007BFF !important;
-        margin-bottom: 20px !important;
+        background: var(--surface) !important; padding: 14px 18px !important; border-radius: var(--r-card) !important;
+        text-align: left !important; box-shadow: none !important; border: 1px solid var(--line) !important;
+        border-left: 4px solid var(--brand) !important; margin-bottom: 14px !important;
     }
-    .metric-title {
-        font-size: 0.85rem !important;
-        color: #64748B !important;
-        font-weight: 700 !important;
-        text-transform: uppercase !important;
-    }
+    .metric-title { font-size: 0.8rem !important; color: var(--muted) !important; font-weight: 600 !important; }
     .metric-value {
-        font-size: 1.8rem !important;
-        font-weight: 800 !important;
-        margin-top: 8px !important;
-        color: #0F172A !important;
+        font-size: 1.5rem !important; font-weight: 700 !important; margin-top: 4px !important;
+        color: var(--ink) !important; font-variant-numeric: tabular-nums;
     }
+    /* Kelas lama yang masih dipakai halaman "Report Lapangan" */
+    .sidata-area-card {
+        background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card);
+        padding: 24px 22px; text-align: center; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+        display: flex; flex-direction: column; justify-content: space-between; align-items: center;
+    }
+    .sidata-card-heading { font-size: 1.25rem !important; font-weight: 700 !important; color: var(--ink) !important; margin: 6px 0 8px 0 !important; text-align: center !important; }
+    .sidata-card-desc { font-size: 0.92rem !important; color: var(--muted) !important; line-height: 1.6 !important; margin: 0 !important; text-align: center !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -721,6 +484,15 @@ _CSS_HP = """
 
 st.markdown(_CSS_COMMON + (_CSS_HP if IS_HP else _CSS_WEB), unsafe_allow_html=True)
 
+_CSS_POLISH = """
+<style>
+    .st-key-view_switch div[role="radiogroup"] label p { font-size: .76rem !important; font-weight: 600 !important; color: var(--muted) !important; }
+    .st-key-view_switch div[role="radiogroup"] label:has(input:checked) p { color: var(--ink) !important; }
+    .area-chip { box-sizing: border-box; }
+</style>
+"""
+st.markdown(_CSS_POLISH, unsafe_allow_html=True)
+
 try:
     _sw = st.container(key="view_switch")   # butuh Streamlit >= 1.39
 except TypeError:
@@ -775,7 +547,7 @@ _CSS_WZ = """
     .wz-bar { display:flex; gap:4px; }
     .wz-bar i { flex:1; height:6px; border-radius:99px; background:#E2E8F0; }
     .wz-bar i.done { background:#10B981; }
-    .wz-bar i.cur { background:#0066FF; }
+    .wz-bar i.cur { background:var(--brand); }
 
     /* Ringkasan kelengkapan di langkah terakhir */
     .wz-row { display:flex; gap:8px; padding:9px 11px; border-radius:10px; margin-bottom:6px;
@@ -2569,19 +2341,17 @@ if 'selected_nop' not in st.session_state: st.session_state.selected_nop = ""
 if 'req_wa_ready' not in st.session_state: st.session_state.req_wa_ready = ""
 
 if st.session_state.page != "🏠 Hub Menu Utama":
-    st.markdown("<div style='height: 18px;'></div>", unsafe_allow_html=True)
-    c_nav1, c_nav2 = st.columns([3, 1])
+    c_nav1, c_nav2 = st.columns([1, 4])
     with c_nav1:
-        if st.button("⬅️ BERANDA" if IS_HP else "⬅️ KEMBALI KE BERANDA UTAMA", use_container_width=True, key="btn_home"):
+        if st.button("← Beranda", use_container_width=True, key="btn_home"):
             st.session_state.page = "🏠 Hub Menu Utama"
             st.session_state.pdf_ready = False
             st.session_state.req_wa_ready = ""
             st.rerun()
     with c_nav2:
         if st.session_state.selected_nop:
-            warna_badge = "#FF2E36" if st.session_state.selected_nop == "Pangkalanbun" else "#007BFF"
-            st.markdown(f"<div style='background:{warna_badge}; color:#FFFFFF !important; padding:12px; border-radius:10px; text-align:center; font-weight:800;'>📍 AREA: {st.session_state.selected_nop.upper()}</div>", unsafe_allow_html=True)
-    st.markdown("<hr style='margin: 10px 0 25px 0; border-color: #E2E8F0;'>", unsafe_allow_html=True)
+            _cls_area = "pbu" if st.session_state.selected_nop == "Pangkalanbun" else ""
+            st.markdown(f"<div class='area-chip {_cls_area}'><i></i>NOP {st.session_state.selected_nop}</div>", unsafe_allow_html=True)
 
 # ==========================================
 # 4. SIDEBAR NAVIGATION & SHORTCUT SIDATA
@@ -2610,7 +2380,7 @@ st.sidebar.markdown(
 # ==========================================
 if st.session_state.page == "🏠 Hub Menu Utama":
     
-    # 1. LOGO BADGE PUTIH & JUDUL UTAMA (100% PRESISI TENGAH)
+    # 1. HEADER BERANDA
     logo_b64 = get_local_img_base64("koperasi-jasa-konstruksi-tower-event-organizer-network-monitoring-telekomunikasi-kisel-group-logo-kut.webp")
     if logo_b64:
         logo_html = f'<img src="{logo_b64}" alt="Kinarya Utama Teknik">'
@@ -2618,85 +2388,54 @@ if st.session_state.page == "🏠 Hub Menu Utama":
         logo_html = '<div><div style="font-weight:900; font-size:1.25rem; color:#1E293B !important; letter-spacing:1px;">KINARYA</div><div style="font-weight:600; font-size:0.75rem; color:#64748B !important;">UTAMA TEKNIK</div></div>'
 
     st.markdown(f"""
-        <div class="sidata-top-wrapper">
-            <div class="sidata-logo-badge">
-                {logo_html}
+        <div class="hub-head">
+            <div class="hub-logo">{logo_html}</div>
+            <div>
+                <div class="hub-title">SiRAPI</div>
+                <div class="hub-sub">Request dana dan penyelesaian PJB operasional NOP Palangkaraya &amp; Pangkalan Bun</div>
             </div>
-            <div class="sidata-main-title">SiRAPI NOP PLK & PBU Dashboard</div>
-            <div class="sidata-main-sub">📍 Pilih Area Operasional untuk Membuka Menu Request Dana, Penyelesaian PJB & Portal SiDATA</div>
         </div>
+        <div class="hub-lead">Pilih area kerja Anda</div>
     """, unsafe_allow_html=True)
 
-    # 2. DUA KARTU BESAR AREA OPERASIONAL (PALANGKARAYA vs PANGKALAN BUN)
-    col_area1, col_area2 = st.columns(2, gap="large")
+    # 2. DUA KARTU AREA (Palangkaraya | Pangkalan Bun)
+    _areas = [
+        ("area_plk", "Palangkaraya", "NOP Palangkaraya", "plk", "Palangkaraya"),
+        ("area_pbu", "Pangkalanbun", "NOP Pangkalan Bun", "pbu", "Pangkalan Bun"),
+    ]
+    _cols_area = st.columns(2, gap="large")
+    for _col, (_key, _nop, _judul, _kode, _nama_link) in zip(_cols_area, _areas):
+        with _col:
+            with _wz_box(_key):
+                st.markdown(
+                    f'<div class="area-name">{_judul}</div>'
+                    f'<div class="area-cluster">Cluster {", ".join(MASTER_DATA[_nop]["clusters"])}</div>'
+                    f'<div class="area-meta"><b>{len(MASTER_DATA[_nop]["names"])}</b> personel terdaftar</div>',
+                    unsafe_allow_html=True
+                )
+                _b1, _b2 = st.columns(2)
+                with _b1:
+                    if st.button("Request Dana", type="primary", use_container_width=True, key=f"req_{_kode}_card"):
+                        st.session_state.selected_nop = _nop
+                        st.session_state.req_nop = _nop
+                        st.session_state.req_wa_ready = ""
+                        st.session_state.page = "📝 Form Request Dana"
+                        st.rerun()
+                with _b2:
+                    if st.button("Penyelesaian PJB", type="secondary", use_container_width=True, key=f"pjb_{_kode}_card"):
+                        st.session_state.selected_nop = _nop
+                        st.session_state.page = "✅ Form PJB Operasional"
+                        st.rerun()
+                st.markdown(
+                    f'<a class="area-link" href="https://sidata.streamlit.app/" target="_blank" rel="noopener">Isi laporan SiDATA {_nama_link}</a>',
+                    unsafe_allow_html=True
+                )
 
-    with col_area1:
-        st.markdown(f"""
-            <div class="sidata-area-card">
-                <div>
-                    <div style="font-size: 3.1rem; line-height:1;">🗼</div>
-                    <div class="sidata-pill-blue">AREA OPERASIONAL 1</div>
-                    <div class="sidata-card-heading">NOP PALANGKARAYA</div>
-                    <div class="sidata-card-desc">
-                        Cluster Palangkaraya & Barito Raya — Pengajuan Dana Operasional (BBM, Akomodasi, Material), Penyelesaian Nota PJB, & Pelaporan SiDATA.
-                    </div>
-                </div>
-                <div class="sidata-stat-blue">📊 {len(MASTER_DATA['Palangkaraya']['names'])} Personel Terdaftar</div>
-            </div>
-        """, unsafe_allow_html=True)
-        b_plk1, b_plk2 = st.columns(2)
-        with b_plk1:
-            if st.button("🔵 REQUEST DANA PLK", type="secondary", use_container_width=True, key="req_plk_card"):
-                st.session_state.selected_nop = "Palangkaraya"
-                st.session_state.req_nop = "Palangkaraya"
-                st.session_state.req_wa_ready = ""
-                st.session_state.page = "📝 Form Request Dana"
-                st.rerun()
-        with b_plk2:
-            if st.button("🔵 PENYELESAIAN PJB PLK", type="secondary", use_container_width=True, key="pjb_plk_card"):
-                st.session_state.selected_nop = "Palangkaraya"
-                st.session_state.page = "✅ Form PJB Operasional"
-                st.rerun()
-        st.markdown(
-            '<a href="https://sidata.streamlit.app/" target="_blank" class="btn-sidata-blue">📊 ISI LAPORAN KE SIDATA (PALANGKARAYA)</a>',
-            unsafe_allow_html=True
-        )
-
-    with col_area2:
-        st.markdown(f"""
-            <div class="sidata-area-card">
-                <div>
-                    <div style="font-size: 3.1rem; line-height:1;">📡</div>
-                    <div class="sidata-pill-red">AREA OPERASIONAL 2</div>
-                    <div class="sidata-card-heading">NOP PANGKALAN BUN</div>
-                    <div class="sidata-card-desc">
-                        Cluster Pangkalanbun, Sampit & Ketapang — Pengajuan Dana Operasional (BBM, Akomodasi, Material), Penyelesaian Nota PJB, & Pelaporan SiDATA.
-                    </div>
-                </div>
-                <div class="sidata-stat-red">📊 {len(MASTER_DATA['Pangkalanbun']['names'])} Personel Terdaftar</div>
-            </div>
-        """, unsafe_allow_html=True)
-        b_pbu1, b_pbu2 = st.columns(2)
-        with b_pbu1:
-            if st.button("🔴 REQUEST DANA PBU", type="primary", use_container_width=True, key="req_pbu_card"):
-                st.session_state.selected_nop = "Pangkalanbun"
-                st.session_state.req_nop = "Pangkalanbun"
-                st.session_state.req_wa_ready = ""
-                st.session_state.page = "📝 Form Request Dana"
-                st.rerun()
-        with b_pbu2:
-            if st.button("🔴 PENYELESAIAN PJB PBU", type="primary", use_container_width=True, key="pjb_pbu_card"):
-                st.session_state.selected_nop = "Pangkalanbun"
-                st.session_state.page = "✅ Form PJB Operasional"
-                st.rerun()
-        st.markdown(
-            '<a href="https://sidata.streamlit.app/" target="_blank" class="btn-sidata-red">📊 ISI LAPORAN KE SIDATA (PANGKALAN BUN)</a>',
-            unsafe_allow_html=True
-        )
+    st.markdown('<div class="hub-note">Role TE, MBP, dan CME wajib melapor hasil kegiatan lapangan (Tshoot/PM) ke SiDATA.</div>', unsafe_allow_html=True)
 
     # 3. CEK STATUS TIKET PRIBADI & TIM BELUM PJB (LANGSUNG TAMPIL TERBUKA DI BERANDA)
     st.markdown("<hr style='margin: 35px 0 20px 0; border-color: #CBD5E1;'>", unsafe_allow_html=True)
-    st.markdown("<div class='section-title'>🔍 CEK STATUS TIKET & REMINDER TIM BELUM PJB</div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-title'>Cek status tiket</div>", unsafe_allow_html=True)
     
     # Default langsung ke Palangkaraya (index=0) agar tab Cek Tiket Pending langsung terbuka di layar!
     cek_nop = st.selectbox("Pilih Area Wilayah Pengecekan", list(MASTER_DATA.keys()), index=0, key="cek_area_hub")
@@ -2759,65 +2498,64 @@ if st.session_state.page == "🏠 Hub Menu Utama":
                 else:
                     st.success(f"🎉 Luar biasa! Seluruh tim di wilayah {cek_nop} sudah menyelesaikan PJB aktif.")
 
-    # 4. MENU KHUSUS ADMIN (SELALU TAMPIL JELAS DI BAWAH CEK TIKET)
-    st.markdown("<hr style='margin: 35px 0 20px 0; border-color: #CBD5E1;'>", unsafe_allow_html=True)
-    st.markdown("<div class='section-title'>🛡️ MENU KHUSUS ADMIN</div>", unsafe_allow_html=True)
-    
-    if not st.session_state.admin_logged_in:
-        c_adm1, c_adm2 = st.columns([3, 1])
-        with c_adm1:
-            pass_input = st.text_input("Masukkan Password Admin (Pusat):", type="password", placeholder="Ketik kata sandi admin...", key="pwd_admin_main")
-        with c_adm2:
-            st.markdown("<div style='height: 26px;'></div>", unsafe_allow_html=True)
-            if st.button("🔓 Buka Kunci Akses Admin", type="primary", use_container_width=True, key="btn_login_admin_main"):
-                if pass_input in AUTHORIZED_PASSWORDS:
-                    st.session_state.admin_logged_in = True
-                    st.rerun()
-                else:
-                    st.error("❌ Password Admin Salah!")
-    else:
-        st.success("✅ Akses Mode Admin Terbuka")
-        if st.button("🔒 Keluar Mode Admin", type="primary", key="btn_logout_admin_main"):
-            st.session_state.admin_logged_in = False
-            st.rerun()
+    # 4. MENU ADMIN (dilipat agar tidak mengganggu tim lapangan)
+    st.markdown("<div style='height: 14px;'></div>", unsafe_allow_html=True)
+    with st.expander("Menu admin", expanded=bool(st.session_state.admin_logged_in)):
+        if not st.session_state.admin_logged_in:
+            c_adm1, c_adm2 = st.columns([3, 1])
+            with c_adm1:
+                pass_input = st.text_input("Masukkan Password Admin (Pusat):", type="password", placeholder="Ketik kata sandi admin...", key="pwd_admin_main")
+            with c_adm2:
+                st.markdown("<div style='height: 26px;'></div>", unsafe_allow_html=True)
+                if st.button("🔓 Buka Kunci Akses Admin", type="primary", use_container_width=True, key="btn_login_admin_main"):
+                    if pass_input in AUTHORIZED_PASSWORDS:
+                        st.session_state.admin_logged_in = True
+                        st.rerun()
+                    else:
+                        st.error("❌ Password Admin Salah!")
+        else:
+            st.success("✅ Akses Mode Admin Terbuka")
+            if st.button("🔒 Keluar Mode Admin", type="primary", key="btn_logout_admin_main"):
+                st.session_state.admin_logged_in = False
+                st.rerun()
             
-        st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
-        c_top_adm1, c_top_adm2 = st.columns(2)
-        with c_top_adm1:
-            if st.button("🎫 MASTER TIKET PM (Input Data PM Bulanan)", type="secondary", use_container_width=True):
-                st.session_state.page = "🎫 Master Tiket PM"
-                st.rerun()
-        with c_top_adm2:
-            if st.button("👥 MASTER TIM & NOPOL (Tambah/Edit Nama & Plat)", type="primary", use_container_width=True):
-                st.session_state.page = "👥 Master Tim & Nopol"
-                st.rerun()
+            st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
+            c_top_adm1, c_top_adm2 = st.columns(2)
+            with c_top_adm1:
+                if st.button("🎫 MASTER TIKET PM (Input Data PM Bulanan)", type="secondary", use_container_width=True):
+                    st.session_state.page = "🎫 Master Tiket PM"
+                    st.rerun()
+            with c_top_adm2:
+                if st.button("👥 MASTER TIM & NOPOL (Tambah/Edit Nama & Plat)", type="primary", use_container_width=True):
+                    st.session_state.page = "👥 Master Tim & Nopol"
+                    st.rerun()
         
-        c_a1, c_a2 = st.columns(2)
-        with c_a1:
-            if st.button("🛡️ APPROVAL CENTER (Validasi PJB & Revisi)", type="secondary", use_container_width=True):
-                st.session_state.page = "🛡️ Approval Center"
-                st.rerun()
-            if st.button("📈 LIVE MONITORING (Dashboard Analisa)", type="secondary", use_container_width=True):
-                st.session_state.page = "📈 Live Monitoring"
-                st.rerun()
-            if st.button("👀 REQ & PJB MONITORING (Pantau Tim & Warning)", type="primary", use_container_width=True):
-                st.session_state.page = "👀 Request & PJB Monitoring"
-                st.rerun()
-            if st.button("🔧 KONTROL, EDIT & HISTORI KM/RH (Mobil & Genset)", type="secondary", use_container_width=True):
-                st.session_state.page = "🔧 Kontrol & Edit KM/RH"
-                st.rerun()
-        with c_a2:
-            if st.button("🏦 MANAJEMEN KAS (Distribusi Dana)", type="secondary", use_container_width=True):
-                st.session_state.page = "🏦 Manajemen Kas & Distribusi"
-                st.rerun()
-            if st.button("🖨️ REPORT & AUTO PJB (Export Laporan)", type="secondary", use_container_width=True):
-                st.session_state.page = "🖨️ Auto PJB Report"
-                st.rerun()
-            if st.button("📢 INFO UPDATE SERVER & WA (Broadcast)", type="primary", use_container_width=True):
-                st.session_state.page = "📢 Info Update Server & WA"
-                st.rerun()
+            c_a1, c_a2 = st.columns(2)
+            with c_a1:
+                if st.button("🛡️ APPROVAL CENTER (Validasi PJB & Revisi)", type="secondary", use_container_width=True):
+                    st.session_state.page = "🛡️ Approval Center"
+                    st.rerun()
+                if st.button("📈 LIVE MONITORING (Dashboard Analisa)", type="secondary", use_container_width=True):
+                    st.session_state.page = "📈 Live Monitoring"
+                    st.rerun()
+                if st.button("👀 REQ & PJB MONITORING (Pantau Tim & Warning)", type="primary", use_container_width=True):
+                    st.session_state.page = "👀 Request & PJB Monitoring"
+                    st.rerun()
+                if st.button("🔧 KONTROL, EDIT & HISTORI KM/RH (Mobil & Genset)", type="secondary", use_container_width=True):
+                    st.session_state.page = "🔧 Kontrol & Edit KM/RH"
+                    st.rerun()
+            with c_a2:
+                if st.button("🏦 MANAJEMEN KAS (Distribusi Dana)", type="secondary", use_container_width=True):
+                    st.session_state.page = "🏦 Manajemen Kas & Distribusi"
+                    st.rerun()
+                if st.button("🖨️ REPORT & AUTO PJB (Export Laporan)", type="secondary", use_container_width=True):
+                    st.session_state.page = "🖨️ Auto PJB Report"
+                    st.rerun()
+                if st.button("📢 INFO UPDATE SERVER & WA (Broadcast)", type="primary", use_container_width=True):
+                    st.session_state.page = "📢 Info Update Server & WA"
+                    st.rerun()
 
-    st.markdown("<div style='text-align: center; color: #64748B !important; font-size: 0.85rem; margin-top:45px; font-weight:600;'>Created by Okta Pradika<br>KUT SYSTEM - SiRAPI AI V5 Enterprise Edition</div>", unsafe_allow_html=True)# PAGE ADMIN: MASTER TIKET PM
+    st.markdown("<div class='hub-foot'>Created by Okta Pradika<br>KUT SYSTEM - SiRAPI AI V5 Enterprise Edition</div>", unsafe_allow_html=True)# PAGE ADMIN: MASTER TIKET PM
 # ==========================================
 # ==========================================
 # PAGE ADMIN: KONTROL, EDIT & HISTORI KM MOBIL / MOTOR & RH GENSET MBP
@@ -3543,7 +3281,7 @@ elif st.session_state.page == "🎫 Master Tiket PM":
 # PAGE 1: FORM REQUEST DANA
 # ==========================================
 elif st.session_state.page == "📝 Form Request Dana":
-    st.markdown("<div class='header-card'><h2>📝 PORTAL PENGAJUAN DANA</h2><p>Operational System - Input Pengajuan Baru / Revisi (Multi-Split Engine)</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='header-card'><h2>Request Dana</h2><p>Input pengajuan baru atau revisi. Satu tiket dapat dipecah otomatis menjadi beberapa sub-tiket.</p></div>", unsafe_allow_html=True)
     _wz_render()
     
     with _wz_box("wz1_nop"):
@@ -4653,7 +4391,7 @@ elif st.session_state.page == "📝 Form Request Dana":
 # PAGE 2: FORM PJB OPERASIONAL 
 # ==========================================
 elif st.session_state.page == "✅ Form PJB Operasional":
-    st.markdown("<div class='header-card'><h2>✅ PORTAL PJB (PENYELESAIAN)</h2><p>Pilih dan selesaikan sub-tiket Anda secara spesifik.</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='header-card'><h2>Penyelesaian PJB</h2><p>Pilih dan selesaikan sub-tiket Anda secara spesifik.</p></div>", unsafe_allow_html=True)
     
     nop_cari = st.selectbox("📂 1. Pilih Database (NOP):", ["-- Pilih NOP --"] + list(MASTER_DATA.keys()))
     
